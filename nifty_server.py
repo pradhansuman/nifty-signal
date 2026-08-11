@@ -28,6 +28,22 @@ CACHE_TTL = 60  # seconds
 
 def run_script(script_name):
     """Run a Python script and return parsed JSON."""
+    if IS_CLOUD:
+        return _run_script_import(script_name)
+    return _run_script_subprocess(script_name)
+
+def _run_script_import(script_name):
+    """Import module and call main() directly (no subprocess, works on Render)."""
+    try:
+        mod_name = script_name.replace(".py", "")
+        mod = __import__(mod_name)
+        result = mod.main()
+        return result if isinstance(result, dict) else {"error": f"Bad return"}
+    except Exception as e:
+        return {"error": f"Import error: {str(e)}"}
+
+def _run_script_subprocess(script_name):
+    """Run script via subprocess with venv Python (local Mac)."""
     try:
         script_path = os.path.join(WORKSPACE, script_name)
         proc = subprocess.run(
@@ -37,8 +53,6 @@ def run_script(script_name):
         )
         stdout = proc.stdout.strip()
         stderr = proc.stderr.strip()
-        
-        # Find the last valid JSON object in stdout
         lines = stdout.split("\n")
         for line in reversed(lines):
             line = line.strip()
@@ -47,17 +61,14 @@ def run_script(script_name):
                     return json.loads(line)
                 except json.JSONDecodeError:
                     continue
-        
-        # Try the whole stdout
         if stdout:
             try:
                 return json.loads(stdout)
             except json.JSONDecodeError:
                 pass
-        
         return {"error": f"No JSON in output", "stdout": stdout[:200], "stderr": stderr[:200]}
     except subprocess.TimeoutExpired:
-        return {"error": "Script timed out (35s)"}
+        return {"error": "Script timed out (60s)"}
     except Exception as e:
         return {"error": str(e)}
 

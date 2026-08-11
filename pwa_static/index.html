@@ -340,6 +340,23 @@
     <div id="orbDetails" style="font-size:11px;color:var(--text-dim);margin-top:4px"></div>
   </div>
 
+  <!-- Intraday (VWAP + EMA) -->
+  <div class="card" id="intradayCard">
+    <div class="card-header"><span class="label">📊 Intraday Signals</span><span style="font-size:11px;color:var(--text-dim)">5-min bars</span></div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1;padding:8px;border-radius:8px;background:var(--bg)" id="vwapBox">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">VWAP Reversion</div>
+        <div style="font-size:13px;font-weight:700" id="vwapSignal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="vwapDetail"></div>
+      </div>
+      <div style="flex:1;padding:8px;border-radius:8px;background:var(--bg)" id="emaBox">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">9/21 EMA Crossover</div>
+        <div style="font-size:13px;font-weight:700" id="emaSignal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="emaDetail"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Position Sizing -->
   <div class="card" id="sizingCard">
     <div class="card-header"><span class="label">💰 Position Sizing</span></div>
@@ -841,14 +858,67 @@ async function fetchORB() {
   }
 }
 
+async function fetchIntraday() {
+  try {
+    const resp = await fetch('/api/intraday');
+    const d = await resp.json();
+    
+    // VWAP
+    const v = d.vwap || {};
+    const vsEl = document.getElementById('vwapSignal');
+    const vdEl = document.getElementById('vwapDetail');
+    if (v.signal === 'VWAP_BUY') {
+      vsEl.textContent = '🟢 BUY (mean reversion)';
+      vsEl.style.color = 'var(--green)';
+    } else if (v.signal === 'VWAP_SELL') {
+      vsEl.textContent = '🔴 SELL (mean reversion)';
+      vsEl.style.color = 'var(--red)';
+    } else {
+      vsEl.textContent = v.signal || '--';
+      vsEl.style.color = 'var(--yellow)';
+    }
+    vdEl.textContent = v.reason || 'Outside hours';
+    
+    // EMA
+    const e = d.ema || {};
+    const esEl = document.getElementById('emaSignal');
+    const edEl = document.getElementById('emaDetail');
+    if (e.signal === 'EMA_BUY') {
+      esEl.textContent = '🟢 GOLDEN CROSS';
+      esEl.style.color = 'var(--green)';
+    } else if (e.signal === 'EMA_SELL') {
+      esEl.textContent = '🔴 DEATH CROSS';
+      esEl.style.color = 'var(--red)';
+    } else if (e.signal === 'EMA_LONG') {
+      esEl.textContent = '🟢 In Uptrend';
+      esEl.style.color = 'var(--green)';
+    } else if (e.signal === 'EMA_SHORT') {
+      esEl.textContent = '🔴 In Downtrend';
+      esEl.style.color = 'var(--red)';
+    } else {
+      esEl.textContent = e.signal || '--';
+      esEl.style.color = 'var(--yellow)';
+    }
+    edEl.textContent = e.reason || 'Outside hours';
+    
+  } catch(e) {
+    document.getElementById('vwapSignal').textContent = 'N/A';
+    document.getElementById('emaSignal').textContent = 'N/A';
+  }
+}
+
 // ── Init ──
 fetchSignal();
 fetchJournal();
 fetchAlerts();
 fetchTunnelURL();
+fetchORB();
+fetchIntraday();
 setInterval(fetchSignal, 60000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);
+setInterval(fetchORB, 60000);
+setInterval(fetchIntraday, 60000);
 
 // Register service worker for offline
 if ('serviceWorker' in navigator) {

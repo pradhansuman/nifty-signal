@@ -152,6 +152,12 @@ def api_orb():
     return jsonify(run_script("orb_scalp.py"))
 
 
+@app.route("/api/intraday")
+def api_intraday():
+    """VWAP + EMA intraday signals. Valid during market hours."""
+    return jsonify(run_script("intraday_signals.py"))
+
+
 # ── Position Sizing ──
 
 @app.route("/api/position-size")

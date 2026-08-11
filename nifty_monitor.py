@@ -384,6 +384,19 @@ def main():
                 if enriched.get("chain_spot"):
                     result["spot"] = enriched["chain_spot"]
                 result.update(enriched)
+                
+                # ── PCR Reversal (Contrarian) Signal ──
+                pcr = enriched.get("oi_pcr")
+                if pcr is not None:
+                    if pcr < 0.7:
+                        result["contrarian_signal"] = "SELL_CALLS"
+                        result["contrarian_reason"] = f"PCR={pcr} — excessive call buying (euphoria). Fade the crowd."
+                    elif pcr > 1.4:
+                        result["contrarian_signal"] = "SELL_PUTS"
+                        result["contrarian_reason"] = f"PCR={pcr} — excessive put buying (panic). Fade the crowd."
+                    else:
+                        result["contrarian_signal"] = "NEUTRAL"
+                        result["contrarian_reason"] = f"PCR={pcr} — balanced positioning, no contrarian edge."
             else:
                 result["option_chain_source"] = "enrich_returned_none"
     except Exception as e:

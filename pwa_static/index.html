@@ -327,6 +327,12 @@
     <div class="action-text" id="actionText">Loading...</div>
   </div>
 
+  <!-- Contrarian PCR Signal -->
+  <div class="action-card" id="contrarianCard" style="background:#1a1030;border-color:#7c3aed55">
+    <div class="action-title">🔄 Contrarian (PCR Reversal)</div>
+    <div class="action-text" id="contrarianText">Loading...</div>
+  </div>
+
   <!-- Position Sizing -->
   <div class="card" id="sizingCard">
     <div class="card-header"><span class="label">💰 Position Sizing</span></div>
@@ -530,6 +536,25 @@ function render(s) {
     actionTextEl.textContent = 'No entry yet. Waiting for 200 EMA bounce with trend confirmation. ' + (s.reason || '');
   } else {
     actionCard.classList.add('hidden');
+  }
+
+  // ── Contrarian PCR Signal ──
+  const contrarianCard = document.getElementById('contrarianCard');
+  const contrarianText = document.getElementById('contrarianText');
+  const cs = s.contrarian_signal;
+  if (cs === 'SELL_CALLS' || cs === 'SELL_PUTS') {
+    contrarianCard.classList.remove('hidden');
+    contrarianCard.style.background = '#1a1030';
+    const dir = cs === 'SELL_CALLS' ? '🔴 SELL CALLS' : '🟢 SELL PUTS';
+    contrarianText.textContent = dir + ' — ' + (s.contrarian_reason || '');
+    contrarianText.style.color = '#c4b5fd';
+  } else if (cs === 'NEUTRAL') {
+    contrarianCard.classList.remove('hidden');
+    contrarianCard.style.background = '#141b22';
+    contrarianText.textContent = '⚪ No contrarian edge — ' + (s.contrarian_reason || 'PCR balanced');
+    contrarianText.style.color = 'var(--text-dim)';
+  } else {
+    contrarianCard.classList.add('hidden');
   }
 
   // Levels card (only for BUY)

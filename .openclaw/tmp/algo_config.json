@@ -1,0 +1,14 @@
+{
+  "live_mode": false,
+  "max_lots_per_trade": 2,
+  "max_lots_per_day": 10,
+  "daily_loss_limit": 10000,
+  "enabled_strategies": {
+    "ema_bounce": false,
+    "contrarian": false,
+    "orb": false,
+    "vwap": false,
+    "btst_exit": false
+  },
+  "lot_size": 65
+}

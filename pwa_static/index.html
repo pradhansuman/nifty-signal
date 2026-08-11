@@ -418,6 +418,20 @@
     <div id="recentTrades" style="margin-top:8px;max-height:200px;overflow-y:auto"></div>
   </div>
 
+  <!-- Algo Trading -->
+  <div class="card" id="algoCard">
+    <div class="card-header">
+      <span class="label">🤖 Algo Trading</span>
+      <span class="value" id="algoMode">DRY RUN</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px" id="algoLimits"></div>
+    <div id="algoStrategies" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+    <div id="algoOrders" style="max-height:150px;overflow-y:auto;font-size:11px"></div>
+    <div style="margin-top:6px;font-size:10px;color:var(--red);display:none" id="algoWarning">
+      ⚠️ To enable LIVE trading: POST /api/algo/toggle with confirm="CONFIRM_LIVE"
+    </div>
+  </div>
+
   <!-- Alerts -->
   <div class="card" id="alertsCard">
     <div class="card-header"><span class="label">🔔 Live Alerts</span><span style="font-size:11px;color:var(--text-dim)" id="tunnelBadge"></span></div>
@@ -907,6 +921,48 @@ async function fetchIntraday() {
   }
 }
 
+async function fetchAlgoStatus() {
+  try {
+    const resp = await fetch('/api/algo/status');
+    const d = await resp.json();
+    
+    // Mode badge
+    const modeEl = document.getElementById('algoMode');
+    if (d.live_mode) {
+      modeEl.textContent = '🔴 LIVE';
+      modeEl.style.color = 'var(--red)';
+      document.getElementById('algoWarning').style.display = 'none';
+    } else {
+      modeEl.textContent = '🧪 DRY RUN';
+      modeEl.style.color = 'var(--green)';
+    }
+    
+    // Limits
+    document.getElementById('algoLimits').textContent =
+      `Max: ${d.max_lots_trade} lot/trade | ${d.max_lots_day} lot/day | Daily loss limit: ₹${d.daily_limit?.toLocaleString('en-IN')}`;
+    
+    // Strategy toggles
+    const strats = d.enabled_strategies || {};
+    document.getElementById('algoStrategies').innerHTML = Object.entries(strats).map(([k,v]) =>
+      `<span style="padding:2px 8px;border-radius:6px;font-size:10px;background:${v?'#00c85322':'#ff174422'};color:${v?'var(--green)':'var(--red)'};border:1px solid ${v?'#00c85344':'#ff174444'}">${k} ${v?'✅':'⏸'}</span>`
+    ).join('');
+    
+    // Recent orders
+    const orders = d.recent_orders || [];
+    const ordersEl = document.getElementById('algoOrders');
+    if (!orders.length) {
+      ordersEl.innerHTML = '<div style="color:var(--text-dim)">No orders yet</div>';
+      return;
+    }
+    ordersEl.innerHTML = orders.slice(-8).reverse().map(o =>
+      `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
+        <span>${o.timestamp?.slice(-8) || ''} <b>${o.transaction_type||'?'}</b> ${o.instrument||''}</span>
+        <span style="color:${o.status==='DRY_RUN'?'var(--text-dim)':o.status==='LIVE'?'var(--green)':'var(--red)'}">${o.status} ${o.lots||o.quantity?'('+(o.lots||0)+'L)':''}</span>
+      </div>`
+    ).join('');
+  } catch(e) {}
+}
+
 // ── Init ──
 fetchSignal();
 fetchJournal();
@@ -914,11 +970,13 @@ fetchAlerts();
 fetchTunnelURL();
 fetchORB();
 fetchIntraday();
+fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);
 setInterval(fetchORB, 60000);
 setInterval(fetchIntraday, 60000);
+setInterval(fetchAlgoStatus, 30000);
 
 // Register service worker for offline
 if ('serviceWorker' in navigator) {

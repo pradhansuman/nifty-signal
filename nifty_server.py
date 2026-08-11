@@ -12,6 +12,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from trade_journal import add_trade, update_trade, get_all
+from algo_trader import get_algo_status, toggle_live_mode, toggle_strategy, execute_trade
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
@@ -156,6 +157,27 @@ def api_orb():
 def api_intraday():
     """VWAP + EMA intraday signals. Valid during market hours."""
     return jsonify(run_script("intraday_signals.py"))
+
+
+# ── Algo Trading ──
+
+@app.route("/api/algo/status")
+def api_algo_status():
+    return jsonify(get_algo_status())
+
+@app.route("/api/algo/toggle", methods=["POST"])
+def api_algo_toggle():
+    data = request.get_json() or {}
+    enable = data.get("enable", False)
+    confirm = data.get("confirm")
+    return jsonify(toggle_live_mode(enable, confirm))
+
+@app.route("/api/algo/strategy", methods=["POST"])
+def api_algo_strategy():
+    data = request.get_json() or {}
+    name = data.get("strategy", "")
+    enable = data.get("enable", False)
+    return jsonify(toggle_strategy(name, enable))
 
 
 # ── Position Sizing ──

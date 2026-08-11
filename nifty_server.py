@@ -17,7 +17,8 @@ app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
 PORT = int(os.environ.get("PORT", 5099))
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
-VENV_PYTHON = os.path.join(WORKSPACE, ".openclaw/tmp/venv/bin/python")
+IS_CLOUD = os.environ.get("RENDER", "") == "true" or os.environ.get("RAILWAY", "") == "true"
+VENV_PYTHON = sys.executable if IS_CLOUD else os.path.join(WORKSPACE, ".openclaw/tmp/venv/bin/python")
 
 # Cache
 _last_signal = None
@@ -455,22 +456,18 @@ def serve_static(path):
 
 
 if __name__ == "__main__":
-    is_cloud = os.environ.get("RENDER", "") == "true" or os.environ.get("RAILWAY", "") == "true"
-    
     print(f"🚀 Nifty Signal Server starting on port {PORT}")
     print(f"   Local:   http://localhost:{PORT}")
-    if not is_cloud:
+    if not IS_CLOUD:
         print(f"   Mobile:  http://<mac-ip>:{PORT}")
     print(f"   API:     http://localhost:{PORT}/api/signal")
     
-    if is_cloud:
+    if IS_CLOUD:
         print("   Mode:    ☁️  Cloud (no background scheduler)")
     else:
-        # Detect tunnel URL on start
         tunnel = detect_tunnel_url()
         if tunnel:
             print(f"   Tunnel:  {tunnel}")
-        # Start alert scheduler thread (local only)
         scheduler = threading.Thread(target=alert_scheduler, daemon=True)
         scheduler.start()
         print("   Alerts:  Background scheduler started")

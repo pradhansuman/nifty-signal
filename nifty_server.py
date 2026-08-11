@@ -404,10 +404,12 @@ def _is_market_open():
         return True  # Fallback
 
 def alert_scheduler():
-    """Background thread: checks every 30s and fires time-based alerts."""
+    """Background thread: checks every 30s and fires alerts for ALL strategies."""
     last_premarket_date = None
     last_monitor_minute = None
     last_btst_date = None
+    last_orb_check = None
+    last_intraday_check = None
     
     while True:
         try:
@@ -420,6 +422,8 @@ def alert_scheduler():
                 time.sleep(60)
                 continue
             
+            in_market = _is_market_open()
+            
             # ── Pre-market brief at 9:00 AM ──
             if current_minute == "09:00" and last_premarket_date != today:
                 last_premarket_date = today
@@ -429,27 +433,67 @@ def alert_scheduler():
                     vix = sig.get("vix", "N/A")
                     pcr = sig.get("oi_pcr", "N/A")
                     signal = sig.get("signal", "N/A")
+                    cs = sig.get("contrarian_signal", "")
+                    cont_msg = f" | Contrarian: {cs}" if cs and cs != "NEUTRAL" else ""
                     _add_alert("info", "📅 Pre-Market Brief",
-                        f"Nifty: {spot} | VIX: {vix} | PCR: {pcr} | Signal: {signal} | "
+                        f"Nifty: {spot} | VIX: {vix} | PCR: {pcr} | Signal: {signal}{cont_msg} | "
                         f"200 EMA: {sig.get('ema_200', 'N/A')} | Stop: {sig.get('stop_level', 'N/A')}")
                 except Exception as e:
                     _add_alert("warning", "Pre-Market Brief Failed", str(e)[:200])
             
-            # ── 15-min monitor during market hours ──
-            if _is_market_open() and current_minute.endswith(("00", "15", "30", "45")) and last_monitor_minute != current_minute:
+            # ── 15-min EMA Entry/Exit Monitor ──
+            if in_market and current_minute.endswith(("00", "15", "30", "45")) and last_monitor_minute != current_minute:
                 last_monitor_minute = current_minute
                 try:
                     sig = get_signal()
                     signal = sig.get("signal", "")
                     if signal in ("BUY_CALLS", "BUY_PUTS"):
-                        _add_alert("critical", f"🔴 {signal}",
+                        _add_alert("critical", f"🔴 {signal} — 200 EMA",
                             f"Spot: {sig.get('spot')} | ADX: {sig.get('adx')} | "
                             f"PCR: {sig.get('oi_pcr')} | IV: {sig.get('atm_iv')}% | "
                             f"Trade: {sig.get('recommended_trade', '')[:100]}")
                     elif signal in ("EXIT_LONGS", "EXIT_SHORTS"):
                         _add_alert("critical", f"⚠️ {signal}", sig.get("exit_reason", ""))
+                    # Contrarian PCR check
+                    cs = sig.get("contrarian_signal", "")
+                    if cs in ("SELL_CALLS", "SELL_PUTS"):
+                        _add_alert("critical", f"🔄 Contrarian: {cs}",
+                            sig.get("contrarian_reason", ""))
                 except Exception as e:
                     _add_alert("warning", "Monitor Check Failed", str(e)[:200])
+            
+            # ── ORB signal (9:30-10:15, every 2 min) ──
+            orb_start = now.replace(hour=9, minute=30, second=0, microsecond=0)
+            orb_end = now.replace(hour=10, minute=15, second=0, microsecond=0)
+            if orb_start <= now <= orb_end and last_orb_check != current_minute:
+                last_orb_check = current_minute
+                try:
+                    orb = run_script("orb_scalp.py")
+                    if orb.get("signal") in ("ORB_BUY", "ORB_SELL"):
+                        _add_alert("critical", f"⚡ ORB: {orb['signal']}",
+                            f"{orb.get('reason', '')} | Entry: {orb.get('entry_strike')} | "
+                            f"Target: {orb.get('target_strike')} | Stop: {orb.get('stop_strike')}")
+                except Exception as e:
+                    pass
+            
+            # ── Intraday (VWAP + EMA) every 5 min ──
+            if in_market and current_minute.endswith(("00", "05")) and last_intraday_check != current_minute:
+                last_intraday_check = current_minute
+                try:
+                    intra = run_script("intraday_signals.py")
+                    # VWAP
+                    vwap = intra.get("vwap", {})
+                    if vwap and vwap.get("signal") in ("VWAP_BUY", "VWAP_SELL"):
+                        _add_alert("critical", f"📊 VWAP: {vwap['signal']}",
+                            f"{vwap.get('reason', '')} | Spot: {vwap.get('spot')} | VWAP: {vwap.get('vwap')}")
+                    # EMA crossover
+                    ema = intra.get("ema", {})
+                    if ema and ema.get("signal") in ("EMA_BUY", "EMA_SELL"):
+                        _add_alert("critical", f"📈 EMA: {ema['signal']}",
+                            f"{ema.get('reason', '')} | Spot: {ema.get('spot')} | "
+                            f"EMA9: {ema.get('ema9')} | EMA21: {ema.get('ema21')}")
+                except Exception as e:
+                    pass
             
             # ── BTST close-out at 3:25 PM ──
             if current_minute == "15:25" and last_btst_date != today:

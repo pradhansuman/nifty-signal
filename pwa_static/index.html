@@ -333,6 +333,13 @@
     <div class="action-text" id="contrarianText">Loading...</div>
   </div>
 
+  <!-- ORB Scalp -->
+  <div class="action-card" id="orbCard" style="background:#0a1628;border-color:#448aff55">
+    <div class="action-title">⚡ Opening Range Breakout <span style="font-size:11px;color:var(--text-dim)">9:15-10:15 AM</span></div>
+    <div class="action-text" id="orbText" style="color:#80b4ff">Outside market hours</div>
+    <div id="orbDetails" style="font-size:11px;color:var(--text-dim);margin-top:4px"></div>
+  </div>
+
   <!-- Position Sizing -->
   <div class="card" id="sizingCard">
     <div class="card-header"><span class="label">💰 Position Sizing</span></div>
@@ -556,6 +563,9 @@ function render(s) {
   } else {
     contrarianCard.classList.add('hidden');
   }
+
+  // ── ORB Scalp (fetched separately, only meaningful 9:30-10:15 AM) ──
+  fetchORB();
 
   // Levels card (only for BUY)
   if (sig === 'BUY_CALLS' || sig === 'BUY_PUTS') {
@@ -791,6 +801,44 @@ async function fetchTunnelURL() {
       document.getElementById('tunnelBadge').textContent = '🔗 ' + data.url;
     }
   } catch(e) {}
+}
+
+async function fetchORB() {
+  const card = document.getElementById('orbCard');
+  const text = document.getElementById('orbText');
+  const details = document.getElementById('orbDetails');
+  
+  try {
+    const resp = await fetch('/api/orb');
+    const d = await resp.json();
+    
+    if (d.signal === 'ORB_BUY') {
+      card.style.background = '#0a2816'; card.style.borderColor = '#00c85355';
+      text.textContent = '🟢 BUY — ' + (d.breakout_direction || '') + ' breakout';
+      text.style.color = '#80ffb4';
+      details.textContent = (d.reason || '') +
+        ' | Entry: ' + (d.entry_strike || '--') + ' CE | Target: ' + (d.target_strike || '--') + ' | Stop: ' + (d.stop_strike || '--');
+    } else if (d.signal === 'ORB_SELL') {
+      card.style.background = '#280a0a'; card.style.borderColor = '#ff174455';
+      text.textContent = '🔴 SELL — ' + (d.breakout_direction || '') + ' breakdown';
+      text.style.color = '#ff8080';
+      details.textContent = (d.reason || '') +
+        ' | Entry: ' + (d.entry_strike || '--') + ' PE | Target: ' + (d.target_strike || '--') + ' | Stop: ' + (d.stop_strike || '--');
+    } else {
+      card.style.background = '#0a1628'; card.style.borderColor = '#448aff55';
+      text.textContent = '⏳ ' + (d.reason || 'Waiting for breakout...');
+      text.style.color = '#80b4ff';
+      if (d.opening_high) {
+        details.textContent = 'Range: ' + d.opening_low + ' – ' + d.opening_high +
+          ' (' + (d.range_pts || '--') + ' pts) | Spot: ' + (d.spot || '--');
+      } else {
+        details.textContent = '';
+      }
+    }
+  } catch(e) {
+    text.textContent = 'ORB not available';
+    text.style.color = 'var(--text-dim)';
+  }
 }
 
 // ── Init ──

@@ -144,6 +144,14 @@ def api_health():
     return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
 
 
+# ── ORB Scalp ──
+
+@app.route("/api/orb")
+def api_orb():
+    """Opening Range Breakout signal. Only valid 9:30-10:15 AM IST."""
+    return jsonify(run_script("orb_scalp.py"))
+
+
 # ── Position Sizing ──
 
 @app.route("/api/position-size")

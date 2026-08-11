@@ -1,0 +1,34 @@
+# Sensitive — never commit
+.openclaw/tmp/upstox_config.py
+.openclaw/tmp/trade_journal.json
+.openclaw/tmp/alerts.json
+.openclaw/tmp/tunnel_url.txt
+.openclaw/tmp/cf_url.txt
+.openclaw/tmp/bore_url.txt
+.openclaw/tmp/nse_proxy_config.py
+
+# Virtualenv
+.openclaw/tmp/venv/
+.openclaw/tmp/cloudflared
+.openclaw/tmp/bore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Attachments / personal
+.openclaw-attachments/
+memory/
+nifty_analysis_*.json
+
+# Misc
+*.log

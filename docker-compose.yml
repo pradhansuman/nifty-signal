@@ -1,0 +1,26 @@
+version: "3.8"
+services:
+  nifty-signal:
+    build: .
+    container_name: nifty-signal
+    restart: unless-stopped
+    ports:
+      - "5099:5099"
+    environment:
+      - TZ=Asia/Kolkata
+    volumes:
+      - ./data:/app/data  # optional: persist cached data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:5099/api/health')"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+  # Optional: HTTPS tunnel (comment out if you use NAS reverse proxy instead)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: nifty-tunnel
+    restart: unless-stopped
+    command: tunnel --url http://nifty-signal:5099 --no-autoupdate
+    depends_on:
+      - nifty-signal

@@ -938,8 +938,10 @@ async function fetchAlgoStatus() {
     }
     
     // Limits
+    const state = d.state || {};
     document.getElementById('algoLimits').textContent =
-      `Max: ${d.max_lots_trade} lot/trade | ${d.max_lots_day} lot/day | Daily loss limit: ₹${d.daily_limit?.toLocaleString('en-IN')}`;
+      `Max: ${d.max_lots_trade} lot/trade | ${d.max_lots_day} lot/day | Loss limit: ₹${d.daily_limit?.toLocaleString('en-IN')} | ` +
+      `Paper P&L: ₹${(state.pnl_today||0).toLocaleString('en-IN')} today / ₹${(state.total_pnl||0).toLocaleString('en-IN')} total`;
     
     // Strategy toggles
     const strats = d.enabled_strategies || {};
@@ -947,19 +949,31 @@ async function fetchAlgoStatus() {
       `<span style="padding:2px 8px;border-radius:6px;font-size:10px;background:${v?'#00c85322':'#ff174422'};color:${v?'var(--green)':'var(--red)'};border:1px solid ${v?'#00c85344':'#ff174444'}">${k} ${v?'✅':'⏸'}</span>`
     ).join('');
     
-    // Recent orders
-    const orders = d.recent_orders || [];
-    const ordersEl = document.getElementById('algoOrders');
-    if (!orders.length) {
-      ordersEl.innerHTML = '<div style="color:var(--text-dim)">No orders yet</div>';
-      return;
+    // Active positions
+    const positions = d.active_positions || [];
+    const closedTrades = d.closed_trades || [];
+    let html = '';
+    
+    if (positions.length) {
+      html += '<div style="font-size:10px;font-weight:700;color:var(--text-dim);margin-top:4px">Open Positions:</div>';
+      html += positions.map(p =>
+        `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
+          #${p.id} ${p.direction} ${p.strike} ${p.lots}L @ ₹${p.entry_premium} (${p.signal_type})
+        </div>`
+      ).join('');
     }
-    ordersEl.innerHTML = orders.slice(-8).reverse().map(o =>
-      `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--border)">
-        <span>${o.timestamp?.slice(-8) || ''} <b>${o.transaction_type||'?'}</b> ${o.instrument||''}</span>
-        <span style="color:${o.status==='DRY_RUN'?'var(--text-dim)':o.status==='LIVE'?'var(--green)':'var(--red)'}">${o.status} ${o.lots||o.quantity?'('+(o.lots||0)+'L)':''}</span>
-      </div>`
-    ).join('');
+    
+    if (closedTrades.length) {
+      html += '<div style="font-size:10px;font-weight:700;color:var(--text-dim);margin-top:4px">Closed P&L:</div>';
+      html += closedTrades.slice(-5).reverse().map(t => {
+        const pnlClass = (t.pnl||0) >= 0 ? 'var(--green)' : 'var(--red)';
+        return `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
+          #${t.id} ${t.direction} ${t.strike}: <span style="color:${pnlClass}">₹${(t.pnl||0).toLocaleString('en-IN')} (${t.pnl_pct||0}%)</span>
+        </div>`;
+      }).join('');
+    }
+    
+    document.getElementById('algoOrders').innerHTML = html || '<div style="font-size:10px;color:var(--text-dim)">No positions</div>';
   } catch(e) {}
 }
 

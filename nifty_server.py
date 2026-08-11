@@ -12,7 +12,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 from trade_journal import add_trade, update_trade, get_all
-from algo_trader import get_algo_status, toggle_live_mode, toggle_strategy, execute_trade
+from algo_trader import get_algo_status, toggle_live_mode, toggle_strategy, execute_trade, track_paper_entry, track_paper_exit, track_paper_exit_all
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
@@ -470,11 +470,23 @@ def alert_scheduler():
                     sig = get_signal()
                     signal = sig.get("signal", "")
                     if signal in ("BUY_CALLS", "BUY_PUTS"):
+                        direction = "BUY" if signal == "BUY_CALLS" else "SELL"
+                        strike = sig.get("entry_strike", 0)
+                        premium = sig.get("entry_premium") or sig.get("btst_premium") or 0
+                        lots = 1
+                        # Track paper position
+                        track_paper_entry("ema_bounce", direction, strike, lots, premium)
                         _add_alert("critical", f"🔴 {signal} — 200 EMA",
                             f"Spot: {sig.get('spot')} | ADX: {sig.get('adx')} | "
                             f"PCR: {sig.get('oi_pcr')} | IV: {sig.get('atm_iv')}% | "
                             f"Trade: {sig.get('recommended_trade', '')[:100]}")
                     elif signal in ("EXIT_LONGS", "EXIT_SHORTS"):
+                        # Close paper positions
+                        current_premium = sig.get("entry_premium") or sig.get("btst_premium") or 0
+                        results = track_paper_exit_all(current_premium, "long" if signal == "EXIT_LONGS" else "short")
+                        if results:
+                            total_pnl = sum(r["pnl"] for r in results)
+                            sig["paper_exit_pnl"] = total_pnl
                         _add_alert("critical", f"⚠️ {signal}", sig.get("exit_reason", ""))
                     # Contrarian PCR check
                     cs = sig.get("contrarian_signal", "")

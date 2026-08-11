@@ -55,7 +55,9 @@ _algo_state = {
     "trades_today": 0,
     "lots_today": 0,
     "pnl_today": 0.0,
+    "total_pnl": 0.0,  # Running paper P&L
     "active_positions": [],
+    "closed_trades": [],
     "daily_limit_hit": False,
     "last_order_time": None,
 }
@@ -247,6 +249,8 @@ def get_algo_status():
         "enabled_strategies": cfg["enabled_strategies"],
         "state": state,
         "recent_orders": orders,
+        "active_positions": state.get("active_positions", []),
+        "closed_trades": state.get("closed_trades", [])[-10:],
     }
 
 
@@ -274,3 +278,67 @@ def toggle_strategy(strategy_name, enable):
     cfg["enabled_strategies"][strategy_name] = enable
     save_config(cfg)
     return {"status": "ok", "strategy": strategy_name, "enabled": enable}
+
+
+# ── Paper P&L Tracking ──
+
+def track_paper_entry(signal_type, direction, strike, lots, premium):
+    """Record a simulated entry position."""
+    state = load_state()
+    pos = {
+        "id": len(state["active_positions"]) + len(state.get("closed_trades", [])) + 1,
+        "signal_type": signal_type,
+        "direction": direction,
+        "strike": strike,
+        "lots": lots,
+        "entry_premium": premium,
+        "entry_time": datetime.now(IST).strftime("%H:%M:%S"),
+        "status": "open",
+    }
+    state["active_positions"].append(pos)
+    return pos
+
+def track_paper_exit(position_id, exit_premium):
+    """Close a simulated position and calculate P&L."""
+    state = load_state()
+    lot_size = 65
+    
+    for i, pos in enumerate(state["active_positions"]):
+        if pos["id"] == position_id:
+            entry = pos["entry_premium"]
+            lots = pos["lots"]
+            
+            if pos["direction"] == "SELL":
+                pnl = round((entry - exit_premium) * lots * lot_size, 2)
+            else:
+                pnl = round((exit_premium - entry) * lots * lot_size, 2)
+            
+            pnl_pct = round(pnl / (entry * lots * lot_size) * 100, 2) if entry and lots else 0
+            
+            pos["exit_premium"] = exit_premium
+            pos["pnl"] = pnl
+            pos["pnl_pct"] = pnl_pct
+            pos["exit_time"] = datetime.now(IST).strftime("%H:%M:%S")
+            pos["status"] = "closed"
+            
+            state["pnl_today"] = round(state["pnl_today"] + pnl, 2)
+            state["total_pnl"] = round(state.get("total_pnl", 0) + pnl, 2)
+            
+            # Move to closed
+            state.setdefault("closed_trades", []).append(pos)
+            state["active_positions"].pop(i)
+            
+            return {"pnl": pnl, "pnl_pct": pnl_pct, "position": pos}
+    
+    return None
+
+def track_paper_exit_all(exit_premium, trade_direction="long"):
+    """Close ALL open positions matching the direction."""
+    results = []
+    state = load_state()
+    for pos in list(state["active_positions"]):
+        if pos["direction"] == ("SELL" if trade_direction == "short" else "BUY"):
+            r = track_paper_exit(pos["id"], exit_premium)
+            if r:
+                results.append(r)
+    return results

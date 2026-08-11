@@ -364,11 +364,14 @@ def main():
     # ── Enrich with Upstox option chain if token available ──
     try:
         import importlib.util
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", "upstox_config.py")
-        spec = importlib.util.spec_from_file_location("upstox_config", config_path)
-        upstox_cfg = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(upstox_cfg)
-        token = getattr(upstox_cfg, "UPSTOX_ACCESS_TOKEN", "")
+        token = os.environ.get("UPSTOX_TOKEN", "")
+        if not token:
+            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", "upstox_config.py")
+            if os.path.exists(config_path):
+                spec = importlib.util.spec_from_file_location("upstox_config", config_path)
+                upstox_cfg = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(upstox_cfg)
+                token = getattr(upstox_cfg, "UPSTOX_ACCESS_TOKEN", "")
         
         # Debug
         if not token:

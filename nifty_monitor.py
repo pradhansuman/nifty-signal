@@ -494,20 +494,37 @@ def enrich_from_upstox(result, token):
         btst_strike = result.get("btst_strike")
         
         entry_premium = None; target_premium = None; btst_premium = None
-        entry_delta = None  # Real delta from Upstox
+        entry_delta = None
         for item in data:
             s = item.get("strike_price", 0)
             if s == entry_strike:
                 md = item.get("call_options", {}).get("market_data", {})
                 gr = item.get("call_options", {}).get("option_greeks", {})
                 entry_premium = md.get("ltp")
-                entry_delta = gr.get("delta")  # Real delta
+                entry_delta = gr.get("delta")
             if s == target_strike:
                 md = item.get("call_options", {}).get("market_data", {})
                 target_premium = md.get("ltp")
-            if s == btst_strike:
-                md = item.get("call_options", {}).get("market_data", {})
-                btst_premium = md.get("ltp")
+        
+        # ── BTST premium from WEEKLY expiry (separate chain) ──
+        btst_expiry_display = result.get("btst_expiry")
+        if btst_expiry_display and btst_strike:
+            try:
+                btst_expiry_dt = datetime.strptime(btst_expiry_display, "%d-%b-%Y")
+                btst_expiry_api = btst_expiry_dt.strftime("%Y-%m-%d")
+                btst_resp = req.get(
+                    "https://api.upstox.com/v2/option/chain",
+                    headers=headers,
+                    params={"instrument_key": "NSE_INDEX|Nifty 50", "expiry_date": btst_expiry_api},
+                    timeout=10
+                )
+                if btst_resp.status_code == 200:
+                    for item in btst_resp.json().get("data", []):
+                        if item.get("strike_price") == btst_strike:
+                            btst_premium = item.get("call_options", {}).get("market_data", {}).get("ltp")
+                            break
+            except:
+                pass  # BTST premium is optional
         
         # Net debit for spread (entry - target)
         net_debit = None

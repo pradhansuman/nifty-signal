@@ -452,6 +452,7 @@ def alert_scheduler():
     last_premarket_date = None
     last_monitor_minute = None
     last_btst_date = None
+    last_eod_summary = None
     last_orb_check = None
     last_intraday_check = None
     
@@ -491,13 +492,32 @@ def alert_scheduler():
                 try:
                     sig = get_signal()
                     signal = sig.get("signal", "")
+                    spot = sig.get("spot", 0)
+                    stop_level = sig.get("stop_level", 0)
+                    
                     if signal in ("BUY_CALLS", "BUY_PUTS"):
+                        # Include risk disclosure
+                        premium = sig.get("entry_premium") or 0
+                        risk_per_lot = round(abs(spot - stop_level) * (sig.get("entry_delta") or 0.5) * 65, 2)
                         _add_alert("critical", f"🔴 {signal} — 200 EMA",
-                            f"Spot: {sig.get('spot')} | ADX: {sig.get('adx')} | "
-                            f"PCR: {sig.get('oi_pcr')} | IV: {sig.get('atm_iv')}% | "
+                            f"Spot: {spot} | ADX: {sig.get('adx')} | "
+                            f"PCR: {sig.get('weekly_pcr')} | IV: {sig.get('atm_iv')}% | "
+                            f"Stop: {stop_level} | Max loss: ₹{risk_per_lot}/lot | "
                             f"Trade: {sig.get('recommended_trade', '')[:100]}")
                     elif signal in ("EXIT_LONGS", "EXIT_SHORTS"):
                         _add_alert("critical", f"⚠️ {signal}", sig.get("exit_reason", ""))
+                    
+                    # ── Stop approach warning ──
+                    if stop_level and spot and signal in ("BUY_CALLS", "BUY_PUTS", "WAIT"):
+                        dist_to_stop = abs(spot - stop_level)
+                        stop_pct = round(dist_to_stop / spot * 100, 2)
+                        if stop_pct < 0.3:  # Within 0.3% of stop
+                            _add_alert("critical", f"🛑 STOP APPROACHING — {stop_pct}% away!",
+                                f"Spot: {spot} | Stop: {stop_level} | Distance: {dist_to_stop:.0f} pts | "
+                                f"EXIT NOW if stop breaks! Max loss if held: ₹{(sig.get('entry_premium') or 0) * 65:.0f}/lot")
+                        elif stop_pct < 0.6:  # Within 0.6%
+                            _add_alert("warning", f"⚠️ Near stop — {stop_pct}% from {stop_level}",
+                                f"Distance: {dist_to_stop:.0f} pts. Prepare to exit.")
                     # Contrarian PCR check
                     cs = sig.get("contrarian_signal", "")
                     if cs in ("SELL_CALLS", "SELL_PUTS"):
@@ -550,6 +570,23 @@ def alert_scheduler():
                             f"Spot: {sig.get('spot')} | Premium: ₹{sig.get('btst_premium', 'N/A')}")
                 except Exception as e:
                     _add_alert("warning", "BTST Alert Failed", str(e)[:200])
+            
+            # ── Daily P&L Summary at 3:30 PM ──
+            if current_minute == "15:30" and last_eod_summary != today:
+                last_eod_summary = today
+                try:
+                    from algo_trader import load_state
+                    st = load_state()
+                    pnl = st.get("pnl_today", 0)
+                    trades = st.get("trades_today", 0) + len(st.get("closed_trades", []))
+                    pos_count = len(st.get("active_positions", []))
+                    emoji = "🟢" if pnl > 0 else "🔴" if pnl < 0 else "⚪"
+                    _add_alert("info", f"{emoji} Market Closed — P&L: ₹{pnl:,.0f}",
+                        f"Trades today: {trades} | Open positions: {pos_count} | "
+                        f"{'Profit' if pnl > 0 else 'Loss' if pnl < 0 else 'Flat'} day. "
+                        f"Review your journal and prep for tomorrow.")
+                except:
+                    pass
             
             time.sleep(30)
         except Exception as e:

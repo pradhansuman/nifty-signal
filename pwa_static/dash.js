@@ -197,7 +197,8 @@ function render(s) {
       }
       document.getElementById('entryLevel').textContent = tradeInfo || ('Entry: ' + (s.entry_strike || '--'));
       document.getElementById('targetLevelPill').textContent = s.stop_level ? '🛑 Index Stop: ' + s.stop_level : '';
-      document.getElementById('stopLevelPill').textContent = ''; else {
+      document.getElementById('stopLevelPill').textContent = '';
+    } else {
       document.getElementById('tradeType').textContent = s.recommended_trade || 'No active trade';
       document.getElementById('entryLevel').textContent = '';
       document.getElementById('targetLevelPill').textContent = '';

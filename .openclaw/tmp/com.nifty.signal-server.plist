@@ -2,27 +2,27 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>Label</key>
-    <string>com.nifty.signal-server</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/skp/.openclaw-autoclaw/agents/nifty-50/workspace/.openclaw/tmp/venv/bin/python</string>
-        <string>/Users/skp/.openclaw-autoclaw/agents/nifty-50/workspace/nifty_server.py</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/Users/skp/.openclaw-autoclaw/agents/nifty-50/workspace</string>
-    <key>RunAtLoad</key>
-    <true/>
-    <key>KeepAlive</key>
-    <true/>
-    <key>StandardOutPath</key>
-    <string>/tmp/nifty_server.log</string>
-    <key>StandardErrorPath</key>
-    <string>/tmp/nifty_server.err</string>
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PATH</key>
-        <string>/usr/local/bin:/usr/bin:/bin</string>
-    </dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/usr/local/bin:/usr/bin:/bin</string>
+	</dict>
+	<key>KeepAlive</key>
+	<true/>
+	<key>Label</key>
+	<string>com.nifty.signal-server</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/Users/skp/.openclaw-autoclaw/agents/nifty-50/workspace/.openclaw/tmp/venv/bin/python3</string>
+		<string>/Users/skp/.openclaw-autoclaw/agents/nifty-50/workspace/nifty_server.py</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>/tmp/nifty_server.err</string>
+	<key>StandardOutPath</key>
+	<string>/tmp/nifty_server.log</string>
+	<key>WorkingDirectory</key>
+	<string>/Users/skp/.openclaw-autoclaw/agents/nifty-50/workspace</string>
 </dict>
 </plist>

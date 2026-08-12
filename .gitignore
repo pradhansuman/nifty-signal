@@ -34,3 +34,11 @@ nifty_analysis_*.json
 # Misc
 *.log
 .openclaw/tmp/algo_orders.json
+.openclaw/tmp/backtest_cache.json
+.openclaw/tmp/chain_cache.json
+.openclaw/tmp/ivrank_cache.json
+.openclaw/tmp/outlook_cache.json
+.openclaw/tmp/expiry_cache.json
+.openclaw/tmp/fiidii_cache.json
+.openclaw/tmp/weekly_cache.json
+.openclaw/tmp/chart_cache.json

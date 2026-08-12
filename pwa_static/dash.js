@@ -789,6 +789,12 @@ function renderChain(d) {
   walls.innerHTML = d.call_wall ? '🧱 Call wall: <b style="color:var(--red)">' + d.call_wall + '</b> (OI ' + fmtOID(d.call_wall_oi) + ') · ' : '' +
     (d.put_wall ? 'Put wall: <b style="color:var(--green)">' + d.put_wall + '</b> (OI ' + fmtOID(d.put_wall_oi) + ')' : '');
 
+  // Prominent spot price — Upstox chain spot, fall back to main signal spot
+  const spotBig = el('chainSpotBig');
+  let sp = d.chain_spot;
+  if (sp == null && typeof cachedSignal !== 'undefined' && cachedSignal && cachedSignal.spot) sp = cachedSignal.spot;
+  spotBig.textContent = sp != null ? Number(sp).toLocaleString('en-IN', {maximumFractionDigits: 2}) : '--';
+
   const tb = el('chainRows');
   tb.innerHTML = '';
   const rows = d.rows || [];

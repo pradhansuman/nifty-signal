@@ -197,6 +197,14 @@
   <div class="signal-sub" id="signalSub"></div>
 </div>
 
+  <!-- Alerts (TOP — always visible) -->
+  <div class="card" id="alertsCard" style="border-color:#ff174433">
+    <div class="card-header"><span class="label">🔔 Live Alerts</span><span style="font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px;display:none" id="alertBadge">0</span><span style="font-size:11px;color:var(--text-dim)" id="tunnelBadge"></span></div>
+    <div id="alertsList" style="max-height:280px;overflow-y:auto;font-size:12px;line-height:1.5">
+      <div style="color:var(--text-dim);padding:12px;text-align:center">Waiting for market signals...</div>
+    </div>
+  </div>
+
 <div class="cards">
   <!-- Price -->
   <div class="card">
@@ -431,14 +439,6 @@
     <div id="algoOrders" style="max-height:150px;overflow-y:auto;font-size:11px"></div>
     <div style="margin-top:6px;font-size:10px;color:var(--red);display:none" id="algoWarning">
       ⚠️ To enable LIVE trading: POST /api/algo/toggle with confirm="CONFIRM_LIVE"
-    </div>
-  </div>
-
-  <!-- Alerts -->
-  <div class="card" id="alertsCard">
-    <div class="card-header"><span class="label">🔔 Live Alerts</span><span style="font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px;display:none" id="alertBadge">0</span><span style="font-size:11px;color:var(--text-dim)" id="tunnelBadge"></span></div>
-    <div id="alertsList" style="max-height:280px;overflow-y:auto;font-size:12px;line-height:1.5">
-      <div style="color:var(--text-dim);padding:12px;text-align:center">Waiting for market signals...</div>
     </div>
   </div>
 

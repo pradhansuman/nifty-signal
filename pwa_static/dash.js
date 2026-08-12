@@ -570,8 +570,49 @@ async function fetchAlgoStatus() {
   } catch(e) {}
 }
 
+// ── FII/DII Smart Money ──
+async function fetchFiiDii() {
+  try {
+    const resp = await fetch('/api/fiidii?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
+    renderFiiDii(d);
+  } catch(e) {}
+}
+
+function renderFiiDii(d) {
+  const card = document.getElementById('fiiDiiCard');
+  if (!card) return;
+  const el = id => document.getElementById(id);
+  const fii = d.fii_net, dii = d.dii_net;
+
+  el('fiiDate').textContent = d.date || '';
+
+  const fiiEl = el('fiiNetVal');
+  fiiEl.textContent = fii != null ? (fii > 0 ? '+' : '') + fii.toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
+  fiiEl.style.color = fii > 0 ? 'var(--green)' : fii < 0 ? 'var(--red)' : 'var(--text-dim)';
+
+  const diiEl = el('diiNetVal');
+  diiEl.textContent = dii != null ? (dii > 0 ? '+' : '') + dii.toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
+  diiEl.style.color = dii > 0 ? 'var(--green)' : dii < 0 ? 'var(--red)' : 'var(--text-dim)';
+
+  const score = d.sentiment_score;
+  const scoreEl = el('smartMoneyScore');
+  if (score != null) {
+    scoreEl.textContent = score + '/100';
+    scoreEl.style.color = score >= 60 ? 'var(--green)' : score <= 40 ? 'var(--red)' : 'var(--yellow)';
+  } else {
+    scoreEl.textContent = '--';
+  }
+
+  const readEl = el('smartMoneyRead');
+  readEl.textContent = d.read || 'No data';
+  readEl.style.color = 'var(--text-dim)';
+}
+
 // ── Init ──
 fetchSignal();
+fetchFiiDii();
 fetchJournal();
 fetchAlerts();
 fetchTunnelURL();
@@ -579,6 +620,7 @@ fetchORB();
 fetchIntraday();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
+setInterval(fetchFiiDii, 300000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);
 setInterval(fetchORB, 60000);

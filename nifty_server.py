@@ -13,8 +13,18 @@ warnings.filterwarnings("ignore")
 
 from trade_journal import add_trade, update_trade, get_all
 from algo_trader import get_algo_status, toggle_live_mode, toggle_strategy, execute_trade, track_paper_entry, track_paper_exit, track_paper_exit_all
+from fii_dii import fiidii_summary
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
+@app.before_request
+def log_request():
+    """Log every incoming request to /tmp/nifty_requests.log"""
+    try:
+        with open("/tmp/nifty_requests.log", "a") as f:
+            f.write(f"{datetime.now().strftime('%H:%M:%S')} {request.remote_addr} {request.method} {request.path}\n")
+    except:
+        pass
+
 
 PORT = int(os.environ.get("PORT", 5099))
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
@@ -136,6 +146,11 @@ def api_signal():
         "emoji": emoji.get(sig_name, "⚪"),
         "updated": datetime.now().strftime("%H:%M:%S"),
     })
+
+@app.route("/api/fiidii")
+def api_fiidii():
+    """Smart Money FII/DII flows (cached 30 min)."""
+    return jsonify(fiidii_summary())
 
 @app.route("/api/full")
 def api_full():

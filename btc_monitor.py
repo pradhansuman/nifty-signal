@@ -134,6 +134,33 @@ def get_btc_signal(interval="1h"):
             elif result["signal"] in ("BUY_SHORT",):
                 result["stop_level"] = round(spot + 1.5 * atr, 1)
                 result["target_level"] = round(spot - 2.5 * atr, 1)
+
+        # ── Trade recommendation ──
+        rr = None
+        action = None
+        if result["signal"] == "BUY_LONG" and result.get("stop_level") and result.get("target_level") and spot:
+            risk = spot - result["stop_level"]
+            rew = result["target_level"] - spot
+            if risk > 0:
+                rr = round(rew / risk, 2)
+                action = "BUY"
+                result["recommendation"] = (
+                    f"BUY BTC at ~${spot:,.0f} | Stop ${result['stop_level']:,.0f} | "
+                    f"Target ${result['target_level']:,.0f} | Risk ${risk:,.0f}/BTC | R:R {rr}")
+        elif result["signal"] == "BUY_SHORT" and result.get("stop_level") and result.get("target_level") and spot:
+            risk = result["stop_level"] - spot
+            rew = spot - result["target_level"]
+            if risk > 0:
+                rr = round(rew / risk, 2)
+                action = "SELL"
+                result["recommendation"] = (
+                    f"SELL BTC at ~${spot:,.0f} | Stop ${result['stop_level']:,.0f} | "
+                    f"Target ${result['target_level']:,.0f} | Risk ${risk:,.0f}/BTC | R:R {rr}")
+        else:
+            result["recommendation"] = (
+                f"HOLD — no trade. {result.get('reason', '')[:70]}")
+        result["action"] = action or ("HOLD" if result["signal"] == "WAIT" else "EXIT")
+        result["rr_ratio"] = rr
     except Exception as e:
         result["signal"] = "ERROR"
         result["reason"] = str(e)[:100]

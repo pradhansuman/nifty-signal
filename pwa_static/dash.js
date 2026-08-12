@@ -703,6 +703,14 @@ function renderBtc(d) {
       '<span style="color:var(--green);font-weight:700">🎯 Target: $' + Number(d.target_level).toLocaleString('en-US', {maximumFractionDigits: 0}) + '</span>' +
       '</div>';
   }
+  // BTC recommendation banner
+  const rec = document.getElementById('btcRec');
+  if (rec && d.recommendation) {
+    rec.style.display = 'block';
+    rec.textContent = '💡 ' + d.recommendation;
+    rec.style.background = d.action === 'BUY' ? 'rgba(0,200,83,0.12)' : d.action === 'SELL' ? 'rgba(255,23,68,0.12)' : 'rgba(255,193,7,0.08)';
+    rec.style.color = d.action === 'BUY' ? 'var(--green)' : d.action === 'SELL' ? 'var(--red)' : 'var(--yellow)';
+  }
   // BTC alerts
   const al = document.getElementById('btcAlertsList');
   if (al && d.alerts && d.alerts.length) {
@@ -950,6 +958,14 @@ function renderBnf(d) {
     lv.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
       '<span style="color:var(--red);font-weight:700">🛑 Stop: ' + Number(d.stop_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span>' +
       '<span style="color:var(--green);font-weight:700">🎯 Target: ' + Number(d.target_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span></div>';
+  }
+  // BNF recommendation banner
+  const rec = document.getElementById('bnfRec');
+  if (rec && d.recommendation) {
+    rec.style.display = 'block';
+    rec.textContent = '💡 ' + d.recommendation;
+    rec.style.background = d.action === 'BUY' ? 'rgba(0,200,83,0.12)' : d.action === 'SELL' ? 'rgba(255,23,68,0.12)' : 'rgba(255,193,7,0.08)';
+    rec.style.color = d.action === 'BUY' ? 'var(--green)' : d.action === 'SELL' ? 'var(--red)' : 'var(--yellow)';
   }
   // BNF alerts
   const al = document.getElementById('bnfAlertsList');

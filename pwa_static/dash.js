@@ -759,6 +759,11 @@ function renderBacktest(d) {
     'Longs: ' + d.long_trades + ' · Shorts: ' + d.short_trades + ' · Avg hold: ' + d.avg_bars + ' bars<br>' +
     'Exits: 🎯target ' + (d.exit_reasons.target||0) + ' · 🛑stop ' + (d.exit_reasons.stop||0) + ' · ⏳time ' + (d.exit_reasons.time||0) + ' · ADX ' + (d.exit_reasons.adx_death||0) + '<br>' +
     'Rules: 1h bars, 48-bar time stop, 1% target, 0.5% EMA stop, costs 0.1%/round trip';
+  if (d.variants) {
+    const vLines = Object.entries(d.variants).map(([k,v]) =>
+      (k === d.variant ? '<b>✓ ' : '') + (k === 'base' ? 'Base' : k === 'time' ? 'Morning-only' : 'Morning+VIX<18') + ': ' + v.trades + ' tr, ' + v.win_rate + '% WR, ' + v.expectancy + '%/tr' + (k === d.variant ? '</b>' : ''));
+    det.innerHTML += '<br><br><b>Variants tested:</b><br>' + vLines.join('<br>');
+  }
 }
 
 // ── Option Chain Table ──

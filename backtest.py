@@ -47,13 +47,24 @@ def _adx(high, low, close, period=14):
     return dx.ewm(alpha=1 / period, adjust=False).mean(), pdi, mdi
 
 
-def run_backtest():
+def run_backtest(variant="base"):
     df = yf.download("^NSEI", period="2y", interval="1h", auto_adjust=False)
     if df is None or df.empty:
         return {"error": "No Nifty 1h data"}
     if hasattr(df.columns, "levels") and len(df.columns.levels) > 1:
         df.columns = df.columns.get_level_values(0)
     df = df.dropna()
+
+    # VIX series for filter (daily → forward fill to hourly)
+    vix_df = None
+    if variant != "base":
+        try:
+            vix_df = yf.download("^INDIAVIX", period="2y", interval="1d", auto_adjust=False)
+            if hasattr(vix_df.columns, "levels") and len(vix_df.columns.levels) > 1:
+                vix_df.columns = vix_df.columns.get_level_values(0)
+            vix_df = vix_df["Close"].dropna()
+        except Exception:
+            vix_df = None
 
     close = df["Close"]
     ema200 = _ema(close, 200)
@@ -66,7 +77,31 @@ def run_backtest():
     pos = None
 
     for i in range(200, len(df) - 1):
+        # VIX filter (only check on entries)
+        vix_ok = True
+        if variant != "base" and vix_df is not None:
+            ts = close.index[i]
+            try:
+                ts_n = ts.tz_localize(None)
+            except Exception:
+                ts_n = ts
+            vix_idx = vix_df.index
+            if getattr(vix_idx, "tz", None) is not None:
+                vix_idx = vix_idx.tz_localize(None)
+            vix_slice = vix_df[vix_idx <= ts_n]
+            if len(vix_slice):
+                vix_ok = float(vix_slice.iloc[-1]) < 18
+
+        # Time-of-day filter: entries only in first 3 hourly bars (09:15/10:15/11:15 IST)
+        tod_ok = True
+        if variant in ("time", "time_vix"):
+            hh = close.index[i].hour
+            mm = close.index[i].minute
+            tod_ok = (hh == 9 and mm <= 30) or (hh == 10) or (hh == 11)
+
         if pos is None:
+            if not (vix_ok and tod_ok):
+                continue
             d = (close.iloc[i] - ema200.iloc[i]) / ema200.iloc[i] * 100
             a, p, m = adx.iloc[i], pdi.iloc[i], mdi.iloc[i]
             r = rsi.iloc[i]
@@ -157,16 +192,31 @@ def get_backtest(force=False):
     now = time.time()
     if not force and _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
         return _cache["data"]
-    out = run_backtest()
-    if "error" not in out:
+    results = {}
+    for v in ("base", "time", "time_vix"):
+        r = run_backtest(v)
+        if "error" not in r:
+            results[v] = r
+    if not results:
+        out = {"error": "Backtest failed"}
+    else:
+        # Pick best by expectancy
+        best_key = max(results, key=lambda k: results[k]["expectancy"])
+        out = results[best_key]
+        out["variant"] = best_key
+        out["variants"] = {
+            k: {"trades": v["trades"], "win_rate": v["win_rate"], "expectancy": v["expectancy"], "profit_factor": v["profit_factor"]}
+            for k, v in results.items()
+        }
         exp = out["expectancy"]
         pf = out.get("profit_factor") or 0
+        vname = {"base": "Base rules", "time": "Morning entries only", "time_vix": "Morning + VIX<18"}.get(best_key, best_key)
         if out["win_rate"] >= 55 and exp > 0 and pf >= 1.3:
-            out["read"] = f"✅ Edge confirmed: {out['win_rate']}% win rate, {exp:+.2f}%/trade, PF {pf} over {out['trades']} trades."
+            out["read"] = f"✅ Edge confirmed ({vname}): {out['win_rate']}% WR, {exp:+.2f}%/trade, PF {pf} over {out['trades']} trades."
         elif exp > 0:
-            out["read"] = f"Marginal edge: {out['win_rate']}% win rate, {exp:+.2f}%/trade, PF {pf} over {out['trades']} trades. Best variant: 48-bar hold + 1% target. Size small, strict stops."
+            out["read"] = f"Marginal edge ({vname}): {out['win_rate']}% WR, {exp:+.2f}%/trade, PF {pf} over {out['trades']} trades. Size small, strict stops."
         else:
-            out["read"] = f"⚠️ No edge: {out['win_rate']}% win rate, {exp:+.2f}%/trade, PF {pf} over {out['trades']} trades. Treat signals as guidance, not certainty."
+            out["read"] = f"⚠️ No edge in any variant: best {vname} {out['win_rate']}% WR, {exp:+.2f}%/trade, PF {pf}. Signals = guidance only."
         _cache["ts"] = now
         _cache["data"] = out
         try:

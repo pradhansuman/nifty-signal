@@ -724,9 +724,47 @@ function renderIvRank(d) {
   readEl.style.color = rank != null && rank <= 40 ? 'var(--green)' : rank != null && rank >= 70 ? 'var(--red)' : 'var(--text-dim)';
 }
 
+// ── Backtest ──
+async function fetchBacktest() {
+  try {
+    const resp = await fetch('/api/backtest?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderBacktest(await resp.json());
+  } catch(e) {}
+}
+
+function renderBacktest(d) {
+  const el = id => document.getElementById(id);
+  if (!el('btTrades')) return;
+  if (d.error) { el('btRead').textContent = d.error; return; }
+  el('btPeriod').textContent = d.period ? d.period.slice(0, 10) + ' → ' + d.period.slice(-10) : '';
+  el('btTrades').textContent = d.trades;
+  const wr = el('btWinRate');
+  wr.textContent = d.win_rate + '%';
+  wr.style.color = d.win_rate >= 55 ? 'var(--green)' : d.win_rate >= 45 ? 'var(--yellow)' : 'var(--red)';
+  const ex = el('btExpectancy');
+  ex.textContent = (d.expectancy > 0 ? '+' : '') + d.expectancy + '%';
+  ex.style.color = d.expectancy > 0 ? 'var(--green)' : 'var(--red)';
+  const pf = el('btPF');
+  pf.textContent = d.profit_factor || '--';
+  pf.style.color = (d.profit_factor || 0) >= 1.3 ? 'var(--green)' : (d.profit_factor || 0) >= 1 ? 'var(--yellow)' : 'var(--red)';
+  const rd = el('btRead');
+  rd.textContent = d.read || '';
+  rd.style.color = 'var(--text-dim)';
+
+  const det = el('btDetails');
+  det.innerHTML =
+    'Avg win: ' + d.avg_win + '% · Avg loss: ' + d.avg_loss + '% · Max DD: ' + d.max_drawdown_pct + '%<br>' +
+    'Total return (2y): ' + d.total_return_pct + '% · Best: ' + d.best_trade + '% · Worst: ' + d.worst_trade + '%<br>' +
+    'Longs: ' + d.long_trades + ' · Shorts: ' + d.short_trades + ' · Avg hold: ' + d.avg_bars + ' bars<br>' +
+    'Exits: 🎯target ' + (d.exit_reasons.target||0) + ' · 🛑stop ' + (d.exit_reasons.stop||0) + ' · ⏳time ' + (d.exit_reasons.time||0) + ' · ADX ' + (d.exit_reasons.adx_death||0) + '<br>' +
+    'Rules: 1h bars, 48-bar time stop, 1% target, 0.5% EMA stop, costs 0.1%/round trip';
+}
+
 // ── Init ──
 fetchSignal();
 fetchIvRank();
+fetchBacktest();
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();

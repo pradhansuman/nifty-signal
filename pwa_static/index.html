@@ -569,6 +569,37 @@
   <div style="margin-top:8px;font-size:12px" id="btcLevels"></div>
 </div>
 
+<!-- Backtest Report -->
+<div class="card" id="backtestCard" style="border-color:#448aff44">
+  <div class="card-header">
+    <span class="label">🧪 Strategy Backtest</span>
+    <span style="font-size:10px;color:var(--text-dim)" id="btPeriod">--</span>
+  </div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="btTrades">--</div>
+      <div class="g-label">Trades</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btWinRate">--</div>
+      <div class="g-label">Win Rate</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btExpectancy">--</div>
+      <div class="g-label">%/Trade</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btPF">--</div>
+      <div class="g-label">Profit Factor</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px" id="btRead">Loading backtest...</div>
+  <details style="margin-top:6px">
+    <summary style="font-size:11px;color:var(--blue);cursor:pointer">Details</summary>
+    <div style="font-size:11px;line-height:1.7;margin-top:6px;color:var(--text-dim)" id="btDetails"></div>
+  </details>
+</div>
+
 <!-- Trading Playbook -->
 <div class="card" style="border-color:#7c3aed44">
   <details>
@@ -606,6 +637,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260812f"></script>
+<script src="/dash.js?v=20260812g"></script>
 </body>
 </html>

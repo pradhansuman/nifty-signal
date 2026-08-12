@@ -17,6 +17,7 @@ from fii_dii import fiidii_summary
 from tomorrow_outlook import get_outlook
 from btc_monitor import get_btc_signal
 from iv_rank import get_iv_rank
+from backtest import get_backtest
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -174,6 +175,11 @@ def api_btc():
 def api_ivrank():
     """IV Rank / Percentile for Nifty (cached 30 min)."""
     return jsonify(get_iv_rank())
+
+@app.route("/api/backtest")
+def api_backtest():
+    """Strategy backtest report (cached 1 hour)."""
+    return jsonify(get_backtest())
 
 @app.route("/api/full")
 def api_full():

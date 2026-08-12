@@ -99,11 +99,33 @@ def get_full_analysis():
 @app.route("/api/signal")
 def api_signal():
     signal = get_signal()
-    # Map signal to mobile-friendly response
-    emoji = {"BUY_CALLS": "🟢", "WAIT": "🟡", "STAND_ASIDE": "🔴", "ERROR": "⚪"}
+    emoji = {"BUY_CALLS": "🟢", "BUY_PUTS": "🔴", "WAIT": "🟡", "STAND_ASIDE": "🔴", "ERROR": "⚪"}
+    
+    # Auto-track paper positions when entry/exit signals fire
+    try:
+        sig_name = signal.get("signal", "")
+        if sig_name in ("BUY_CALLS", "BUY_PUTS"):
+            direction = "BUY" if sig_name == "BUY_CALLS" else "SELL"
+            strike = signal.get("entry_strike", 0)
+            premium = signal.get("entry_premium") or 0
+            # Check if we already have an active position
+            from algo_trader import load_state
+            st = load_state()
+            existing = [p for p in st.get("active_positions", []) if p.get("direction") == direction and p.get("signal_type","") == "ema_bounce"]
+            if not existing:
+                pos = track_paper_entry("ema_bounce", direction, strike, 1, premium)
+                signal["paper_entry"] = pos
+        elif sig_name in ("EXIT_LONGS", "EXIT_SHORTS"):
+            current_premium = signal.get("entry_premium") or signal.get("btst_premium") or 0
+            results = track_paper_exit_all(current_premium, "long" if sig_name == "EXIT_LONGS" else "short")
+            if results:
+                signal["paper_exit"] = {"count": len(results), "total_pnl": sum(r["pnl"] for r in results)}
+    except Exception:
+        pass  # Non-critical
+    
     return jsonify({
         **signal,
-        "emoji": emoji.get(signal.get("signal", "ERROR"), "⚪"),
+        "emoji": emoji.get(sig_name, "⚪"),
         "updated": datetime.now().strftime("%H:%M:%S"),
     })
 
@@ -470,23 +492,11 @@ def alert_scheduler():
                     sig = get_signal()
                     signal = sig.get("signal", "")
                     if signal in ("BUY_CALLS", "BUY_PUTS"):
-                        direction = "BUY" if signal == "BUY_CALLS" else "SELL"
-                        strike = sig.get("entry_strike", 0)
-                        premium = sig.get("entry_premium") or sig.get("btst_premium") or 0
-                        lots = 1
-                        # Track paper position
-                        track_paper_entry("ema_bounce", direction, strike, lots, premium)
                         _add_alert("critical", f"🔴 {signal} — 200 EMA",
                             f"Spot: {sig.get('spot')} | ADX: {sig.get('adx')} | "
                             f"PCR: {sig.get('oi_pcr')} | IV: {sig.get('atm_iv')}% | "
                             f"Trade: {sig.get('recommended_trade', '')[:100]}")
                     elif signal in ("EXIT_LONGS", "EXIT_SHORTS"):
-                        # Close paper positions
-                        current_premium = sig.get("entry_premium") or sig.get("btst_premium") or 0
-                        results = track_paper_exit_all(current_premium, "long" if signal == "EXIT_LONGS" else "short")
-                        if results:
-                            total_pnl = sum(r["pnl"] for r in results)
-                            sig["paper_exit_pnl"] = total_pnl
                         _add_alert("critical", f"⚠️ {signal}", sig.get("exit_reason", ""))
                     # Contrarian PCR check
                     cs = sig.get("contrarian_signal", "")
@@ -547,6 +557,20 @@ def alert_scheduler():
             time.sleep(60)
 
 
+# ── Paper Trading Heartbeat (keeps paper P&L tracking alive) ──
+
+def paper_tracking_heartbeat():
+    """Pings the signal endpoint every 60s to auto-trigger paper P&L."""
+    import requests as req
+    while True:
+        try:
+            if _is_market_open():
+                req.get(f"http://localhost:{PORT}/api/signal", timeout=30)
+            time.sleep(60)
+        except:
+            time.sleep(30)
+
+
 # ── Serve PWA Frontend ──
 
 @app.route("/")
@@ -574,6 +598,11 @@ if __name__ == "__main__":
         scheduler = threading.Thread(target=alert_scheduler, daemon=True)
         scheduler.start()
         print("   Alerts:  Background scheduler started")
+    
+    # Always start paper tracking heartbeat
+    pth = threading.Thread(target=paper_tracking_heartbeat, daemon=True)
+    pth.start()
+    print("   Paper:   Auto-tracking enabled")
     
     print()
     

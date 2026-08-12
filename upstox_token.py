@@ -37,6 +37,12 @@ def _load_cfg():
         for k in dir(m):
             if k.isupper():
                 cfg[k] = getattr(m, k)
+    # Env vars override (this is how cloud deploys like Render provide the token)
+    for k in ("UPSTOX_ACCESS_TOKEN", "UPSTOX_ACCESS_EXPIRY", "UPSTOX_ANALYTICS_TOKEN",
+              "UPSTOX_REFRESH_TOKEN", "UPSTOX_CLIENT_ID", "UPSTOX_CLIENT_SECRET"):
+        v = os.environ.get(k)
+        if v:
+            cfg[k] = v
     return cfg
 
 

@@ -376,9 +376,15 @@ def main():
         # Debug
         if not token:
             result["option_chain_source"] = "no_token"
-        elif not result.get("selected_expiry"):
-            result["option_chain_source"] = "no_expiry"
         else:
+            # If no signal-selected expiry (WAIT), use nearest weekly expiry
+            if not result.get("selected_expiry"):
+                today = datetime.now()
+                days_to_tue = (1 - today.weekday()) % 7
+                if days_to_tue == 0: days_to_tue = 7
+                next_tue = today + timedelta(days=days_to_tue)
+                result["selected_expiry"] = next_tue.strftime("%d-%b-%Y")
+            
             enriched = enrich_from_upstox(result, token)
             if enriched:
                 if enriched.get("chain_spot"):

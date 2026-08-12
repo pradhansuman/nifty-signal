@@ -621,17 +621,24 @@ function render(s) {
     document.getElementById('tradeDTE').textContent = (s.dte || '--') + ' DTE';
     
     if (s.signal === 'BUY_CALLS' && s.recommended_trade) {
-      document.getElementById('tradeType').textContent = '📈 Bull Call Spread: Buy ' + s.entry_strike + ' CE, Sell ' + s.target_strike + ' CE';
+      document.getElementById('tradeType').textContent = '📈 Buy ' + s.entry_strike + ' CE';
       let tradeInfo = '';
       if (s.entry_premium != null) {
-        tradeInfo = 'Buy @ ₹' + s.entry_premium + ' | Sell @ ₹' + (s.target_premium || '--');
-        if (s.net_debit != null) tradeInfo += ' | Net: ₹' + s.net_debit + ' (₹' + Math.round(s.net_debit * 65).toLocaleString('en-IN') + '/lot)';
+        tradeInfo = 'Premium: ₹' + s.entry_premium + ' (₹' + Math.round(s.entry_premium * 65).toLocaleString('en-IN') + '/lot)';
       }
       document.getElementById('entryLevel').textContent = tradeInfo || ('Entry: ' + (s.entry_strike || '--'));
       document.getElementById('targetLevelPill').textContent = s.stop_level ? '🛑 Index Stop: ' + s.stop_level : '';
       document.getElementById('stopLevelPill').textContent = '';
-    } else {
-      document.getElementById('tradeType').textContent = 'No positional trade active';
+    } else if (s.signal === 'BUY_PUTS' && s.recommended_trade) {
+      document.getElementById('tradeType').textContent = '📉 Buy ' + s.entry_strike + ' PE';
+      let tradeInfo = '';
+      if (s.entry_premium != null) {
+        tradeInfo = 'Premium: ₹' + s.entry_premium + ' (₹' + Math.round(s.entry_premium * 65).toLocaleString('en-IN') + '/lot)';
+      }
+      document.getElementById('entryLevel').textContent = tradeInfo || ('Entry: ' + (s.entry_strike || '--'));
+      document.getElementById('targetLevelPill').textContent = s.stop_level ? '🛑 Index Stop: ' + s.stop_level : '';
+      document.getElementById('stopLevelPill').textContent = ''; else {
+      document.getElementById('tradeType').textContent = s.recommended_trade || 'No active trade';
       document.getElementById('entryLevel').textContent = '';
       document.getElementById('targetLevelPill').textContent = '';
       document.getElementById('stopLevelPill').textContent = '';

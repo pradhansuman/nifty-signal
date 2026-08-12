@@ -99,7 +99,7 @@ def main():
         "selected_expiry": None, "expiry_type": None,
         "dte": None, "theta_zone": None, "atm_strike": None,
         "recommended_trade": None,
-        "entry_strike": None, "target_strike": None, "stop_level": None,
+        "entry_strike": None, "stop_level": None,
         "trade_direction": None,
         # BTST
         "btst_expiry": None, "btst_dte": None,
@@ -166,7 +166,7 @@ def main():
         daily_vol = ann_vol / math.sqrt(252)
         
         def setup_trade(direction, expiries):
-            """Setup positional trade for given direction (long/short)."""
+            """Setup pure option BUY trade (CE for long, PE for short)."""
             strat = "buy" if direction == "long" else "sell"
             selected = select_expiry(expiries, strat)
             dte = selected["dte"]
@@ -178,20 +178,14 @@ def main():
             
             if direction == "long":
                 entry_strike = atm_strike
-                target_price = atm_strike + exp_move_1sd * 0.5
-                target_strike = round(target_price / 50) * 50
-                if target_strike <= entry_strike: target_strike = entry_strike + 50
                 stop_level = round(ema_200 * 0.995 / 10) * 10
-                trade_type = "Bull Call Spread"
-                trade_desc = f"Buy {entry_strike} CE, Sell {target_strike} CE"
+                trade_type = "Buy CE"
+                trade_desc = f"Buy {entry_strike} CE"
             else:  # short
                 entry_strike = atm_strike
-                target_price = atm_strike - exp_move_1sd * 0.5
-                target_strike = round(target_price / 50) * 50
-                if target_strike >= entry_strike: target_strike = entry_strike - 50
                 stop_level = round(ema_200 * 1.005 / 10) * 10
-                trade_type = "Bear Put Spread"
-                trade_desc = f"Buy {entry_strike} PE, Sell {target_strike} PE"
+                trade_type = "Buy PE"
+                trade_desc = f"Buy {entry_strike} PE"
             
             if dte > 15: theta_zone = "slow_decay"
             elif dte > 7: theta_zone = "moderate_decay"
@@ -202,8 +196,7 @@ def main():
                 "expiry": selected["display"], "expiry_type": selected["type"],
                 "dte": dte, "theta_zone": theta_zone, "atm_strike": atm_strike,
                 "trade_desc": trade_desc, "trade_type": trade_type,
-                "entry_strike": entry_strike, "target_strike": target_strike,
-                "stop_level": stop_level,
+                "entry_strike": entry_strike, "stop_level": stop_level,
                 "expected_move_1sd": exp_move_1sd, "expected_move_pct": exp_move_pct,
                 "action": (f"{trade_type}: {trade_desc} | Expiry: {selected['display']} ({dte}DTE) | "
                           f"Stop: {stop_level} | Expected ±{exp_move_pct}%")
@@ -290,10 +283,9 @@ def main():
                 "recommended_trade": (
                     f"{trade['trade_type']}: {trade['trade_desc']} | "
                     f"Expiry: {trade['expiry']} ({trade['expiry_type']}, {trade['dte']} DTE) | "
-                    f"Max profit if Nifty {'above' if 'Call' in trade['trade_type'] else 'below'} {trade['target_strike']} | "
                     f"Expected 1σ: ±{trade['expected_move_pct']}%"
                 ),
-                "entry_strike": trade["entry_strike"], "target_strike": trade["target_strike"],
+                "entry_strike": trade["entry_strike"],
                 "stop_level": trade["stop_level"],
                 "expected_move_1sd": trade["expected_move_1sd"],
                 "expected_move_pct": trade["expected_move_pct"],
@@ -324,10 +316,9 @@ def main():
                 "recommended_trade": (
                     f"{trade['trade_type']}: {trade['trade_desc']} | "
                     f"Expiry: {trade['expiry']} ({trade['expiry_type']}, {trade['dte']} DTE) | "
-                    f"Max profit if Nifty below {trade['target_strike']} | "
                     f"Expected 1σ: ±{trade['expected_move_pct']}%"
                 ),
-                "entry_strike": trade["entry_strike"], "target_strike": trade["target_strike"],
+                "entry_strike": trade["entry_strike"],
                 "stop_level": trade["stop_level"],
                 "expected_move_1sd": trade["expected_move_1sd"],
                 "expected_move_pct": trade["expected_move_pct"],
@@ -496,10 +487,9 @@ def enrich_from_upstox(result, token):
         
         # Look up premiums for recommended strikes
         entry_strike = result.get("entry_strike")
-        target_strike = result.get("target_strike")
         btst_strike = result.get("btst_strike")
         
-        entry_premium = None; target_premium = None; btst_premium = None
+        entry_premium = None; btst_premium = None
         entry_delta = None
         for item in data:
             s = item.get("strike_price", 0)
@@ -508,9 +498,6 @@ def enrich_from_upstox(result, token):
                 gr = item.get("call_options", {}).get("option_greeks", {})
                 entry_premium = md.get("ltp")
                 entry_delta = gr.get("delta")
-            if s == target_strike:
-                md = item.get("call_options", {}).get("market_data", {})
-                target_premium = md.get("ltp")
         
         # ── BTST premium from WEEKLY expiry (separate chain) ──
         btst_expiry_display = result.get("btst_expiry")
@@ -540,10 +527,7 @@ def enrich_from_upstox(result, token):
             except:
                 pass
         
-        # Net debit for spread (entry - target)
-        net_debit = None
-        if entry_premium is not None and target_premium is not None:
-            net_debit = round(entry_premium - target_premium, 2)
+        # Net debit for spread (entry - target) — REMOVED for pure buyer
         
         return {
             "oi_pcr": round(tpo / tco, 3) if tco > 0 else None,
@@ -557,8 +541,6 @@ def enrich_from_upstox(result, token):
             "max_pain_estimate": mp_strike,
             "chain_spot": chain_spot,
             "entry_premium": entry_premium,
-            "target_premium": target_premium,
-            "net_debit": net_debit,
             "btst_premium": btst_premium,
             # Weekly PCR (near-term sentiment, more OI-intensive)
             "weekly_pcr": weekly_pcr,

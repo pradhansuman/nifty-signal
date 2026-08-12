@@ -96,9 +96,17 @@ def get_full_analysis():
 
 # ── API Routes ──
 
+_signal_cache = {"ts": 0, "data": None}
+
 @app.route("/api/signal")
 def api_signal():
-    signal = get_signal()
+    # Serve cached result for 60s — API responds instantly instead of recomputing
+    import time as _t
+    now = _t.time()
+    if _signal_cache["data"] is None or (now - _signal_cache["ts"]) > 60:
+        _signal_cache["data"] = get_signal()
+        _signal_cache["ts"] = now
+    signal = _signal_cache["data"]
     emoji = {"BUY_CALLS": "🟢", "BUY_PUTS": "🔴", "WAIT": "🟡", "STAND_ASIDE": "🔴", "ERROR": "⚪"}
     
     # Auto-track paper positions when entry/exit signals fire

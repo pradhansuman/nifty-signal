@@ -463,8 +463,12 @@
 <script>
 // Immediate proof of JS execution
 var _jsAlive = true;
-document.addEventListener('DOMContentLoaded', () => {
-document.getElementById('debugInfo').textContent = 'JS loaded ✅';
+(function init() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+    return;
+  }
+  document.getElementById('debugInfo').textContent = 'JS loaded ✅';
 });
 let cachedSignal = null;
 let deferredPrompt = null;
@@ -1046,7 +1050,7 @@ setInterval(fetchAlgoStatus, 30000);
 
 // Service worker disabled — was causing blank dashboard
 // To re-enable: uncomment below after clearing browser cache
-}); // DOMContentLoaded end
+})(); // init end
 </script>
 </body>
 </html>

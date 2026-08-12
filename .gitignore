@@ -32,3 +32,4 @@ nifty_analysis_*.json
 
 # Misc
 *.log
+.openclaw/tmp/algo_orders.json

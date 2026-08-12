@@ -881,12 +881,28 @@ async function fetchChart() {
   try {
     const resp = await fetch('/api/chart?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    drawChart(await resp.json());
+    drawChart(await resp.json(), 'niftyChart', 'chartSpotTag');
   } catch(e) {}
 }
 
-function drawChart(d) {
-  const cv = document.getElementById('niftyChart');
+async function fetchBtcChart() {
+  try {
+    const resp = await fetch('/api/chart?asset=btc&_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    drawChart(await resp.json(), 'btcChart');
+  } catch(e) {}
+}
+
+async function fetchBnfChart() {
+  try {
+    const resp = await fetch('/api/chart?asset=banknifty&_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    drawChart(await resp.json(), 'bnfChart');
+  } catch(e) {}
+}
+
+function drawChart(d, canvasId, spotTagId) {
+  const cv = document.getElementById(canvasId);
   if (!cv || d.error) return;
   const ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height, PAD = 6;
@@ -921,8 +937,10 @@ function drawChart(d) {
   });
   ctx.stroke();
   // Spot tag
-  const tag = document.getElementById('chartSpotTag');
-  if (tag && d.spot) tag.textContent = 'Spot: ' + Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0});
+  if (spotTagId) {
+    const tag = document.getElementById(spotTagId);
+    if (tag && d.spot) tag.textContent = 'Spot: ' + Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0});
+  }
 }
 
 // ── Bank Nifty ──
@@ -1030,6 +1048,8 @@ fetchIvRank();
 fetchBacktest();
 fetchChain();
 fetchChart();
+fetchBtcChart();
+fetchBnfChart();
 fetchExpiry();
 fetchWeekly();
 fetchFiiDii();

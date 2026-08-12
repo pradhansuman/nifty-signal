@@ -612,7 +612,11 @@ def paper_tracking_heartbeat():
 
 @app.route("/")
 def index():
-    return send_from_directory(app.static_folder, "index.html")
+    try:
+        with open(os.path.join(app.static_folder, "index.html"), "r") as f:
+            return f.read(), 200, {"Content-Type": "text/html; charset=utf-8"}
+    except:
+        return "Error loading dashboard", 500
 
 @app.route("/<path:path>")
 def serve_static(path):

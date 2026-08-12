@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test</title></head>
+<body>
+<h1 id="h">WAITING</h1>
+<script>
+document.getElementById('h').textContent = 'JS WORKS';
+fetch('/api/signal').then(r=>r.json()).then(d=>{
+  document.getElementById('h').textContent = 'Signal: '+d.signal+' Spot: '+d.spot;
+}).catch(e=>{
+  document.getElementById('h').textContent = 'ERROR: '+e.message;
+});
+</script>
+</body></html>

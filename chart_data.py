@@ -25,7 +25,8 @@ def get_chart_data(asset="nifty", force=False):
     if not force and _cache["data"].get(asset) and (now - _cache["ts"].get(asset, 0)) < CACHE_TTL:
         return _cache["data"][asset]
 
-    out = {"error": None, "asset": asset, "dates": [], "close": [], "ema200": [], "spot": None}
+    out = {"error": None, "asset": asset, "dates": [], "close": [], "ema200": [], "spot": None,
+           "open": [], "high": [], "low": [], "volume": []}
     try:
         df = yf.download(cfg["symbol"], period=cfg["period"], interval=cfg["interval"], auto_adjust=False)
         if df is None or df.empty:
@@ -38,8 +39,13 @@ def get_chart_data(asset="nifty", force=False):
 
         tail = close.tail(cfg["points"])
         ema_tail = ema.tail(cfg["points"])
-        out["dates"] = [str(d) for d in tail.index]
+        idx = tail.index
+        out["dates"] = [str(d) for d in idx]
         out["close"] = [round(float(x), 2) for x in tail.tolist()]
+        out["open"] = [round(float(df.loc[d, "Open"]), 2) for d in idx]
+        out["high"] = [round(float(df.loc[d, "High"]), 2) for d in idx]
+        out["low"] = [round(float(df.loc[d, "Low"]), 2) for d in idx]
+        out["volume"] = [int(df.loc[d, "Volume"] or 0) for d in idx]
         out["ema200"] = [round(float(x), 2) if not pd.isna(x) else None for x in ema_tail.tolist()]
         out["spot"] = round(float(close.iloc[-1]), 2)
         out["interval"] = cfg["interval"]

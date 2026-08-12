@@ -908,42 +908,61 @@ function drawChart(d, canvasId, spotTagId, colors) {
   const colorEma = (colors && colors.ema) || '#7c3aed';
   const ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height, PAD = 6;
+  const VOL_H = 26;  // volume band height at bottom
+  const PRICE_H = H - VOL_H - 8;
   ctx.clearRect(0, 0, W, H);
   const close = d.close || [];
   if (close.length < 5) return;
   const ema = d.ema200 || [];
-  const all = close.concat(ema.filter(v => v != null));
+  const highs = d.high || close, lows = d.low || close;
+  const vol = d.volume || [];
+  const all = highs.concat(lows, ema.filter(v => v != null));
   const min = Math.min.apply(null, all), max = Math.max.apply(null, all);
   const rng = (max - min) || 1;
   const X = i => PAD + (i / (close.length - 1)) * (W - 2 * PAD);
-  const Y = v => H - PAD - ((v - min) / rng) * (H - 2 * PAD);
-  // Grid lines
+  const Y = v => PAD + PRICE_H - ((v - min) / rng) * (PRICE_H - 2 * PAD);
+  const bw = Math.max(1.5, ((W - 2 * PAD) / close.length) * 0.6);
+
+  // Grid + value labels
   ctx.strokeStyle = 'rgba(30,41,59,0.6)';
   ctx.lineWidth = 1;
   for (let g = 0; g <= 4; g++) {
-    const gy = PAD + (g / 4) * (H - 2 * PAD);
+    const gy = PAD + (g / 4) * (PRICE_H - 2 * PAD);
     ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W - PAD, gy); ctx.stroke();
-    // Value labels on left edge
     const val = max - (g / 4) * rng;
     ctx.fillStyle = 'rgba(107,114,128,0.8)';
     ctx.font = '9px sans-serif';
     ctx.fillText(val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(0), 1, gy - 2);
   }
-  // Nifty line
-  ctx.strokeStyle = colorLine; ctx.lineWidth = 2;
-  ctx.beginPath();
-  close.forEach((v, i) => { i === 0 ? ctx.moveTo(X(i), Y(v)) : ctx.lineTo(X(i), Y(v)); });
-  ctx.stroke();
-  // Soft fill under price
-  ctx.lineTo(X(close.length - 1), H - PAD);
-  ctx.lineTo(X(0), H - PAD);
-  ctx.closePath();
-  ctx.fillStyle = colorLine;
-  ctx.globalAlpha = 0.12;
-  ctx.fill();
-  ctx.globalAlpha = 1;
+
+  // Volume bars (bottom band)
+  const vmax = Math.max.apply(null, vol.concat([1]));
+  for (let i = 0; i < close.length; i++) {
+    const v = vol[i] || 0;
+    const up = i === 0 || close[i] >= (d.open && d.open[i] != null ? d.open[i] : close[i - 1]);
+    ctx.fillStyle = up ? 'rgba(0,200,83,0.35)' : 'rgba(255,23,68,0.35)';
+    const bh = (v / vmax) * VOL_H;
+    ctx.fillRect(X(i) - bw / 2, H - PAD - bh + 4, bw, bh);
+  }
+
+  // Candles
+  for (let i = 0; i < close.length; i++) {
+    const o = d.open && d.open[i] != null ? d.open[i] : close[i];
+    const h = highs[i], l = lows[i], c = close[i];
+    const up = c >= o;
+    ctx.strokeStyle = up ? '#00c853' : '#ff1744';
+    ctx.fillStyle = up ? '#00c853' : '#ff1744';
+    ctx.lineWidth = 1;
+    // Wick
+    ctx.beginPath(); ctx.moveTo(X(i), Y(h)); ctx.lineTo(X(i), Y(l)); ctx.stroke();
+    // Body
+    const yo = Y(o), yc = Y(c);
+    const bodyTop = Math.min(yo, yc), bodyH = Math.max(1, Math.abs(yo - yc));
+    ctx.fillRect(X(i) - bw / 2, bodyTop, bw, bodyH);
+  }
+
   // 200 EMA line
-  ctx.strokeStyle = colorEma; ctx.lineWidth = 1.5;
+  ctx.strokeStyle = colorEma; ctx.lineWidth = 1.8;
   ctx.beginPath(); let started = false;
   ema.forEach((v, i) => {
     if (v == null) return;
@@ -951,6 +970,7 @@ function drawChart(d, canvasId, spotTagId, colors) {
     else ctx.lineTo(X(i), Y(v));
   });
   ctx.stroke();
+
   // Spot tag
   if (spotTagId) {
     const tag = document.getElementById(spotTagId);

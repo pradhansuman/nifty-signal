@@ -931,15 +931,30 @@ function initTimeframeToggles() {
   bind('tfBnf', tf => fetchBnfChart(tf));
 }
 
+// Chart state registry for resize redraws
+const chartState = {};
+
+function fitCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth || 460;
+  const h = cv.clientHeight || 180;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, w, h };
+}
+
 function drawChart(d, canvasId, spotTagId, colors) {
   const cv = document.getElementById(canvasId);
   if (!cv || d.error) return;
+  chartState[canvasId] = { d: d, spotTagId: spotTagId, colors: colors };
   const colorLine = (colors && colors.line) || '#448aff';
   const colorEma = (colors && colors.ema) || '#7c3aed';
-  const ctx = cv.getContext('2d');
-  const W = cv.width, H = cv.height, PAD = 6;
-  const VOL_H = 26;  // volume band height at bottom
-  const PRICE_H = H - VOL_H - 8;
+  const { ctx, w: W, h: H } = fitCanvas(cv);
+  const PAD = 8;
+  const VOL_H = 24;  // volume band height at bottom
+  const PRICE_H = H - VOL_H - 10;
   ctx.clearRect(0, 0, W, H);
   const close = d.close || [];
   if (close.length < 5) return;
@@ -951,18 +966,23 @@ function drawChart(d, canvasId, spotTagId, colors) {
   const rng = (max - min) || 1;
   const X = i => PAD + (i / (close.length - 1)) * (W - 2 * PAD);
   const Y = v => PAD + PRICE_H - ((v - min) / rng) * (PRICE_H - 2 * PAD);
-  const bw = Math.max(1.5, ((W - 2 * PAD) / close.length) * 0.6);
+  const bw = Math.max(2.5, ((W - 2 * PAD) / close.length) * 0.7);
 
-  // Grid + value labels
-  ctx.strokeStyle = 'rgba(30,41,59,0.6)';
+  // Grid + value labels (right-aligned on left edge, crisp small font)
+  ctx.strokeStyle = 'rgba(30,41,59,0.55)';
   ctx.lineWidth = 1;
+  ctx.font = '10px ui-monospace, Menlo, monospace';
   for (let g = 0; g <= 4; g++) {
     const gy = PAD + (g / 4) * (PRICE_H - 2 * PAD);
     ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W - PAD, gy); ctx.stroke();
     const val = max - (g / 4) * rng;
-    ctx.fillStyle = 'rgba(107,114,128,0.8)';
-    ctx.font = '9px sans-serif';
-    ctx.fillText(val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(0), 1, gy - 2);
+    const txt = val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(0);
+    const tw = ctx.measureText(txt).width;
+    // Label chip with dark bg so it never collides with candles
+    ctx.fillStyle = 'rgba(13,20,32,0.75)';
+    ctx.fillRect(1, gy - 8, tw + 4, 11);
+    ctx.fillStyle = 'rgba(148,163,184,0.95)';
+    ctx.fillText(txt, 3, gy + 1);
   }
 
   // Volume bars (bottom band)
@@ -970,10 +990,13 @@ function drawChart(d, canvasId, spotTagId, colors) {
   for (let i = 0; i < close.length; i++) {
     const v = vol[i] || 0;
     const up = i === 0 || close[i] >= (d.open && d.open[i] != null ? d.open[i] : close[i - 1]);
-    ctx.fillStyle = up ? 'rgba(0,200,83,0.35)' : 'rgba(255,23,68,0.35)';
-    const bh = (v / vmax) * VOL_H;
+    ctx.fillStyle = up ? 'rgba(0,200,83,0.4)' : 'rgba(255,23,68,0.4)';
+    const bh = Math.max(1, (v / vmax) * VOL_H);
     ctx.fillRect(X(i) - bw / 2, H - PAD - bh + 4, bw, bh);
   }
+  // Volume band separator
+  ctx.strokeStyle = 'rgba(30,41,59,0.8)';
+  ctx.beginPath(); ctx.moveTo(PAD, PRICE_H + PAD + 2); ctx.lineTo(W - PAD, PRICE_H + PAD + 2); ctx.stroke();
 
   // Candles
   for (let i = 0; i < close.length; i++) {
@@ -983,11 +1006,9 @@ function drawChart(d, canvasId, spotTagId, colors) {
     ctx.strokeStyle = up ? '#00c853' : '#ff1744';
     ctx.fillStyle = up ? '#00c853' : '#ff1744';
     ctx.lineWidth = 1;
-    // Wick
     ctx.beginPath(); ctx.moveTo(X(i), Y(h)); ctx.lineTo(X(i), Y(l)); ctx.stroke();
-    // Body
     const yo = Y(o), yc = Y(c);
-    const bodyTop = Math.min(yo, yc), bodyH = Math.max(1, Math.abs(yo - yc));
+    const bodyTop = Math.min(yo, yc), bodyH = Math.max(1.5, Math.abs(yo - yc));
     ctx.fillRect(X(i) - bw / 2, bodyTop, bw, bodyH);
   }
 
@@ -1007,6 +1028,18 @@ function drawChart(d, canvasId, spotTagId, colors) {
     if (tag && d.spot) tag.textContent = 'Spot: ' + Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0});
   }
 }
+
+// Redraw on resize (debounced) — keeps charts crisp on rotate/orientation change
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    Object.keys(chartState).forEach(id => {
+      const s = chartState[id];
+      drawChart(s.d, id, s.spotTagId, s.colors);
+    });
+  }, 200);
+});
 
 // ── Bank Nifty ──
 async function fetchBnf() {

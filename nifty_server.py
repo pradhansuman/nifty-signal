@@ -122,6 +122,61 @@ _btc_cache = {"ts": 0, "data": None}
 _bnf_cache = {"ts": 0, "data": None}
 _last_tg_push = 0
 
+_asset_alerts = {}  # asset:date -> list of signal-change alerts
+_asset_last_signal = {}  # asset -> last signal
+
+
+def _track_asset_alert(asset, signal, reason):
+    """Log signal-change alerts for BTC / Bank Nifty, push Telegram on change."""
+    try:
+        key = f"{asset}:{datetime.now().date()}"
+        last = _asset_last_signal.get(asset)
+        if last == signal:
+            return
+        _asset_last_signal[asset] = signal
+        entry = {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "date": datetime.now().strftime("%d-%b"),
+            "signal": signal,
+            "reason": reason[:120] if reason else "",
+            "prev": last or "—",
+        }
+        lst = _asset_alerts.setdefault(key, [])
+        lst.append(entry)
+        if len(lst) > 15:
+            lst.pop(0)
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", f"{asset}_alerts.json")
+        try:
+            with open(path, "w") as f:
+                json.dump(lst, f, default=str)
+        except Exception:
+            pass
+        try:
+            if telegram_alert.is_configured():
+                now = time.time()
+                if now - _last_tg_push > 60:
+                    _last_tg_push = now
+                    emoji = "🟢" if signal == "BUY_LONG" else "🔴" if signal == "BUY_SHORT" else "⏳"
+                    label = "₿ BTC" if asset == "btc" else "🏦 BNF"
+                    telegram_alert.send_telegram(f"{emoji} <b>{label} signal: {signal}</b>\n{reason[:150]}")
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+
+def _asset_alert_list(asset):
+    key = f"{asset}:{datetime.now().date()}"
+    if key in _asset_alerts:
+        return _asset_alerts[key]
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", f"{asset}_alerts.json")
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
 @app.route("/api/signal")
 def api_signal():
     # Serve cached result for 60s — API responds instantly instead of recomputing
@@ -181,7 +236,10 @@ def api_btc():
         _btc_cache["data"] = get_btc_signal(interval)
         _btc_cache["ts"] = _t.time()
         _btc_cache["interval"] = interval
-    return jsonify(_btc_cache["data"])
+    data = dict(_btc_cache["data"])
+    _track_asset_alert("btc", data.get("signal"), data.get("reason"))
+    data["alerts"] = _asset_alert_list("btc")
+    return jsonify(data)
 
 @app.route("/api/banknifty")
 def api_banknifty():
@@ -190,7 +248,10 @@ def api_banknifty():
     if _bnf_cache["data"] is None or (_t.time() - _bnf_cache["ts"]) > 60:
         _bnf_cache["data"] = get_banknifty_signal()
         _bnf_cache["ts"] = _t.time()
-    return jsonify(_bnf_cache["data"])
+    data = dict(_bnf_cache["data"])
+    _track_asset_alert("banknifty", data.get("signal"), data.get("reason"))
+    data["alerts"] = _asset_alert_list("banknifty")
+    return jsonify(data)
 
 @app.route("/api/expiry")
 def api_expiry():

@@ -703,6 +703,18 @@ function renderBtc(d) {
       '<span style="color:var(--green);font-weight:700">🎯 Target: $' + Number(d.target_level).toLocaleString('en-US', {maximumFractionDigits: 0}) + '</span>' +
       '</div>';
   }
+  // BTC alerts
+  const al = document.getElementById('btcAlertsList');
+  if (al && d.alerts && d.alerts.length) {
+    al.innerHTML = d.alerts.slice().reverse().map(a => {
+      const color = a.signal === 'BUY_LONG' ? 'var(--green)' : a.signal === 'BUY_SHORT' ? 'var(--red)' : 'var(--yellow)';
+      return '<div style="padding:4px 6px;border-left:3px solid ' + color + ';background:rgba(124,58,237,0.05);margin:3px 0;border-radius:4px">' +
+        '<b style="color:' + color + '">' + a.signal + '</b> <span style="color:var(--text-dim)">' + a.date + ' ' + a.time + ' <span style="opacity:0.6">(was ' + a.prev + ')</span></span><br>' +
+        '<span style="color:var(--text-dim)">' + a.reason + '</span></div>';
+    }).join('');
+  } else if (al) {
+    al.innerHTML = '<div style="color:var(--text-dim);padding:8px;text-align:center">No signal changes yet today</div>';
+  }
 }
 
 // ── IV Rank ──
@@ -938,6 +950,18 @@ function renderBnf(d) {
     lv.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
       '<span style="color:var(--red);font-weight:700">🛑 Stop: ' + Number(d.stop_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span>' +
       '<span style="color:var(--green);font-weight:700">🎯 Target: ' + Number(d.target_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span></div>';
+  }
+  // BNF alerts
+  const al = document.getElementById('bnfAlertsList');
+  if (al && d.alerts && d.alerts.length) {
+    al.innerHTML = d.alerts.slice().reverse().map(a => {
+      const color = a.signal === 'BUY_LONG' ? 'var(--green)' : a.signal === 'BUY_SHORT' ? 'var(--red)' : 'var(--yellow)';
+      return '<div style="padding:4px 6px;border-left:3px solid ' + color + ';background:rgba(124,58,237,0.05);margin:3px 0;border-radius:4px">' +
+        '<b style="color:' + color + '">' + a.signal + '</b> <span style="color:var(--text-dim)">' + a.date + ' ' + a.time + ' <span style="opacity:0.6">(was ' + a.prev + ')</span></span><br>' +
+        '<span style="color:var(--text-dim)">' + a.reason + '</span></div>';
+    }).join('');
+  } else if (al) {
+    al.innerHTML = '<div style="color:var(--text-dim);padding:8px;text-align:center">No signal changes yet today</div>';
   }
 }
 

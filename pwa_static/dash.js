@@ -881,7 +881,7 @@ async function fetchChart() {
   try {
     const resp = await fetch('/api/chart?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    drawChart(await resp.json(), 'niftyChart', 'chartSpotTag');
+    drawChart(await resp.json(), 'niftyChart', 'chartSpotTag', {line: '#448aff', ema: '#7c3aed'});
   } catch(e) {}
 }
 
@@ -889,7 +889,7 @@ async function fetchBtcChart() {
   try {
     const resp = await fetch('/api/chart?asset=btc&_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    drawChart(await resp.json(), 'btcChart');
+    drawChart(await resp.json(), 'btcChart', null, {line: '#f7931a', ema: '#7c3aed'});
   } catch(e) {}
 }
 
@@ -897,13 +897,15 @@ async function fetchBnfChart() {
   try {
     const resp = await fetch('/api/chart?asset=banknifty&_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    drawChart(await resp.json(), 'bnfChart');
+    drawChart(await resp.json(), 'bnfChart', null, {line: '#00bcd4', ema: '#7c3aed'});
   } catch(e) {}
 }
 
-function drawChart(d, canvasId, spotTagId) {
+function drawChart(d, canvasId, spotTagId, colors) {
   const cv = document.getElementById(canvasId);
   if (!cv || d.error) return;
+  const colorLine = (colors && colors.line) || '#448aff';
+  const colorEma = (colors && colors.ema) || '#7c3aed';
   const ctx = cv.getContext('2d');
   const W = cv.width, H = cv.height, PAD = 6;
   ctx.clearRect(0, 0, W, H);
@@ -921,14 +923,27 @@ function drawChart(d, canvasId, spotTagId) {
   for (let g = 0; g <= 4; g++) {
     const gy = PAD + (g / 4) * (H - 2 * PAD);
     ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W - PAD, gy); ctx.stroke();
+    // Value labels on left edge
+    const val = max - (g / 4) * rng;
+    ctx.fillStyle = 'rgba(107,114,128,0.8)';
+    ctx.font = '9px sans-serif';
+    ctx.fillText(val >= 1000 ? (val / 1000).toFixed(1) + 'k' : val.toFixed(0), 1, gy - 2);
   }
   // Nifty line
-  ctx.strokeStyle = '#448aff'; ctx.lineWidth = 2;
+  ctx.strokeStyle = colorLine; ctx.lineWidth = 2;
   ctx.beginPath();
   close.forEach((v, i) => { i === 0 ? ctx.moveTo(X(i), Y(v)) : ctx.lineTo(X(i), Y(v)); });
   ctx.stroke();
+  // Soft fill under price
+  ctx.lineTo(X(close.length - 1), H - PAD);
+  ctx.lineTo(X(0), H - PAD);
+  ctx.closePath();
+  ctx.fillStyle = colorLine;
+  ctx.globalAlpha = 0.12;
+  ctx.fill();
+  ctx.globalAlpha = 1;
   // 200 EMA line
-  ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1.5;
+  ctx.strokeStyle = colorEma; ctx.lineWidth = 1.5;
   ctx.beginPath(); let started = false;
   ema.forEach((v, i) => {
     if (v == null) return;

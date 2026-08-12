@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Simple Test</title>
+<style>body{background:#0a0e14;color:#fff;font-family:sans-serif;padding:20px}</style>
+</head>
+<body>
+<h2>Simple JS Test</h2>
+<div id="out" style="padding:10px;background:#141b22;border-radius:8px">WAITING FOR JS...</div>
+<script>
+(function(){
+  var el = document.getElementById('out');
+  el.textContent = 'JS IS RUNNING ✅';
+  el.style.color = '#00c853';
+})();
+</script>
+</body></html>

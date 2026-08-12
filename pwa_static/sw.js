@@ -1,28 +1,18 @@
-const CACHE = 'nifty-signal-v4';
-const ASSETS = ['/', '/index.html', '/manifest.json'];
-
+// Self-destructing service worker — disabled for now
+// To re-enable PWA: revert to previous sw.js and re-register
 self.addEventListener('install', e => {
-  // Delete old cache
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-    .then(() => caches.open(CACHE).then(c => c.addAll(ASSETS)))
-  );
+  self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {
-  // Claim all clients so new SW takes effect immediately
-  e.waitUntil(clients.claim());
+  // Delete ALL caches
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k))))
+    .then(() => self.registration.unregister())
+  );
 });
 
+// Pass through all requests
 self.addEventListener('fetch', e => {
-  // Network-first for API + HTML, cache for static
-  if (e.request.url.includes('/api/') || e.request.destination === 'document') {
-    e.respondWith(
-      fetch(e.request).catch(() => caches.match(e.request))
-    );
-  } else {
-    e.respondWith(
-      caches.match(e.request).then(r => r || fetch(e.request))
-    );
-  }
+  e.respondWith(fetch(e.request));
 });

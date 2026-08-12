@@ -15,6 +15,7 @@ from trade_journal import add_trade, update_trade, get_all
 from algo_trader import get_algo_status, toggle_live_mode, toggle_strategy, execute_trade, track_paper_entry, track_paper_exit, track_paper_exit_all
 from fii_dii import fiidii_summary
 from tomorrow_outlook import get_outlook
+from btc_monitor import get_btc_signal
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -108,6 +109,7 @@ def get_full_analysis():
 # ── API Routes ──
 
 _signal_cache = {"ts": 0, "data": None}
+_btc_cache = {"ts": 0, "data": None}
 
 @app.route("/api/signal")
 def api_signal():
@@ -157,6 +159,15 @@ def api_fiidii():
 def api_outlook():
     """Tomorrow outlook: GIFT Nifty gap + US cues (cached 5 min)."""
     return jsonify(get_outlook())
+
+@app.route("/api/btc")
+def api_btc():
+    """Bitcoin 200 EMA bounce signal (cached 60s)."""
+    import time as _t
+    if _btc_cache["data"] is None or (_t.time() - _btc_cache["ts"]) > 60:
+        _btc_cache["data"] = get_btc_signal()
+        _btc_cache["ts"] = _t.time()
+    return jsonify(_btc_cache["data"])
 
 @app.route("/api/full")
 def api_full():

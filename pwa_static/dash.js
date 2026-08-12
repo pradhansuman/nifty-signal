@@ -651,10 +651,53 @@ function renderOutlook(d) {
   readEl.style.color = 'var(--text-dim)';
 }
 
+// ── Bitcoin ──
+async function fetchBtc() {
+  try {
+    const resp = await fetch('/api/btc?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderBtc(await resp.json());
+  } catch(e) {}
+}
+
+function renderBtc(d) {
+  const el = id => document.getElementById(id);
+  if (!el('btcSpot')) return;
+  const spot = d.spot;
+  el('btcSpot').textContent = spot != null ? '$' + Number(spot).toLocaleString('en-US', {maximumFractionDigits: 0}) : '--';
+  el('btcSpot').style.color = spot != null && d.ema_distance_pct < 0 ? 'var(--red)' : 'var(--green)';
+
+  const sigEl = el('btcSignal');
+  const sig = d.signal || 'WAIT';
+  sigEl.textContent = sig === 'BUY_LONG' ? '🟢 LONG' : sig === 'BUY_SHORT' ? '🔴 SHORT' : sig === 'EXIT_LONGS' ? '⚠️ EXIT L' : sig === 'EXIT_SHORTS' ? '⚠️ EXIT S' : sig === 'ERROR' ? 'ERR' : '⏳ WAIT';
+  sigEl.style.color = sig === 'BUY_LONG' ? 'var(--green)' : sig === 'BUY_SHORT' ? 'var(--red)' : sig === 'WAIT' ? 'var(--yellow)' : 'var(--text-dim)';
+
+  const chg = d['24h_change'];
+  const chgEl = el('btc24h');
+  chgEl.textContent = chg != null ? (chg > 0 ? '+' : '') + chg + '%' : '--';
+  chgEl.style.color = chg > 0 ? 'var(--green)' : chg < 0 ? 'var(--red)' : 'var(--text-dim)';
+
+  el('btcReason').textContent = d.reason || '';
+  el('btcEma').textContent = d.ema_200 != null ? '$' + Number(d.ema_200).toLocaleString('en-US', {maximumFractionDigits: 0}) : '--';
+  el('btcAdx').textContent = d.adx != null ? d.adx : '--';
+  el('btcRsi').textContent = d.rsi != null ? d.rsi : '--';
+  el('btcDi').textContent = d.di_plus != null && d.di_minus != null ? d.di_plus + ' / ' + d.di_minus : '--';
+
+  const lv = el('btcLevels');
+  lv.innerHTML = '';
+  if (d.stop_level && d.target_level) {
+    lv.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+      '<span style="color:var(--red);font-weight:700">🛑 Stop: $' + Number(d.stop_level).toLocaleString('en-US', {maximumFractionDigits: 0}) + '</span>' +
+      '<span style="color:var(--green);font-weight:700">🎯 Target: $' + Number(d.target_level).toLocaleString('en-US', {maximumFractionDigits: 0}) + '</span>' +
+      '</div>';
+  }
+}
+
 // ── Init ──
 fetchSignal();
 fetchFiiDii();
 fetchOutlook();
+fetchBtc();
 fetchJournal();
 fetchAlerts();
 fetchTunnelURL();
@@ -664,6 +707,7 @@ fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchFiiDii, 300000);
 setInterval(fetchOutlook, 300000);
+setInterval(fetchBtc, 60000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);
 setInterval(fetchORB, 60000);

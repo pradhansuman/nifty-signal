@@ -1,5 +1,6 @@
 # Sensitive — never commit
 .openclaw/tmp/upstox_config.py
+.openclaw/tmp/telegram_config.py
 .openclaw/tmp/trade_journal.json
 .openclaw/tmp/alerts.json
 .openclaw/tmp/tunnel_url.txt

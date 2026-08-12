@@ -761,10 +761,59 @@ function renderBacktest(d) {
     'Rules: 1h bars, 48-bar time stop, 1% target, 0.5% EMA stop, costs 0.1%/round trip';
 }
 
+// ── Option Chain Table ──
+async function fetchChain() {
+  try {
+    const resp = await fetch('/api/chain?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderChain(await resp.json());
+  } catch(e) {}
+}
+
+function fmtOID(n) {
+  if (n == null) return '--';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(0) + 'K';
+  return n;
+}
+
+function renderChain(d) {
+  const el = id => document.getElementById(id);
+  if (!el('chainRows')) return;
+  if (d.error) {
+    el('chainMeta').textContent = d.error;
+    return;
+  }
+  el('chainMeta').textContent = (d.expiry || '') + ' · Spot ' + (d.chain_spot != null ? Number(d.chain_spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--');
+  const walls = el('chainWalls');
+  walls.innerHTML = d.call_wall ? '🧱 Call wall: <b style="color:var(--red)">' + d.call_wall + '</b> (OI ' + fmtOID(d.call_wall_oi) + ') · ' : '' +
+    (d.put_wall ? 'Put wall: <b style="color:var(--green)">' + d.put_wall + '</b> (OI ' + fmtOID(d.put_wall_oi) + ')' : '');
+
+  const tb = el('chainRows');
+  tb.innerHTML = '';
+  (d.rows || []).forEach(r => {
+    const isATM = d.atm && r.strike === d.atm;
+    const isCW = d.call_wall && r.strike === d.call_wall;
+    const isPW = d.put_wall && r.strike === d.put_wall;
+    const tr = document.createElement('tr');
+    tr.style.borderTop = '1px solid var(--border)';
+    if (isATM) tr.style.background = 'rgba(124,58,237,0.12)';
+    tr.innerHTML =
+      '<td style="padding:3px 4px;text-align:left;font-weight:' + (isATM ? '800' : '600') + '">' + r.strike + (isATM ? ' ◀' : '') + '</td>' +
+      '<td style="padding:3px 4px;text-align:right;color:var(--green)">' + (r.ce_ltp != null ? r.ce_ltp.toLocaleString('en-IN', {maximumFractionDigits: 1}) : '--') + '</td>' +
+      '<td style="padding:3px 4px;text-align:right;color:' + (isCW ? '#ff6b7a;font-weight:800' : 'var(--text-dim)') + '">' + fmtOID(r.ce_oi) + '</td>' +
+      '<td style="padding:3px 4px;text-align:right;color:var(--text-dim)">' + (r.ce_iv != null ? r.ce_iv.toFixed(1) : '--') + '</td>' +
+      '<td style="padding:3px 4px;text-align:right;color:var(--red)">' + (r.pe_ltp != null ? r.pe_ltp.toLocaleString('en-IN', {maximumFractionDigits: 1}) : '--') + '</td>' +
+      '<td style="padding:3px 4px;text-align:right;color:' + (isPW ? '#00e676;font-weight:800' : 'var(--text-dim)') + '">' + fmtOID(r.pe_oi) + '</td>';
+    tb.appendChild(tr);
+  });
+}
+
 // ── Init ──
 fetchSignal();
 fetchIvRank();
 fetchBacktest();
+fetchChain();
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();
@@ -775,6 +824,8 @@ fetchORB();
 fetchIntraday();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
+setInterval(fetchIvRank, 300000);
+setInterval(fetchChain, 60000);
 setInterval(fetchFiiDii, 300000);
 setInterval(fetchOutlook, 300000);
 setInterval(fetchBtc, 60000);

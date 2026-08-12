@@ -18,6 +18,7 @@ from tomorrow_outlook import get_outlook
 from btc_monitor import get_btc_signal
 from iv_rank import get_iv_rank
 from backtest import get_backtest
+from chain_table import get_chain
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -180,6 +181,11 @@ def api_ivrank():
 def api_backtest():
     """Strategy backtest report (cached 1 hour)."""
     return jsonify(get_backtest())
+
+@app.route("/api/chain")
+def api_chain():
+    """Option chain table with walls (cached 60s)."""
+    return jsonify(get_chain())
 
 @app.route("/api/full")
 def api_full():

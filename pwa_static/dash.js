@@ -810,11 +810,11 @@ function renderChain(d) {
       '<td style="padding:3px 4px;text-align:left;font-weight:' + (isATM ? '800' : '600') + '">' + r.strike + (isATM ? ' ◀' : '') + '</td>' +
       '<td style="padding:3px 4px;text-align:right;color:var(--green)">' + (r.ce_ltp != null ? r.ce_ltp.toLocaleString('en-IN', {maximumFractionDigits: 1}) : '--') + '</td>' +
       '<td style="padding:3px 4px;text-align:right;color:' + (isCW ? '#ff6b7a;font-weight:800' : 'var(--text-dim)') + '">' + fmtOID(r.ce_oi) + '</td>' +
-      '<td style="padding:3px 4px;text-align:right;color:var(--text-dim)">' + fmtOID(r.ce_vol) + (rankCEMap[r.strike] ? ' <b style="color:var(--accent)">' + rankCEMap[r.strike] + '</b>' : '') + '</td>' +
+      '<td style="padding:3px 4px;text-align:right;color:var(--text-dim)">' + fmtOID(r.ce_vol) + (rankCEMap[r.strike] ? ' <b style="color:var(--yellow)">' + rankCEMap[r.strike] + '</b>' : '') + '</td>' +
       '<td style="padding:3px 4px;text-align:right;color:var(--text-dim)">' + (r.ce_iv != null ? r.ce_iv.toFixed(1) : '--') + '</td>' +
       '<td style="padding:3px 4px;text-align:right;color:var(--red)">' + (r.pe_ltp != null ? r.pe_ltp.toLocaleString('en-IN', {maximumFractionDigits: 1}) : '--') + '</td>' +
       '<td style="padding:3px 4px;text-align:right;color:' + (isPW ? '#00e676;font-weight:800' : 'var(--text-dim)') + '">' + fmtOID(r.pe_oi) + '</td>' +
-      '<td style="padding:3px 4px;text-align:right;color:var(--text-dim)">' + fmtOID(r.pe_vol) + (rankPEMap[r.strike] ? ' <b style="color:var(--accent)">' + rankPEMap[r.strike] + '</b>' : '') + '</td>';
+      '<td style="padding:3px 4px;text-align:right;color:var(--text-dim)">' + fmtOID(r.pe_vol) + (rankPEMap[r.strike] ? ' <b style="color:var(--yellow)">' + rankPEMap[r.strike] + '</b>' : '') + '</td>';
     tb.appendChild(tr);
   });
 }

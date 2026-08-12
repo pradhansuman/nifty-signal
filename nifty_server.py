@@ -19,6 +19,8 @@ from btc_monitor import get_btc_signal
 from iv_rank import get_iv_rank
 from backtest import get_backtest
 from chain_table import get_chain
+from telegram_alert import send_telegram, get_chat_id_from_updates, save_config, is_configured
+import telegram_alert
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -113,6 +115,7 @@ def get_full_analysis():
 
 _signal_cache = {"ts": 0, "data": None}
 _btc_cache = {"ts": 0, "data": None}
+_last_tg_push = 0
 
 @app.route("/api/signal")
 def api_signal():
@@ -186,6 +189,34 @@ def api_backtest():
 def api_chain():
     """Option chain table with walls (cached 60s)."""
     return jsonify(get_chain())
+
+@app.route("/api/telegram/status")
+def api_tg_status():
+    return jsonify({"configured": is_configured()})
+
+@app.route("/api/telegram/set")
+def api_tg_set():
+    """Set bot token (and optionally chat id). Query: ?token=...&chat_id=..."""
+    token = request.args.get("token", "")
+    chat_id = request.args.get("chat_id", "")
+    if not token and not chat_id:
+        return jsonify({"error": "Provide ?token= and/or ?chat_id="}), 400
+    cfg = save_config(token or None, chat_id or None)
+    return jsonify({"ok": True, "configured": is_configured()})
+
+@app.route("/api/telegram/chatid")
+def api_tg_chatid():
+    """Auto-discover chat id from bot updates (user must message the bot first)."""
+    cid, err = get_chat_id_from_updates()
+    if cid:
+        save_config(chat_id=cid)
+        return jsonify({"ok": True, "chat_id": cid})
+    return jsonify({"error": err}), 400
+
+@app.route("/api/telegram/test")
+def api_tg_test():
+    ok, err = send_telegram("✅ Nifty Signal connected! You'll receive alerts here.")
+    return jsonify({"ok": ok, "error": err})
 
 @app.route("/api/full")
 def api_full():
@@ -486,6 +517,16 @@ def _add_alert(level, title, body):
         _alert_log.pop(0)
     _save_alerts()
     print(f"[ALERT {level.upper()}] {title}: {body[:100]}")
+    # Push to Telegram (only for actionable levels, throttled)
+    try:
+        if level in ("critical", "warning") and telegram_alert.is_configured():
+            now = time.time()
+            if now - _last_tg_push > 60:  # max 1 push/min
+                _last_tg_push = now
+                emoji = "🔴" if level == "critical" else "⚠️"
+                telegram_alert.send_telegram(f"{emoji} <b>{title}</b>\n{body}")
+    except Exception:
+        pass
 
 @app.route("/api/alerts")
 def api_alerts():

@@ -951,6 +951,7 @@ function drawChart(d, canvasId, spotTagId, colors) {
   chartState[canvasId] = { d: d, spotTagId: spotTagId, colors: colors };
   const colorLine = (colors && colors.line) || '#448aff';
   const colorEma = (colors && colors.ema) || '#7c3aed';
+  const colorEma20 = (colors && colors.ema20) || '#f59e0b';
   const { ctx, w: W, h: H } = fitCanvas(cv);
   const PAD = 8;
   const VOL_H = 24;  // volume band height at bottom
@@ -959,9 +960,10 @@ function drawChart(d, canvasId, spotTagId, colors) {
   const close = d.close || [];
   if (close.length < 5) return;
   const ema = d.ema200 || [];
+  const ema20 = d.ema20 || [];
   const highs = d.high || close, lows = d.low || close;
   const vol = d.volume || [];
-  const all = highs.concat(lows, ema.filter(v => v != null));
+  const all = highs.concat(lows, ema.filter(v => v != null), ema20.filter(v => v != null));
   const min = Math.min.apply(null, all), max = Math.max.apply(null, all);
   const rng = (max - min) || 1;
   const X = i => PAD + (i / (close.length - 1)) * (W - 2 * PAD);
@@ -1012,9 +1014,19 @@ function drawChart(d, canvasId, spotTagId, colors) {
     ctx.fillRect(X(i) - bw / 2, bodyTop, bw, bodyH);
   }
 
-  // 200 EMA line
-  ctx.strokeStyle = colorEma; ctx.lineWidth = 1.8;
+  // 20 EMA line (fast momentum — entry timing)
+  ctx.strokeStyle = colorEma20; ctx.lineWidth = 1.5;
   ctx.beginPath(); let started = false;
+  ema20.forEach((v, i) => {
+    if (v == null) return;
+    if (!started) { ctx.moveTo(X(i), Y(v)); started = true; }
+    else ctx.lineTo(X(i), Y(v));
+  });
+  ctx.stroke();
+
+  // 200 EMA line (trend — direction)
+  ctx.strokeStyle = colorEma; ctx.lineWidth = 1.8;
+  ctx.beginPath(); started = false;
   ema.forEach((v, i) => {
     if (v == null) return;
     if (!started) { ctx.moveTo(X(i), Y(v)); started = true; }

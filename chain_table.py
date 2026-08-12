@@ -78,9 +78,9 @@ def get_chain(force=False, strike_range=8):
         pg = item.get("put_options", {}).get("option_greeks", {})
         row = {
             "strike": strike,
-            "ce_ltp": ce.get("ltp"), "ce_oi": ce.get("oi"),
+            "ce_ltp": ce.get("ltp"), "ce_oi": ce.get("oi"), "ce_vol": ce.get("volume"),
             "ce_iv": cg.get("iv"), "ce_delta": cg.get("delta"),
-            "pe_ltp": pe.get("ltp"), "pe_oi": pe.get("oi"),
+            "pe_ltp": pe.get("ltp"), "pe_oi": pe.get("oi"), "pe_vol": pe.get("volume"),
             "pe_iv": pg.get("iv"), "pe_delta": pg.get("delta"),
         }
         rows.append(row)

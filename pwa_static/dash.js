@@ -693,8 +693,40 @@ function renderBtc(d) {
   }
 }
 
+// ── IV Rank ──
+async function fetchIvRank() {
+  try {
+    const resp = await fetch('/api/ivrank?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderIvRank(await resp.json());
+  } catch(e) {}
+}
+
+function renderIvRank(d) {
+  const el = id => document.getElementById(id);
+  if (!el('ivRankVal')) return;
+  el('ivRange').textContent = (d.low_52w != null ? d.low_52w : '--') + ' – ' + (d.high_52w != null ? d.high_52w : '--');
+
+  const rank = d.iv_rank;
+  const rankEl = el('ivRankVal');
+  rankEl.textContent = rank != null ? rank + '%' : '--';
+  rankEl.style.color = rank <= 20 ? 'var(--green)' : rank <= 40 ? 'var(--blue)' : rank <= 60 ? 'var(--yellow)' : rank <= 80 ? 'var(--red)' : '#ff6b7a';
+
+  const pct = d.iv_percentile;
+  const pctEl = el('ivPctVal');
+  pctEl.textContent = pct != null ? pct + '%' : '--';
+  pctEl.style.color = pct <= 25 ? 'var(--green)' : pct >= 75 ? 'var(--red)' : 'var(--yellow)';
+
+  el('ivCurrentVal').textContent = d.current_vix != null ? d.current_vix : '--';
+
+  const readEl = el('ivRead');
+  readEl.textContent = d.read || '';
+  readEl.style.color = rank != null && rank <= 40 ? 'var(--green)' : rank != null && rank >= 70 ? 'var(--red)' : 'var(--text-dim)';
+}
+
 // ── Init ──
 fetchSignal();
+fetchIvRank();
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();

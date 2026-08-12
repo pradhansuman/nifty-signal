@@ -324,6 +324,29 @@
     </div>
   </div>
 
+  <!-- IV Rank -->
+  <div class="card" id="ivRankCard">
+    <div class="card-header">
+      <span class="label">🧊 IV Rank (premium gauge)</span>
+      <span style="font-size:10px;color:var(--text-dim)">52w: <span id="ivRange">--</span></span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="ivRankVal">--</div>
+        <div class="g-label">IV Rank</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="ivPctVal">--</div>
+        <div class="g-label">IV Percentile</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="ivCurrentVal">--</div>
+        <div class="g-label">VIX now</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:12px" id="ivRead">Loading IV history...</div>
+  </div>
+
   <!-- Smart Money (FII/DII) -->
   <div class="card" id="fiiDiiCard">
     <div class="card-header">
@@ -583,6 +606,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260812e"></script>
+<script src="/dash.js?v=20260812f"></script>
 </body>
 </html>

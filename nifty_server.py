@@ -16,6 +16,7 @@ from algo_trader import get_algo_status, toggle_live_mode, toggle_strategy, exec
 from fii_dii import fiidii_summary
 from tomorrow_outlook import get_outlook
 from btc_monitor import get_btc_signal
+from iv_rank import get_iv_rank
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -168,6 +169,11 @@ def api_btc():
         _btc_cache["data"] = get_btc_signal()
         _btc_cache["ts"] = _t.time()
     return jsonify(_btc_cache["data"])
+
+@app.route("/api/ivrank")
+def api_ivrank():
+    """IV Rank / Percentile for Nifty (cached 30 min)."""
+    return jsonify(get_iv_rank())
 
 @app.route("/api/full")
 def api_full():

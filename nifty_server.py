@@ -7,7 +7,7 @@ Run this on the Mac, access from mobile via local network.
 
 import json, math, sys, os, time, subprocess
 from datetime import datetime
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, jsonify, send_from_directory, request, Response
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -614,9 +614,36 @@ def paper_tracking_heartbeat():
 def index():
     try:
         with open(os.path.join(app.static_folder, "index.html"), "r") as f:
-            return f.read(), 200, {"Content-Type": "text/html; charset=utf-8"}
+            html = f.read()
+        # Force browsers to NEVER cache — inject version into HTML
+        html = html.replace('</head>', '<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0"><meta http-equiv="Pragma" content="no-cache"><meta http-equiv="Expires" content="0"></head>')
+        return html, 200, {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        }
     except:
         return "Error loading dashboard", 500
+
+@app.route("/v2")
+def dashboard_v2():
+    """Force-fresh dashboard — guaranteed no cache"""
+    try:
+        with open(os.path.join(app.static_folder, "index.html"), "r") as f:
+            html = f.read()
+        # Inject cache-busting comment
+        ts = str(int(time.time()))
+        html = html.replace('</head>', '<meta http-equiv="Cache-Control" content="no-store"><meta http-equiv="Pragma" content="no-cache"></head>')
+        response = Response(html, 200)
+        response.headers['Content-Type'] = 'text/html; charset=utf-8'
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+        response.headers['ETag'] = ts
+        return response
+    except Exception as e:
+        return f"Error: {e}", 500
 
 @app.route("/<path:path>")
 def serve_static(path):

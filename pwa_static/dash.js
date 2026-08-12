@@ -38,8 +38,11 @@ updateClock();
 // ── Data Fetch ──
 async function fetchSignal() {
   document.getElementById('debugInfo').textContent = 'Fetching signal...';
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 40000); // 40s timeout
   try {
-    const resp = await fetch('/api/signal?_=' + Date.now());
+    const resp = await fetch('/api/signal?_=' + Date.now(), { signal: ctrl.signal });
+    clearTimeout(timer);
     document.getElementById('debugInfo').textContent = 'Response: ' + resp.status;
     if (!resp.ok) throw new Error('API ' + resp.status);
     cachedSignal = await resp.json();
@@ -49,6 +52,7 @@ async function fetchSignal() {
       'Updated ' + cachedSignal.updated;
     document.getElementById('debugInfo').textContent = 'Rendered ✅';
   } catch (e) {
+    clearTimeout(timer);
     document.getElementById('debugInfo').textContent = 'ERROR: ' + e.message;
     document.getElementById('footerText').textContent = 'Connection lost — retrying...';
     if (cachedSignal) render(cachedSignal);

@@ -793,7 +793,21 @@ function renderChain(d) {
   const spotBig = el('chainSpotBig');
   let sp = d.chain_spot;
   if (sp == null && typeof cachedSignal !== 'undefined' && cachedSignal && cachedSignal.spot) sp = cachedSignal.spot;
-  spotBig.textContent = sp != null ? Number(sp).toLocaleString('en-IN', {maximumFractionDigits: 2}) : '--';
+  let spotTxt = sp != null ? Number(sp).toLocaleString('en-IN', {maximumFractionDigits: 2}) : '--';
+  // GIFT Nifty in brackets with trend arrow
+  if (d.gift_nifty != null) {
+    const gift = Number(d.gift_nifty).toLocaleString('en-IN', {maximumFractionDigits: 0});
+    const g = d.gift_gap_vs_spot;
+    const up = d.gift_trend === 'gap_up' || (g != null && g > 15);
+    const dn = d.gift_trend === 'gap_down' || (g != null && g < -15);
+    const arrow = up ? '▲' : dn ? '▼' : '▶';
+    const color = up ? 'var(--green)' : dn ? 'var(--red)' : 'var(--yellow)';
+    spotTxt += ' <span style="font-size:14px;color:var(--text-dim)">(GIFT </span><span style="font-size:14px;color:' + color + ';font-weight:700">' + arrow + ' ' + gift + '</span><span style="font-size:14px;color:var(--text-dim)">)</span>';
+    if (g != null && Math.abs(g) >= 15) {
+      spotTxt += ' <span style="font-size:11px;color:' + color + ';font-weight:700">' + (g > 0 ? '+' : '') + Number(g).toLocaleString('en-IN', {maximumFractionDigits: 0}) + 'pts</span>';
+    }
+  }
+  spotBig.innerHTML = spotTxt;
 
   const tb = el('chainRows');
   tb.innerHTML = '';

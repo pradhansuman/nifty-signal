@@ -12,6 +12,8 @@ CACHE_TTL = 60
 
 _cache = {"ts": 0, "data": None}
 
+from tomorrow_outlook import get_outlook
+
 
 def _token():
     token = os.environ.get("UPSTOX_TOKEN", "")
@@ -117,6 +119,15 @@ def get_chain(force=False, strike_range=8):
     out["put_wall"] = pw
     out["call_wall_oi"] = cw_oi
     out["put_wall_oi"] = pw_oi
+
+    # GIFT Nifty context (from tomorrow outlook, 5-min cache)
+    try:
+        ol = get_outlook()
+        out["gift_nifty"] = ol.get("gift_nifty")
+        out["gift_gap_vs_spot"] = ol.get("expected_gap")
+        out["gift_trend"] = ol.get("indication")
+    except Exception:
+        pass
 
     _cache["ts"] = now
     _cache["data"] = out

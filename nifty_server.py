@@ -308,9 +308,10 @@ def api_tg_test():
 
 @app.route("/api/chart")
 def api_chart():
-    """Price + 200 EMA series. ?asset=nifty|btc|banknifty (cached 10 min)."""
+    """Price + 200 EMA series. ?asset=nifty|btc|banknifty&interval=1d|1h|15m|4h (cached 10 min)."""
     asset = request.args.get("asset", "nifty")
-    return jsonify(get_chart_data(asset))
+    interval = request.args.get("interval") or None
+    return jsonify(get_chart_data(asset, interval))
 
 @app.route("/api/full")
 def api_full():

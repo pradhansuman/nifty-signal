@@ -877,28 +877,58 @@ function renderChain(d) {
 }
 
 // ── Nifty Chart (canvas) ──
-async function fetchChart() {
+async function fetchChart(interval) {
   try {
-    const resp = await fetch('/api/chart?_=' + Date.now());
+    const q = interval ? '&interval=' + interval : '';
+    const resp = await fetch('/api/chart?_=' + Date.now() + q);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    drawChart(await resp.json(), 'niftyChart', 'chartSpotTag', {line: '#448aff', ema: '#7c3aed'});
+    const d = await resp.json();
+    drawChart(d, 'niftyChart', 'chartSpotTag', {line: '#448aff', ema: '#7c3aed'});
+    const lbl = document.getElementById('niftyTfLabel');
+    if (lbl && d.interval) lbl.textContent = d.interval + ' bars';
   } catch(e) {}
 }
 
-async function fetchBtcChart() {
+async function fetchBtcChart(interval) {
   try {
-    const resp = await fetch('/api/chart?asset=btc&_=' + Date.now());
+    const q = interval ? '&interval=' + interval : '';
+    const resp = await fetch('/api/chart?asset=btc&_=' + Date.now() + q);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    drawChart(await resp.json(), 'btcChart', null, {line: '#f7931a', ema: '#7c3aed'});
+    const d = await resp.json();
+    drawChart(d, 'btcChart', null, {line: '#f7931a', ema: '#7c3aed'});
+    const lbl = document.getElementById('btcTfLabel');
+    if (lbl && d.interval) lbl.textContent = d.interval + ' bars';
   } catch(e) {}
 }
 
-async function fetchBnfChart() {
+async function fetchBnfChart(interval) {
   try {
-    const resp = await fetch('/api/chart?asset=banknifty&_=' + Date.now());
+    const q = interval ? '&interval=' + interval : '';
+    const resp = await fetch('/api/chart?asset=banknifty&_=' + Date.now() + q);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    drawChart(await resp.json(), 'bnfChart', null, {line: '#00bcd4', ema: '#7c3aed'});
+    const d = await resp.json();
+    drawChart(d, 'bnfChart', null, {line: '#00bcd4', ema: '#7c3aed'});
+    const lbl = document.getElementById('bnfTfLabel');
+    if (lbl && d.interval) lbl.textContent = d.interval + ' bars';
   } catch(e) {}
+}
+
+// Timeframe toggles
+function initTimeframeToggles() {
+  const bind = (id, fn) => {
+    const wrap = document.getElementById(id);
+    if (!wrap) return;
+    wrap.querySelectorAll('button').forEach(b => {
+      b.addEventListener('click', () => {
+        wrap.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        fn(b.dataset.tf);
+      });
+    });
+  };
+  bind('tfNifty', tf => fetchChart(tf));
+  bind('tfBtc', tf => fetchBtcChart(tf));
+  bind('tfBnf', tf => fetchBnfChart(tf));
 }
 
 function drawChart(d, canvasId, spotTagId, colors) {
@@ -1087,6 +1117,7 @@ fetchBtcChart();
 fetchBnfChart();
 fetchExpiry();
 fetchWeekly();
+initTimeframeToggles();
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();

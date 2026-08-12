@@ -14,21 +14,38 @@ ASSETS = {
     "btc": {"symbol": "BTC-USD", "period": "10d", "interval": "1h", "points": 168},
     "banknifty": {"symbol": "^NSEBANK", "period": "10d", "interval": "1h", "points": 110},
 }
+
+# Timeframe presets per asset: interval -> (period, points)
+TIMEFRAMES = {
+    "nifty": {"1d": ("1y", 120), "1h": ("1mo", 110), "15m": ("5d", 110)},
+    "btc": {"4h": ("2mo", 168), "1h": ("10d", 168), "15m": ("5d", 120)},
+    "banknifty": {"1h": ("10d", 110), "15m": ("5d", 110)},
+}
 _cache = {"ts": {}, "data": {}}
 
 
-def get_chart_data(asset="nifty", force=False):
+def get_chart_data(asset="nifty", interval=None, force=False):
     cfg = ASSETS.get(asset)
     if not cfg:
         return {"error": f"Unknown asset {asset}"}
+    # Resolve timeframe preset (default = signal timeframe)
+    if interval:
+        tf = TIMEFRAMES.get(asset, {}).get(interval)
+        if not tf:
+            return {"error": f"Unknown interval {interval} for {asset}"}
+        period, points = tf
+    else:
+        period, points = cfg["period"], cfg["points"]
+        interval = cfg["interval"]
+    key = f"{asset}:{interval}"
     now = time.time()
-    if not force and _cache["data"].get(asset) and (now - _cache["ts"].get(asset, 0)) < CACHE_TTL:
-        return _cache["data"][asset]
+    if not force and _cache["data"].get(key) and (now - _cache["ts"].get(key, 0)) < CACHE_TTL:
+        return _cache["data"][key]
 
     out = {"error": None, "asset": asset, "dates": [], "close": [], "ema200": [], "spot": None,
            "open": [], "high": [], "low": [], "volume": []}
     try:
-        df = yf.download(cfg["symbol"], period=cfg["period"], interval=cfg["interval"], auto_adjust=False)
+        df = yf.download(cfg["symbol"], period=period, interval=interval, auto_adjust=False)
         if df is None or df.empty:
             out["error"] = "No data"
             return out
@@ -37,8 +54,8 @@ def get_chart_data(asset="nifty", force=False):
         close = df["Close"].dropna()
         ema = close.ewm(span=200, adjust=False).mean()
 
-        tail = close.tail(cfg["points"])
-        ema_tail = ema.tail(cfg["points"])
+        tail = close.tail(points)
+        ema_tail = ema.tail(points)
         idx = tail.index
         out["dates"] = [str(d) for d in idx]
         out["close"] = [round(float(x), 2) for x in tail.tolist()]
@@ -48,12 +65,12 @@ def get_chart_data(asset="nifty", force=False):
         out["volume"] = [int(df.loc[d, "Volume"] or 0) for d in idx]
         out["ema200"] = [round(float(x), 2) if not pd.isna(x) else None for x in ema_tail.tolist()]
         out["spot"] = round(float(close.iloc[-1]), 2)
-        out["interval"] = cfg["interval"]
+        out["interval"] = interval
     except Exception as e:
         out["error"] = str(e)[:100]
 
-    _cache["ts"][asset] = now
-    _cache["data"][asset] = out
+    _cache["ts"][key] = now
+    _cache["data"][key] = out
     return out
 
 

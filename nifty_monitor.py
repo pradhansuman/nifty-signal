@@ -386,7 +386,7 @@ def main():
                 result.update(enriched)
                 
                 # ── PCR Reversal (Contrarian) Signal ──
-                pcr = enriched.get("oi_pcr")
+                pcr = enriched.get("weekly_pcr") or enriched.get("oi_pcr")  # Prefer weekly
                 if pcr is not None:
                     if pcr < 0.7:
                         result["contrarian_signal"] = "SELL_CALLS"
@@ -508,6 +508,7 @@ def enrich_from_upstox(result, token):
         
         # ── BTST premium from WEEKLY expiry (separate chain) ──
         btst_expiry_display = result.get("btst_expiry")
+        weekly_pcr = None; weekly_spot = None
         if btst_expiry_display and btst_strike:
             try:
                 btst_expiry_dt = datetime.strptime(btst_expiry_display, "%d-%b-%Y")
@@ -519,12 +520,19 @@ def enrich_from_upstox(result, token):
                     timeout=10
                 )
                 if btst_resp.status_code == 200:
-                    for item in btst_resp.json().get("data", []):
+                    btst_data = btst_resp.json().get("data", [])
+                    # BTST premium
+                    for item in btst_data:
                         if item.get("strike_price") == btst_strike:
                             btst_premium = item.get("call_options", {}).get("market_data", {}).get("ltp")
                             break
+                    # Weekly PCR (near-term sentiment)
+                    wco = sum((it.get("call_options", {}).get("market_data", {}).get("oi", 0) or 0) for it in btst_data)
+                    wpo = sum((it.get("put_options", {}).get("market_data", {}).get("oi", 0) or 0) for it in btst_data)
+                    weekly_pcr = round(wpo / wco, 3) if wco > 0 else None
+                    weekly_spot = btst_data[0].get("underlying_spot_price") if btst_data else None
             except:
-                pass  # BTST premium is optional
+                pass
         
         # Net debit for spread (entry - target)
         net_debit = None
@@ -546,6 +554,8 @@ def enrich_from_upstox(result, token):
             "target_premium": target_premium,
             "net_debit": net_debit,
             "btst_premium": btst_premium,
+            # Weekly PCR (near-term sentiment, more OI-intensive)
+            "weekly_pcr": weekly_pcr,
             # Real delta from Upstox (not hardcoded 0.5)
             "entry_delta": round(entry_delta, 3) if entry_delta else None,
             # VIX-adjusted sizing multiplier

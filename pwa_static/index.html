@@ -660,12 +660,20 @@ function render(s) {
     optionsCard.classList.remove('hidden');
     document.getElementById('optionsSource').textContent = s.option_chain_source;
     
-    // PCR color: > 1.2 bearish, < 0.8 bullish, between = neutral
+    // PCR color
     const pcr = s.oi_pcr;
+    const wpcr = s.weekly_pcr;
     const pcrEl = document.getElementById('pcrOIVAL');
-    pcrEl.textContent = pcr != null ? pcr.toFixed(2) : '--';
+    const pcrLabel = s.weekly_pcr != null ? (wpcr.toFixed(2) + ' / ' + (pcr||0).toFixed(2)) : ((pcr||0).toFixed(2));
+    pcrEl.textContent = pcrLabel;
+    pcrEl.style.fontSize = wpcr != null ? '20px' : '24px';
     if (pcr != null) {
       pcrEl.style.color = pcr > 1.2 ? 'var(--red)' : pcr < 0.8 ? 'var(--green)' : 'var(--yellow)';
+    }
+    // Show weekly/monthly breakdown
+    const pcrLabelEl = document.getElementById('pcrOIVAL').nextElementSibling;
+    if (pcrLabelEl && s.weekly_pcr != null) {
+      pcrLabelEl.innerHTML = 'PCR (W/M)';
     }
     
     // ATM IV

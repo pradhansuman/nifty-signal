@@ -1,4 +1,4 @@
-const CACHE = 'nifty-signal-v3';
+const CACHE = 'nifty-signal-v4';
 const ASSETS = ['/', '/index.html', '/manifest.json'];
 
 self.addEventListener('install', e => {

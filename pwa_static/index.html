@@ -491,21 +491,26 @@ updateClock();
 // ── Data Fetch ──
 async function fetchSignal() {
   try {
-    const resp = await fetch('/api/signal');
-    if (!resp.ok) throw new Error('API error');
+    const resp = await fetch('/api/signal?_=' + Date.now());
+    if (!resp.ok) throw new Error('API ' + resp.status);
     cachedSignal = await resp.json();
     render(cachedSignal);
     document.getElementById('footerText').textContent =
       'Updated ' + cachedSignal.updated;
   } catch (e) {
+    console.error('Fetch error:', e);
     document.getElementById('footerText').textContent = 'Connection lost — retrying...';
-    // Show last cached data if available
     if (cachedSignal) render(cachedSignal);
   }
 }
 
 function render(s) {
-  const sig = s.signal;
+  if (!s || typeof s !== 'object') {
+    console.warn('render got invalid data:', s);
+    return;
+  }
+  try {
+  const sig = s.signal || 'LOADING';
   const banner = document.getElementById('signalBanner');
   banner.className = 'signal-banner ' + (
     sig === 'BUY_CALLS' ? 'buy' : sig === 'STAND_ASIDE' ? 'exit' : 'wait'
@@ -734,6 +739,7 @@ function render(s) {
     const trailEl = document.getElementById('trailStop');
     trailEl.style.color = gap > 50 ? 'var(--green)' : 'var(--yellow)';
   }
+  } catch(e) { console.error('Render error:', e); }
 }
 
 // ── Position Sizing ──

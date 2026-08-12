@@ -19,13 +19,8 @@ _cache = {"ts": 0, "data": None}
 def _upstox_token():
     token = os.environ.get("UPSTOX_TOKEN", "")
     if not token:
-        cfg = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", "upstox_config.py")
-        if os.path.exists(cfg):
-            import importlib.util
-            spec = importlib.util.spec_from_file_location("upstox_config", cfg)
-            m = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(m)
-            token = getattr(m, "UPSTOX_ACCESS_TOKEN", "")
+        from upstox_token import get_token
+        token = get_token()
     return token
 
 

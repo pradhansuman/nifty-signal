@@ -357,12 +357,8 @@ def main():
         import importlib.util
         token = os.environ.get("UPSTOX_TOKEN", "")
         if not token:
-            config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", "upstox_config.py")
-            if os.path.exists(config_path):
-                spec = importlib.util.spec_from_file_location("upstox_config", config_path)
-                upstox_cfg = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(upstox_cfg)
-                token = getattr(upstox_cfg, "UPSTOX_ACCESS_TOKEN", "")
+            from upstox_token import get_token
+            token = get_token()
         
         # Debug
         if not token:

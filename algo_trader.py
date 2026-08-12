@@ -211,15 +211,11 @@ def _get_upstox_token():
     if token:
         return token
     try:
-        import importlib.util
-        path = os.path.join(WORKSPACE, ".openclaw", "tmp", "upstox_config.py")
-        if os.path.exists(path):
-            spec = importlib.util.spec_from_file_location("upstox_config", path)
-            cfg = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(cfg)
-            return getattr(cfg, "UPSTOX_ACCESS_TOKEN", "")
+        from upstox_token import get_token
+        return get_token()
     except:
         pass
+    return ""
     return ""
 
 

@@ -42,3 +42,8 @@ nifty_analysis_*.json
 .openclaw/tmp/fiidii_cache.json
 .openclaw/tmp/weekly_cache.json
 .openclaw/tmp/chart_cache.json
+
+.openclaw/tmp/*_alerts.json
+.openclaw/tmp/*_cache.json
+.openclaw/tmp/*.png
+.openclaw/tmp/shot*.py

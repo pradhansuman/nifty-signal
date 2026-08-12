@@ -21,6 +21,7 @@ from backtest import get_backtest
 from chain_table import get_chain
 from telegram_alert import send_telegram, get_chat_id_from_updates, save_config, is_configured
 import telegram_alert
+from chart_data import get_chart_data
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -217,6 +218,11 @@ def api_tg_chatid():
 def api_tg_test():
     ok, err = send_telegram("✅ Nifty Signal connected! You'll receive alerts here.")
     return jsonify({"ok": ok, "error": err})
+
+@app.route("/api/chart")
+def api_chart():
+    """Nifty close + 200 EMA series for the dashboard chart (cached 10 min)."""
+    return jsonify(get_chart_data())
 
 @app.route("/api/full")
 def api_full():

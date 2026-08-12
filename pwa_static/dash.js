@@ -839,11 +839,61 @@ function renderChain(d) {
   });
 }
 
+// ── Nifty Chart (canvas) ──
+async function fetchChart() {
+  try {
+    const resp = await fetch('/api/chart?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    drawChart(await resp.json());
+  } catch(e) {}
+}
+
+function drawChart(d) {
+  const cv = document.getElementById('niftyChart');
+  if (!cv || d.error) return;
+  const ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, PAD = 6;
+  ctx.clearRect(0, 0, W, H);
+  const close = d.close || [];
+  if (close.length < 5) return;
+  const ema = d.ema200 || [];
+  const all = close.concat(ema.filter(v => v != null));
+  const min = Math.min.apply(null, all), max = Math.max.apply(null, all);
+  const rng = (max - min) || 1;
+  const X = i => PAD + (i / (close.length - 1)) * (W - 2 * PAD);
+  const Y = v => H - PAD - ((v - min) / rng) * (H - 2 * PAD);
+  // Grid lines
+  ctx.strokeStyle = 'rgba(30,41,59,0.6)';
+  ctx.lineWidth = 1;
+  for (let g = 0; g <= 4; g++) {
+    const gy = PAD + (g / 4) * (H - 2 * PAD);
+    ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W - PAD, gy); ctx.stroke();
+  }
+  // Nifty line
+  ctx.strokeStyle = '#448aff'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  close.forEach((v, i) => { i === 0 ? ctx.moveTo(X(i), Y(v)) : ctx.lineTo(X(i), Y(v)); });
+  ctx.stroke();
+  // 200 EMA line
+  ctx.strokeStyle = '#7c3aed'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); let started = false;
+  ema.forEach((v, i) => {
+    if (v == null) return;
+    if (!started) { ctx.moveTo(X(i), Y(v)); started = true; }
+    else ctx.lineTo(X(i), Y(v));
+  });
+  ctx.stroke();
+  // Spot tag
+  const tag = document.getElementById('chartSpotTag');
+  if (tag && d.spot) tag.textContent = 'Spot: ' + Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0});
+}
+
 // ── Init ──
 fetchSignal();
 fetchIvRank();
 fetchBacktest();
 fetchChain();
+fetchChart();
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();

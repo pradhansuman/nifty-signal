@@ -610,9 +610,51 @@ function renderFiiDii(d) {
   readEl.style.color = 'var(--text-dim)';
 }
 
+// ── Tomorrow Outlook ──
+async function fetchOutlook() {
+  try {
+    const resp = await fetch('/api/outlook?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderOutlook(await resp.json());
+  } catch(e) {}
+}
+
+function renderOutlook(d) {
+  const card = document.getElementById('outlookCard');
+  if (!card) return;
+  const el = id => document.getElementById(id);
+  const now = new Date();
+  el('outlookTime').textContent = now.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+
+  const giftEl = el('giftNiftyVal');
+  giftEl.textContent = d.gift_nifty != null ? Number(d.gift_nifty).toLocaleString('en-IN') : '--';
+
+  const gapEl = el('gapVal');
+  if (d.expected_gap != null) {
+    const g = d.expected_gap;
+    gapEl.textContent = (g > 0 ? '+' : '') + g.toLocaleString('en-IN', {maximumFractionDigits: 0});
+    gapEl.style.color = g > 15 ? 'var(--green)' : g < -15 ? 'var(--red)' : 'var(--yellow)';
+    gapEl.style.fontSize = '16px';
+  } else {
+    gapEl.textContent = '--';
+  }
+
+  const usEl = el('usReadVal');
+  const us = d.us || {};
+  const parts = Object.entries(us).map(([k,v]) => k.split(' ')[0] + ' ' + (v.change_pct >= 0 ? '+' : '') + v.change_pct + '%');
+  usEl.textContent = parts.join(' · ') || '--';
+  usEl.style.fontSize = '11px';
+  usEl.style.color = Object.values(us).some(u => u.change_pct < 0) ? 'var(--red)' : 'var(--green)';
+
+  const readEl = el('outlookRead');
+  readEl.textContent = d.read || 'No data';
+  readEl.style.color = 'var(--text-dim)';
+}
+
 // ── Init ──
 fetchSignal();
 fetchFiiDii();
+fetchOutlook();
 fetchJournal();
 fetchAlerts();
 fetchTunnelURL();
@@ -621,6 +663,7 @@ fetchIntraday();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchFiiDii, 300000);
+setInterval(fetchOutlook, 300000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);
 setInterval(fetchORB, 60000);

@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore")
 from trade_journal import add_trade, update_trade, get_all
 from algo_trader import get_algo_status, toggle_live_mode, toggle_strategy, execute_trade, track_paper_entry, track_paper_exit, track_paper_exit_all
 from fii_dii import fiidii_summary
+from tomorrow_outlook import get_outlook
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -151,6 +152,11 @@ def api_signal():
 def api_fiidii():
     """Smart Money FII/DII flows (cached 30 min)."""
     return jsonify(fiidii_summary())
+
+@app.route("/api/outlook")
+def api_outlook():
+    """Tomorrow outlook: GIFT Nifty gap + US cues (cached 5 min)."""
+    return jsonify(get_outlook())
 
 @app.route("/api/full")
 def api_full():

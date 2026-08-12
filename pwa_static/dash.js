@@ -658,6 +658,18 @@ async function fetchBtc() {
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     renderBtc(await resp.json());
   } catch(e) {}
+  // Also fetch 15m signal
+  try {
+    const resp = await fetch('/api/btc?interval=15m&_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
+    const s15 = document.getElementById('btcSignal15');
+    if (s15) {
+      const sig = d.signal || 'WAIT';
+      s15.textContent = sig === 'BUY_LONG' ? '🟢 LONG' : sig === 'BUY_SHORT' ? '🔴 SHORT' : sig === 'WAIT' ? '⏳ WAIT' : 'ERR';
+      s15.style.color = sig === 'BUY_LONG' ? 'var(--green)' : sig === 'BUY_SHORT' ? 'var(--red)' : 'var(--yellow)';
+    }
+  } catch(e) {}
 }
 
 function renderBtc(d) {
@@ -893,15 +905,97 @@ function drawChart(d) {
   if (tag && d.spot) tag.textContent = 'Spot: ' + Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0});
 }
 
+// ── Bank Nifty ──
+async function fetchBnf() {
+  try {
+    const resp = await fetch('/api/banknifty?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderBnf(await resp.json());
+  } catch(e) {}
+}
+
+function renderBnf(d) {
+  const el = id => document.getElementById(id);
+  if (!el('bnfSpot')) return;
+  el('bnfSpot').textContent = d.spot != null ? Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
+  el('bnfSpot').style.color = d.ema_distance_pct != null && d.ema_distance_pct < 0 ? 'var(--red)' : 'var(--green)';
+  const sigEl = el('bnfSignal');
+  const sig = d.signal || 'WAIT';
+  sigEl.textContent = sig === 'BUY_LONG' ? '🟢 LONG' : sig === 'BUY_SHORT' ? '🔴 SHORT' : sig === 'EXIT_LONGS' ? '⚠️ EXIT L' : sig === 'EXIT_SHORTS' ? '⚠️ EXIT S' : '⏳ WAIT';
+  sigEl.style.color = sig === 'BUY_LONG' ? 'var(--green)' : sig === 'BUY_SHORT' ? 'var(--red)' : 'var(--yellow)';
+  el('bnfAdx').textContent = d.adx != null ? d.adx : '--';
+  el('bnfRsi').textContent = d.rsi != null ? d.rsi : '--';
+  el('bnfReason').textContent = d.reason || '';
+  el('bnfEma').textContent = d.ema_200 != null ? Number(d.ema_200).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
+  el('bnfDi').textContent = d.di_plus != null && d.di_minus != null ? d.di_plus + ' / ' + d.di_minus : '--';
+  const dist = d.ema_distance_pct;
+  const distEl = el('bnfDist');
+  distEl.textContent = dist != null ? (dist > 0 ? '+' : '') + dist + '%' : '--';
+  distEl.style.color = dist > 0 ? 'var(--green)' : dist < 0 ? 'var(--red)' : 'var(--yellow)';
+  const lv = el('bnfLevels');
+  lv.innerHTML = '';
+  if (d.stop_level && d.target_level) {
+    lv.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+      '<span style="color:var(--red);font-weight:700">🛑 Stop: ' + Number(d.stop_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span>' +
+      '<span style="color:var(--green);font-weight:700">🎯 Target: ' + Number(d.target_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span></div>';
+  }
+}
+
+// ── Expiry Countdown ──
+async function fetchExpiry() {
+  try {
+    const resp = await fetch('/api/expiry?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderExpiry(await resp.json());
+  } catch(e) {}
+}
+
+function renderExpiry(d) {
+  const el = id => document.getElementById(id);
+  if (!el('expiryRead')) return;
+  const g = el('expiryGamma');
+  g.textContent = (d.gamma_risk || '--').toUpperCase();
+  g.style.background = d.gamma_risk === 'extreme' ? 'rgba(255,23,68,0.2)' : d.gamma_risk === 'high' ? 'rgba(255,23,68,0.12)' : d.gamma_risk === 'medium' ? 'rgba(255,193,7,0.15)' : 'rgba(0,200,83,0.15)';
+  g.style.color = d.gamma_risk === 'extreme' || d.gamma_risk === 'high' ? 'var(--red)' : d.gamma_risk === 'medium' ? 'var(--yellow)' : 'var(--green)';
+  el('expiryRead').textContent = d.read || '';
+}
+
+// ── Weekly Review ──
+async function fetchWeekly() {
+  try {
+    const resp = await fetch('/api/weeklyreview?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderWeekly(await resp.json());
+  } catch(e) {}
+}
+
+function renderWeekly(d) {
+  const el = id => document.getElementById(id);
+  if (!el('weeklyPnl')) return;
+  if (d.error || (d.trades === 0 && !d.pnl)) { return; }
+  el('weeklyWeek').textContent = d.week || '';
+  const p = el('weeklyPnl');
+  p.textContent = d.pnl > 0 ? '₹' + Math.round(d.pnl).toLocaleString('en-IN') : d.pnl < 0 ? '-₹' + Math.round(Math.abs(d.pnl)).toLocaleString('en-IN') : '₹0';
+  p.style.color = d.pnl > 0 ? 'var(--green)' : d.pnl < 0 ? 'var(--red)' : 'var(--text-dim)';
+  el('weeklyTrades').textContent = d.trades;
+  const wr = el('weeklyWR');
+  wr.textContent = d.win_rate + '%';
+  wr.style.color = d.win_rate >= 50 ? 'var(--green)' : d.win_rate >= 40 ? 'var(--yellow)' : 'var(--red)';
+  el('weeklyRead').textContent = d.read || '';
+}
+
 // ── Init ──
 fetchSignal();
 fetchIvRank();
 fetchBacktest();
 fetchChain();
 fetchChart();
+fetchExpiry();
+fetchWeekly();
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();
+fetchBnf();
 fetchJournal();
 fetchAlerts();
 fetchTunnelURL();
@@ -911,9 +1005,11 @@ fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchIvRank, 300000);
 setInterval(fetchChain, 60000);
+setInterval(fetchExpiry, 600000);
 setInterval(fetchFiiDii, 300000);
 setInterval(fetchOutlook, 300000);
 setInterval(fetchBtc, 60000);
+setInterval(fetchBnf, 60000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);
 setInterval(fetchORB, 60000);

@@ -22,6 +22,9 @@ from chain_table import get_chain
 from telegram_alert import send_telegram, get_chat_id_from_updates, save_config, is_configured
 import telegram_alert
 from chart_data import get_chart_data
+from banknifty_monitor import get_banknifty_signal
+from expiry_countdown import get_expiry
+from weekly_review import get_weekly_report, build_weekly_report
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -116,6 +119,7 @@ def get_full_analysis():
 
 _signal_cache = {"ts": 0, "data": None}
 _btc_cache = {"ts": 0, "data": None}
+_bnf_cache = {"ts": 0, "data": None}
 _last_tg_push = 0
 
 @app.route("/api/signal")
@@ -169,12 +173,34 @@ def api_outlook():
 
 @app.route("/api/btc")
 def api_btc():
-    """Bitcoin 200 EMA bounce signal (cached 60s)."""
+    """Bitcoin 200 EMA bounce signal (cached 60s). Supports ?interval=15m|1h|4h."""
     import time as _t
-    if _btc_cache["data"] is None or (_t.time() - _btc_cache["ts"]) > 60:
-        _btc_cache["data"] = get_btc_signal()
+    interval = request.args.get("interval", "1h")
+    key = f"{interval}:{_btc_cache['ts']}"
+    if _btc_cache["data"] is None or (_t.time() - _btc_cache["ts"]) > 60 or _btc_cache.get("interval") != interval:
+        _btc_cache["data"] = get_btc_signal(interval)
         _btc_cache["ts"] = _t.time()
+        _btc_cache["interval"] = interval
     return jsonify(_btc_cache["data"])
+
+@app.route("/api/banknifty")
+def api_banknifty():
+    """Bank Nifty 200 EMA bounce signal (cached 60s)."""
+    import time as _t
+    if _bnf_cache["data"] is None or (_t.time() - _bnf_cache["ts"]) > 60:
+        _bnf_cache["data"] = get_banknifty_signal()
+        _bnf_cache["ts"] = _t.time()
+    return jsonify(_bnf_cache["data"])
+
+@app.route("/api/expiry")
+def api_expiry():
+    """Expiry countdown + gamma risk (cached 10 min)."""
+    return jsonify(get_expiry())
+
+@app.route("/api/weeklyreview")
+def api_weeklyreview():
+    """Latest weekly review report."""
+    return jsonify(get_weekly_report())
 
 @app.route("/api/ivrank")
 def api_ivrank():
@@ -691,6 +717,26 @@ def alert_scheduler():
                         f"{'Profit' if pnl > 0 else 'Loss' if pnl < 0 else 'Flat'} day. "
                         f"Review your journal and prep for tomorrow.")
                 except:
+                    pass
+
+            # ── Friday Weekly Review at 3:35 PM ──
+            if current_minute == "15:35" and now.weekday() == 4 and last_eod_summary != today:
+                try:
+                    rep = build_weekly_report()
+                    _add_alert("info", f"📊 Weekly Review (W{now.isocalendar()[1]})",
+                        f"Trades: {rep['trades']} | Win rate: {rep['win_rate']}% | P&L: ₹{rep['pnl']:,.0f} | "
+                        f"Avg win: ₹{rep['avg_win']:,.0f} | Avg loss: ₹{rep['avg_loss']:,.0f} | {rep['read']}")
+                except Exception:
+                    pass
+
+            # ── Tuesday Expiry Day Warning at 9:20 AM ──
+            if current_minute == "09:20" and now.weekday() == 1:
+                try:
+                    from expiry_countdown import get_expiry
+                    ex = get_expiry(force=True)
+                    _add_alert("critical", "⚠️ EXPIRY DAY — Gamma Alert",
+                        f"Weekly expiry TODAY. {ex['gamma_note']} Don't buy new weeklies late — theta and gamma will wreck you. Close/roll by 3:15 PM.")
+                except Exception:
                     pass
             
             time.sleep(30)

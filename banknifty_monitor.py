@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Bitcoin 200 EMA Bounce Monitor — same engine as Nifty, for BTC-USD.
-- BUY_LONG: 200 EMA bounce with bullish trend (4h bars)
+Bank Nifty 200 EMA Bounce Monitor — same engine as Nifty, for ^NSEBANK.
+- BUY_LONG: 200 EMA bounce with bullish trend (1h bars)
 - BUY_SHORT: 200 EMA breakdown with bearish trend
 - EXIT_LONGS / EXIT_SHORTS: trend broken or weakened
 - WAIT: no clear signal
-BTC trades 24/7 — no market hours, no expiry.
+Bank Nifty — NSE hours, no expiry (futures-style signal).
 """
 import json, math
 from datetime import datetime
 import yfinance as yf
 import pandas as pd
 
-SYMBOL = "BTC-USD"
+SYMBOL = "^NSEBANK"
 ENTRY_ZONE_PCT = 0.5       # within 0.5% of 200 EMA for entry
 MIN_ADX = 18
 MAX_RSI = 70
@@ -57,19 +57,17 @@ def adx_di(high, low, close, period=14):
     return float(adx.iloc[-1]), float(pdi.iloc[-1]), float(mdi.iloc[-1])
 
 
-def get_btc_signal(interval="1h"):
+def get_banknifty_signal():
     result = {
         "signal": "WAIT", "reason": "Waiting for setup",
         "spot": None, "ema_200": None, "ema_distance": None, "ema_distance_pct": None,
         "adx": None, "rsi": None, "di_plus": None, "di_minus": None,
         "atr": None, "stop_level": None, "target_level": None,
         "24h_change": None, "entry_zone": False, "trend_broken": False,
-        "interval": interval,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M IST"),
     }
     try:
-        period = "3mo" if interval == "1h" else "1mo"
-        df = yf.download(SYMBOL, period=period, interval=interval, progress=False, auto_adjust=False)
+        df = yf.download(SYMBOL, period="3mo", interval="1h", progress=False, auto_adjust=False)
         if df is None or df.empty:
             result["reason"] = "No data from Yahoo"; return result
         # Flatten MultiIndex columns (newer yfinance)
@@ -142,6 +140,4 @@ def get_btc_signal(interval="1h"):
 
 
 if __name__ == "__main__":
-    import sys
-    iv = sys.argv[1] if len(sys.argv) > 1 else "1h"
-    print(json.dumps(get_btc_signal(iv), indent=1))
+    print(json.dumps(get_banknifty_signal(), indent=1))

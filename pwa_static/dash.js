@@ -662,13 +662,16 @@ async function fetchBtc() {
   try {
     const resp = await fetch('/api/btc?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    renderBtc(await resp.json());
+    const d = await resp.json();
+    window._lastBtc = d;
+    renderBtc(d);
   } catch(e) {}
   // Also fetch 15m signal
   try {
     const resp = await fetch('/api/btc?interval=15m&_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const d = await resp.json();
+    window._lastBtc15 = d;
     const s15 = document.getElementById('btcSignal15');
     if (s15) {
       const sig = d.signal || 'WAIT';
@@ -681,6 +684,7 @@ async function fetchBtc() {
 function renderBtc(d) {
   const el = id => document.getElementById(id);
   if (!el('btcSpot')) return;
+  refreshBtcStrategies();
   const spot = d.spot;
   el('btcSpot').textContent = spot != null ? '$' + Number(spot).toLocaleString('en-US', {maximumFractionDigits: 0}) : '--';
   el('btcSpot').style.color = spot != null && d.ema_distance_pct < 0 ? 'var(--red)' : 'var(--green)';
@@ -943,13 +947,16 @@ async function fetchSensex() {
   try {
     const resp = await fetch('/api/sensex?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    renderSensex(await resp.json());
+    const d = await resp.json();
+    window._lastSensex = d;
+    renderSensex(d);
   } catch(e) {}
 }
 
 function renderSensex(d) {
   const el = id => document.getElementById(id);
   if (!el('sensexSpot')) return;
+  refreshSensexStrategies(d);
   const spot = d.spot;
   el('sensexSpot').textContent = spot != null ? Number(spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
   el('sensexSpot').style.color = d.ema_distance_pct != null && d.ema_distance_pct < 0 ? 'var(--red)' : 'var(--green)';
@@ -1229,6 +1236,72 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
+// ── Shared strategy-status row renderer (used by Nifty + BTC + BNF + Sensex cards) ──
+function stratRowHTML(name, state, reason, cls) {
+  const border = cls === 'ok' ? '#00c853' : cls === 'bad' ? '#ff1744' : cls === 'wait' ? '#ffab00' : '#64748b';
+  const chip = 'strat-' + (cls === 'ok' ? 'ok' : cls === 'bad' ? 'bad' : cls === 'wait' ? 'wait' : 'off');
+  return '<div class="strat-row" style="border-left-color:' + border + '"><span class="strat-name">' + name + '</span><span class="strat-state ' + chip + '">' + state + '</span><span class="strat-reason">' + (reason || '') + '</span></div>';
+}
+
+function renderStratCard(listId, updatedId, rows) {
+  const list = document.getElementById(listId);
+  if (!list) return;
+  list.innerHTML = rows.join('');
+  const upd = document.getElementById(updatedId);
+  if (upd) upd.textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+}
+
+// BTC-style signal payload rows (used by BTC / Bank Nifty / Sensex)
+function btcStyleRows(d) {
+  const rows = [];
+  const add = (n, st, r, c) => rows.push(stratRowHTML(n, st, r, c));
+  const fmt = v => v != null ? Number(v).toLocaleString('en-IN', { maximumFractionDigits: 0 }) : '--';
+  const sig = d.signal || 'WAIT';
+  if (sig === 'BUY_LONG') add('200 EMA Bounce', 'BUY', d.reason || 'Setup active', 'ok');
+  else if (sig === 'BUY_SHORT') add('200 EMA Bounce', 'SELL', d.reason || 'Setup active', 'bad');
+  else add('200 EMA Bounce', 'WAIT', d.reason || 'No setup', 'wait');
+  const adx = d.adx;
+  const trend = adx >= 20 ? 'TRENDING' : adx >= 15 ? 'WEAK' : 'RANGING';
+  add('Trend Strength', trend, 'ADX ' + (adx != null ? adx.toFixed(1) : '--') + ' | DI+ ' + (d.di_plus != null ? d.di_plus.toFixed(1) : '--') + ' vs DI- ' + (d.di_minus != null ? d.di_minus.toFixed(1) : '--'), trend === 'TRENDING' ? (d.di_plus > d.di_minus ? 'ok' : 'bad') : 'wait');
+  const rsi = d.rsi;
+  if (rsi != null) add('Momentum (RSI)', rsi > 70 ? 'OVERBOUGHT' : rsi < 30 ? 'OVERSOLD' : 'NEUTRAL', 'RSI ' + rsi.toFixed(1), 'wait');
+  else add('Momentum (RSI)', '--', 'no data', 'off');
+  if (d.entry_zone) add('Entry Zone', 'IN ZONE', 'Price at 200 EMA (' + fmt(d.ema_200) + ') — watch for bounce', 'ok');
+  else if (d.ema_distance_pct != null) {
+    const dist = d.ema_distance_pct;
+    add('Entry Zone', 'AWAY', (dist >= 0 ? '+' : '') + dist.toFixed(2) + '% from 200 EMA (' + fmt(d.ema_200) + ')', 'wait');
+  } else add('Entry Zone', 'AWAY', 'No 200 EMA data', 'wait');
+  return rows;
+}
+
+async function refreshBtcStrategies() {
+  const rows = btcStyleRows(window._lastBtc || {});
+  const s15 = window._lastBtc15;
+  if (s15 && s15.signal) {
+    const st = s15.signal === 'BUY_LONG' ? 'BUY' : s15.signal === 'BUY_SHORT' ? 'SELL' : 'WAIT';
+    rows.push(stratRowHTML('15m Signal', st, (s15.reason || '').slice(0, 90), st === 'BUY' ? 'ok' : st === 'SELL' ? 'bad' : 'wait'));
+  }
+  renderStratCard('btcStrategiesList', 'btcStratUpdated', rows);
+}
+
+async function refreshBnfStrategies(d) {
+  const rows = btcStyleRows(d || window._lastBnf || {});
+  try {
+    const resp = await fetch('/api/oi?asset=bnf&_=' + Date.now());
+    if (resp.ok) {
+      const oi = await resp.json();
+      const ob = oi.bias || 'WAIT';
+      const st = ob === 'BULLISH' ? 'BUY' : ob === 'BEARISH' ? 'SELL' : ob;
+      rows.push(stratRowHTML('OI Buildup', st, (oi.reason || '').slice(0, 90), ob === 'BULLISH' ? 'ok' : ob === 'BEARISH' ? 'bad' : 'wait'));
+    }
+  } catch (e) {}
+  renderStratCard('bnfStrategiesList', 'bnfStratUpdated', rows);
+}
+
+async function refreshSensexStrategies(d) {
+  renderStratCard('sensexStrategiesList', 'sensexStratUpdated', btcStyleRows(d || window._lastSensex || {}));
+}
+
 // ── Nifty Strategy Status (positional + intraday breakdown — always visible) ──
 async function refreshStrategies() {
   const list = document.getElementById('strategiesList');
@@ -1236,11 +1309,7 @@ async function refreshStrategies() {
   const renderRows = (orb, intra, oi, gap) => {
     const s = window._lastSignal || {};
     const rows = [];
-    const add = (name, state, reason, cls) => {
-      const border = cls === 'ok' ? '#00c853' : cls === 'bad' ? '#ff1744' : cls === 'wait' ? '#ffab00' : '#64748b';
-      const chip = 'strat-' + (cls === 'ok' ? 'ok' : cls === 'bad' ? 'bad' : cls === 'wait' ? 'wait' : 'off');
-      rows.push('<div class="strat-row" style="border-left-color:' + border + '"><span class="strat-name">' + name + '</span><span class="strat-state ' + chip + '">' + state + '</span><span class="strat-reason">' + (reason || '') + '</span></div>');
-    };
+    const add = (name, state, reason, cls) => rows.push(stratRowHTML(name, state, reason, cls));
     // 200 EMA Bounce (1h)
     if (s.signal === 'BUY_CALLS') add('200 EMA Bounce', 'BUY', s.reason || 'Setup active — buy CE', 'ok');
     else if (s.signal === 'BUY_PUTS') add('200 EMA Bounce', 'SELL', s.reason || 'Setup active — buy PE', 'bad');
@@ -1311,7 +1380,9 @@ async function fetchBnf() {
   try {
     const resp = await fetch('/api/banknifty?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    renderBnf(await resp.json());
+    const d = await resp.json();
+    window._lastBnf = d;
+    renderBnf(d);
   } catch(e) {}
 }
 
@@ -1370,6 +1441,7 @@ async function fetchGap() {
 function renderBnf(d) {
   const el = id => document.getElementById(id);
   if (!el('bnfSpot')) return;
+  refreshBnfStrategies(d);
   el('bnfSpot').textContent = d.spot != null ? Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
   el('bnfSpot').style.color = d.ema_distance_pct != null && d.ema_distance_pct < 0 ? 'var(--red)' : 'var(--green)';
   const sigEl = el('bnfSignal');
@@ -1465,7 +1537,7 @@ function renderWeekly(d) {
 // ── Init ──
 // Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
 fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart(); fetchSensexChart();
-refreshStrategies();
+refreshStrategies(); refreshBtcStrategies(); refreshBnfStrategies(); refreshSensexStrategies();
 fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles(); initQuickNav();
 setTimeout(() => { fetchBtc(); fetchBnf(); fetchSensex(); fetchOi(); fetchOi('bnf'); }, 800);
 setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
@@ -1482,6 +1554,9 @@ fetchIntraday();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(refreshStrategies, 120000);
+setInterval(refreshBtcStrategies, 60000);
+setInterval(refreshBnfStrategies, 60000);
+setInterval(refreshSensexStrategies, 60000);
 setInterval(fetchIvRank, 300000);
 setInterval(fetchChain, 60000);
 setInterval(fetchExpiry, 600000);

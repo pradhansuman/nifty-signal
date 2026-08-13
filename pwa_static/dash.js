@@ -1181,6 +1181,33 @@ function drawChart(d, canvasId, spotTagId, colors) {
   });
   ctx.stroke();
 
+  // ── EMA guide lines + latest-value tags (bounce zone at a glance) ──
+  const lastVal = arr => { for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return arr[i]; return null; };
+  const lastEma20 = lastVal(ema20), lastEma = lastVal(ema);
+  const fmt = v => Number(v).toLocaleString('en-IN', {maximumFractionDigits: 0});
+  const drawGuide = (val, color, label, below) => {
+    if (val == null) return;
+    const gy = Y(val);
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = color; ctx.globalAlpha = 0.55; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, gy); ctx.lineTo(W - PAD, gy); ctx.stroke();
+    ctx.restore();
+    // Value chip at right edge, clamped inside canvas; `below` places it under the line
+    const txt = label + ' ' + fmt(val);
+    ctx.font = 'bold 10px ui-monospace, Menlo, monospace';
+    const tw = ctx.measureText(txt).width + 8;
+    let cy = below ? gy + 2 : gy - 15;
+    if (cy < 2) cy = 2;
+    if (cy > H - 16) cy = H - 16;
+    ctx.fillStyle = 'rgba(13,20,32,0.85)';
+    ctx.fillRect(W - PAD - tw, cy, tw, 14);
+    ctx.fillStyle = color; ctx.globalAlpha = 1;
+    ctx.fillText(txt, W - PAD - tw + 4, cy + 10);
+  };
+  drawGuide(lastEma20, colorEma20, '20E', false);
+  drawGuide(lastEma, colorEma, '200E', true);
+
   // Spot tag
   if (spotTagId) {
     const tag = document.getElementById(spotTagId);

@@ -46,8 +46,10 @@ async function fetchSignal() {
     document.getElementById('debugInfo').textContent = 'Response: ' + resp.status;
     if (!resp.ok) throw new Error('API ' + resp.status);
     cachedSignal = await resp.json();
+    window._lastSignal = cachedSignal;
     document.getElementById('debugInfo').textContent = 'Data: ' + JSON.stringify(cachedSignal).slice(0, 150);
     render(cachedSignal);
+    refreshStrategies();
     document.getElementById('footerText').textContent =
       'Updated ' + cachedSignal.updated;
     document.getElementById('debugInfo').textContent = 'Rendered ✅';
@@ -1227,6 +1229,83 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
+// ── Nifty Strategy Status (positional + intraday breakdown — always visible) ──
+async function refreshStrategies() {
+  const list = document.getElementById('strategiesList');
+  if (!list) return;
+  const renderRows = (orb, intra, oi, gap) => {
+    const s = window._lastSignal || {};
+    const rows = [];
+    const add = (name, state, reason, cls) => {
+      const border = cls === 'ok' ? '#00c853' : cls === 'bad' ? '#ff1744' : cls === 'wait' ? '#ffab00' : '#64748b';
+      const chip = 'strat-' + (cls === 'ok' ? 'ok' : cls === 'bad' ? 'bad' : cls === 'wait' ? 'wait' : 'off');
+      rows.push('<div class="strat-row" style="border-left-color:' + border + '"><span class="strat-name">' + name + '</span><span class="strat-state ' + chip + '">' + state + '</span><span class="strat-reason">' + (reason || '') + '</span></div>');
+    };
+    // 200 EMA Bounce (1h)
+    if (s.signal === 'BUY_CALLS') add('200 EMA Bounce', 'BUY', s.reason || 'Setup active — buy CE', 'ok');
+    else if (s.signal === 'BUY_PUTS') add('200 EMA Bounce', 'SELL', s.reason || 'Setup active — buy PE', 'bad');
+    else {
+      const distTxt = s.distance_pct != null ? 'spot ' + (s.distance_pct >= 0 ? '+' : '') + s.distance_pct + '% vs 200 EMA (' + (s.ema_200 ? s.ema_200.toLocaleString('en-IN') : '--') + ')' : '';
+      add('200 EMA Bounce', 'WAIT', 'No bounce yet — ' + distTxt, 'wait');
+    }
+    // BTST (positional)
+    if (s.btst_recommended) add('BTST (Positional)', 'ACTIVE', s.btst_recommended, 'ok');
+    else add('BTST (Positional)', 'WAIT', 'No setup — only triggers on a BUY_CALLS/BUY_PUTS signal', 'wait');
+    // ORB
+    if (orb && orb.reason) {
+      const st = orb.signal === 'ORB_BUY' ? 'BUY' : orb.signal === 'ORB_SELL' ? 'SELL' : 'WAIT';
+      add('ORB Breakout', st, (orb.reason || '').slice(0, 90), st === 'BUY' ? 'ok' : st === 'SELL' ? 'bad' : 'wait');
+    } else add('ORB Breakout', 'WAIT', 'No setup — window 9:30-10:15 AM', 'wait');
+    // VWAP
+    if (intra && intra.vwap && intra.vwap.reason) {
+      const v = intra.vwap;
+      const st = v.signal === 'VWAP_BUY' ? 'BUY' : v.signal === 'VWAP_SELL' ? 'SELL' : (v.signal || 'WAIT');
+      add('VWAP Reversion', st, (v.reason || '').slice(0, 90), st === 'BUY' ? 'ok' : st === 'SELL' ? 'bad' : 'wait');
+    } else add('VWAP Reversion', 'WAIT', 'No data yet', 'wait');
+    // EMA Cross (5m)
+    if (intra && intra.ema && intra.ema.reason) {
+      const e = intra.ema;
+      const st = e.signal === 'EMA_BUY' ? 'BUY' : e.signal === 'EMA_SELL' ? 'SELL' : (e.signal || 'WAIT');
+      add('EMA Cross (5m)', st, (e.reason || '').slice(0, 90), st === 'BUY' ? 'ok' : st === 'SELL' ? 'bad' : 'wait');
+    } else add('EMA Cross (5m)', 'WAIT', 'No data yet', 'wait');
+    // Contrarian
+    if (s.contrarian_signal) {
+      const cs = s.contrarian_signal;
+      if (cs === 'NEUTRAL') add('Contrarian PCR', 'NEUTRAL', (s.contrarian_reason || '').slice(0, 90), 'wait');
+      else if (cs === 'SELL_CALLS') add('Contrarian PCR', 'BEARISH', (s.contrarian_reason || '').slice(0, 90), 'bad');
+      else if (cs === 'SELL_PUTS') add('Contrarian PCR', 'BULLISH', (s.contrarian_reason || '').slice(0, 90), 'ok');
+    }
+    // Gap & Go
+    if (gap && gap.reason) {
+      const st = gap.signal && gap.signal !== 'WAIT' ? gap.signal : 'WAIT';
+      add('Gap & Go', st, (gap.reason || '').slice(0, 90), st === 'WAIT' ? 'wait' : 'ok');
+    } else add('Gap & Go', 'WAIT', 'No data yet', 'wait');
+    // OI Buildup
+    if (oi && oi.reason) {
+      const ob = oi.bias || 'WAIT';
+      const st = ob === 'BULLISH' ? 'BUY' : ob === 'BEARISH' ? 'SELL' : ob;
+      add('OI Buildup', st, (oi.reason || '').slice(0, 90), ob === 'BULLISH' ? 'ok' : ob === 'BEARISH' ? 'bad' : 'wait');
+    } else add('OI Buildup', 'WAIT', 'No data yet', 'wait');
+    list.innerHTML = rows.join('');
+    const upd = document.getElementById('stratUpdated');
+    if (upd) upd.textContent = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  };
+  // Phase 1: signal-based rows immediately (never blank)
+  const state = { orb: null, intra: null, oi: null, gap: null };
+  const renderAll = () => renderRows(state.orb, state.intra, state.oi, state.gap);
+  renderAll();
+  // Phase 2: independent per-endpoint fetches — each row updates as its data arrives
+  const fetchT = (url) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 20000);
+    return fetch(url, { signal: ctrl.signal }).then(r => r.json()).catch(() => null).finally(() => clearTimeout(t));
+  };
+  fetchT('/api/orb').then(d => { state.orb = d; renderAll(); });
+  fetchT('/api/intraday').then(d => { state.intra = d; renderAll(); });
+  fetchT('/api/oi').then(d => { state.oi = d; renderAll(); });
+  fetchT('/api/gapgo').then(d => { state.gap = d; renderAll(); });
+}
+
 // ── Bank Nifty ──
 async function fetchBnf() {
   try {
@@ -1386,6 +1465,7 @@ function renderWeekly(d) {
 // ── Init ──
 // Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
 fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart(); fetchSensexChart();
+refreshStrategies();
 fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles(); initQuickNav();
 setTimeout(() => { fetchBtc(); fetchBnf(); fetchSensex(); fetchOi(); fetchOi('bnf'); }, 800);
 setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
@@ -1401,6 +1481,7 @@ fetchORB();
 fetchIntraday();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
+setInterval(refreshStrategies, 120000);
 setInterval(fetchIvRank, 300000);
 setInterval(fetchChain, 60000);
 setInterval(fetchExpiry, 600000);

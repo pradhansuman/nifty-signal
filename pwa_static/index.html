@@ -222,6 +222,15 @@
   }
   .card { scroll-margin-top: 58px; }
 
+.strat-grid{display:flex;flex-direction:column;gap:6px}
+.strat-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:5px 8px;background:rgba(30,41,59,.35);border-radius:8px;border-left:3px solid #64748b;min-width:0}
+.strat-name{font-weight:700;white-space:nowrap;min-width:92px;flex-shrink:0}
+.strat-state{font-weight:700;white-space:nowrap;padding:1px 8px;border-radius:10px;font-size:11px;flex-shrink:0}
+.strat-reason{color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.strat-ok{background:#00c85322;color:#00c853}
+.strat-bad{background:#ff174422;color:#ff1744}
+.strat-wait{background:#ffab0044;color:#ffab00}
+.strat-off{background:#64748b33;color:#94a3b8}
 </style>
 </head>
 <body>
@@ -265,6 +274,14 @@
   </div>
 
 <div class="cards">
+  <!-- Nifty Strategy Status (positional + intraday breakdown — always visible) -->
+  <div class="card" id="strategiesCard">
+    <div class="card-header"><span class="label">🧭 Nifty Strategy Status</span><span class="value" id="stratUpdated">--</span></div>
+    <div id="strategiesList" class="strat-grid">
+      <div style="color:var(--text-dim);padding:8px;text-align:center">Loading strategy statuses...</div>
+    </div>
+  </div>
+
   <!-- Price -->
   <div class="card" id="niftyCard">
     <div class="card-header">
@@ -1067,6 +1084,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260813k"></script>
+<script src="/dash.js?v=20260813l"></script>
 </body>
 </html>

@@ -135,6 +135,18 @@ _signal_cache = {"ts": 0, "data": None}
 _btc_cache = {"ts": 0, "data": None}
 _bnf_cache = {"ts": 0, "data": None}
 _sensex_cache = {"ts": 0, "data": None}
+_intraday_cache = {"ts": 0, "data": None}
+
+
+def _clean_nan(obj):
+    """Replace NaN/Inf floats with None so responses stay valid strict JSON (browsers reject literal NaN)."""
+    if isinstance(obj, float) and (obj != obj or obj in (float("inf"), float("-inf"))):
+        return None
+    if isinstance(obj, dict):
+        return {k: _clean_nan(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean_nan(v) for v in obj]
+    return obj
 _last_tg_push = 0
 _signal_lock = threading.Lock()
 # ── Telegram queue: every alert is enqueued, batched sender flushes → nothing lost ──
@@ -473,7 +485,11 @@ def api_orb():
 @app.route("/api/intraday")
 def api_intraday():
     """VWAP + EMA intraday signals. Valid during market hours."""
-    return jsonify(run_script("intraday_signals.py"))
+    import time as _t
+    if _intraday_cache["data"] is None or (_t.time() - _intraday_cache["ts"]) > 60:
+        _intraday_cache["data"] = run_script("intraday_signals.py")
+        _intraday_cache["ts"] = _t.time()
+    return jsonify(_clean_nan(_intraday_cache["data"]))
 
 
 # ── Algo Trading ──
@@ -980,6 +996,7 @@ def warmup_caches():
         (lambda: get_backtest(asset="nifty"), (), 19),
         (lambda: get_backtest(asset="banknifty"), (), 21),
         (lambda: get_expiry(asset="banknifty"), (), 23),
+        (lambda: _intraday_cache.update(data=run_script("intraday_signals.py"), ts=time.time()), (), 25),
     ]
     for fn, args, delay in jobs:
         try:

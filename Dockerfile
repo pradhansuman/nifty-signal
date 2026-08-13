@@ -1,26 +1,25 @@
-# Nifty Signal — NAS Docker Setup
-# Works on: Synology, QNAP, TrueNAS, Unraid, any Linux NAS with Docker
+# Nifty Signal — Render / NAS Docker Setup
+# Works on: Render, Railway, Synology, QNAP, TrueNAS, any Linux NAS with Docker
 
 FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install dependencies
-RUN pip install --no-cache-dir \
-    yfinance \
-    pandas \
-    flask \
-    requests \
-    numpy
+# Install dependencies from the pinned lockfile
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app files
-COPY nifty_monitor.py .
-COPY nifty_pipeline_v2.py .
-COPY nifty_server.py .
+# Copy the full app (all modules + static assets).
+# NOTE: .openclaw/tmp/*.py secrets are git-ignored → NOT in the image.
+#       On Render, supply them via env vars: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
+#       UPSTOX_ANALYTICS_TOKEN (the code falls back to env vars automatically).
+COPY *.py ./
 COPY pwa_static/ ./pwa_static/
 
-# Expose port
+# Render sets PORT automatically; fallback for NAS/docker-compose
+ENV PORT=5099
+
 EXPOSE 5099
 
-# Start the server
+# Render web service expects the app to bind $PORT — nifty_server reads it from env
 CMD ["python", "nifty_server.py"]

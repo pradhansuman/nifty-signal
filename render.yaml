@@ -1,0 +1,24 @@
+# Nifty Signal — Render Blueprint
+# Deploy: New Blueprint → paste this repo → Render asks you to fill the env vars.
+# After deploy, the scheduler + Telegram alerts run automatically (macOS instance
+# should be stopped to avoid duplicate messages).
+services:
+  - type: web
+    name: nifty-signal
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      # These are placeholders — set REAL values in the Render dashboard
+      # (they are never committed to git). The app reads them at boot.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: UPSTOX_ANALYTICS_TOKEN
+        sync: false
+      # Keep the background alert scheduler running on the cloud instance.
+      # Set to "true" ONLY if you want alerts from this instance disabled.
+      - key: NO_SCHEDULER
+        value: "false"

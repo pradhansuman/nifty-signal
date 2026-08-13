@@ -55,3 +55,31 @@ https://script.google.com/macros/s/.../exec?symbol=NIFTY&format=expiries
 | "Authorization required" | You skipped the OAuth screen — re-deploy and authorize |
 | Empty chain / 0 strikes | Check the expiry date format: `DD-Mon-YYYY` (e.g. `27-Aug-2026`) |
 | Timeout | First run is slow (cold start). Subsequent runs are faster. Increase Python timeout if needed. |
+
+---
+
+## Render Cloud Deployment (Telegram alerts from the cloud)
+
+The app is Render-ready: `Dockerfile` + `render.yaml` blueprint. Cloud mode boots with the **alert scheduler, Telegram batcher, and cache warmup enabled by default** (macOS instance should be stopped to avoid duplicate pushes).
+
+### Deploy (one-time, ~5 min)
+1. **Push** this repo to GitHub (already done — `pradhansuman/nifty-signal`).
+2. Render dashboard → **New → Blueprint** → pick the repo (or New Web Service → Docker → root).
+3. Render auto-detects `render.yaml` / `Dockerfile`.
+4. Set env vars in the Render dashboard (never commit these):
+   - `TELEGRAM_BOT_TOKEN` — bot token from @BotFather
+   - `TELEGRAM_CHAT_ID` — your chat id (already known: 5094931498)
+   - `UPSTOX_ANALYTICS_TOKEN` — 1-year Upstox analytics token
+   - `NO_SCHEDULER=false` — keep the scheduler ON (default)
+5. Deploy. Health check hits `/` → 200.
+
+### Verified end-to-end (2026-08-13)
+- Cloud-mode boot: scheduler + Telegram + warmup threads start; `/api/signal` 200.
+- **Env-var-only Telegram path tested**: a real push was delivered using only `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` (no config file) — exactly the Render scenario.
+- Static pages `/` and `/v2` serve; chart API works.
+
+### ⚠️ Caveats
+- **Free tier sleeps** after ~15 min idle → scheduler pauses with it. Keep it awake with a free uptime pinger (UptimeRobot, 5-min interval) hitting `/`.
+- **Run alerts from ONE host** — Mac + Render together = every alert twice (both schedulers fire). Either stop the Mac instance, or set `NO_SCHEDULER=true` on one of them.
+- `.openclaw/tmp/*.py` secrets are git-ignored → NOT in the image; env vars are the only credential source on Render.
+- Disk caches (backtest, OI snapshots, alerts) are ephemeral on Render — they rebuild per boot; fine.

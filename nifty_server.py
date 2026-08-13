@@ -192,6 +192,7 @@ def _track_asset_alert(asset, signal, reason):
             lst.pop(0)
         path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", f"{asset}_alerts.json")
         try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "w") as f:
                 json.dump(lst, f, default=str)
         except Exception:
@@ -1066,7 +1067,19 @@ if __name__ == "__main__":
     print(f"   API:     http://localhost:{PORT}/api/signal")
     
     if IS_CLOUD:
-        print("   Mode:    ☁️  Cloud (no background scheduler)")
+        print("   Mode:    ☁️  Cloud (scheduler enabled by default; set NO_SCHEDULER=true to disable)")
+        if os.environ.get("NO_SCHEDULER", "") == "true":
+            print("   Alerts:  DISABLED via NO_SCHEDULER env var")
+        else:
+            scheduler = threading.Thread(target=alert_scheduler, daemon=True)
+            scheduler.start()
+            print("   Alerts:  Background scheduler started")
+            tgs = threading.Thread(target=tg_sender, daemon=True)
+            tgs.start()
+            print("   Telegram: Batched sender started")
+            wu = threading.Thread(target=warmup_caches, daemon=True)
+            wu.start()
+            print("   Warmup:  Background cache pre-compute started")
     else:
         tunnel = detect_tunnel_url()
         if tunnel:

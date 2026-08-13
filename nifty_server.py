@@ -750,31 +750,6 @@ def alert_scheduler():
             
             if now.weekday() >= 5:  # Weekend
                 time.sleep(60)
-
-
-def warmup_caches():
-    """Pre-compute heavy endpoints at boot so the first page load is instant."""
-    jobs = [
-        (get_signal, (), 1),
-        (lambda: get_chain(asset="nifty"), (), 3),
-        (lambda: get_chain(asset="banknifty"), (), 5),
-        (lambda: get_btc_signal("1h"), (), 7),
-        (lambda: get_banknifty_signal(), (), 9),
-        (fiidii_summary, (), 11),
-        (get_outlook, (), 13),
-        (lambda: get_iv_rank(asset="nifty"), (), 15),
-        (lambda: get_iv_rank(asset="banknifty"), (), 17),
-        (lambda: get_backtest(asset="nifty"), (), 19),
-        (lambda: get_backtest(asset="banknifty"), (), 21),
-        (lambda: get_expiry(asset="banknifty"), (), 23),
-    ]
-    for fn, args, delay in jobs:
-        try:
-            time.sleep(delay)
-            fn(*args)
-        except Exception:
-            pass
-    print("   Warmup:  All caches pre-computed")
                 continue
             
             in_market = _is_market_open()
@@ -971,6 +946,31 @@ def warmup_caches():
         except Exception as e:
             print(f"[SCHEDULER ERROR] {e}")
             time.sleep(60)
+
+
+def warmup_caches():
+    """Pre-compute heavy endpoints at boot so the first page load is instant."""
+    jobs = [
+        (get_signal, (), 1),
+        (lambda: get_chain(asset="nifty"), (), 3),
+        (lambda: get_chain(asset="banknifty"), (), 5),
+        (lambda: get_btc_signal("1h"), (), 7),
+        (lambda: get_banknifty_signal(), (), 9),
+        (fiidii_summary, (), 11),
+        (get_outlook, (), 13),
+        (lambda: get_iv_rank(asset="nifty"), (), 15),
+        (lambda: get_iv_rank(asset="banknifty"), (), 17),
+        (lambda: get_backtest(asset="nifty"), (), 19),
+        (lambda: get_backtest(asset="banknifty"), (), 21),
+        (lambda: get_expiry(asset="banknifty"), (), 23),
+    ]
+    for fn, args, delay in jobs:
+        try:
+            time.sleep(delay)
+            fn(*args)
+        except Exception:
+            pass
+    print("   Warmup:  All caches pre-computed")
 
 
 # ── Paper Trading Heartbeat (keeps paper P&L tracking alive) ──

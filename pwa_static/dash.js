@@ -706,6 +706,8 @@ function renderBtc(d) {
       '<span style="color:var(--red);font-weight:700">🛑 Stop: $' + Number(d.stop_level).toLocaleString('en-US', {maximumFractionDigits: 0}) + '</span>' +
       '<span style="color:var(--green);font-weight:700">🎯 Target: $' + Number(d.target_level).toLocaleString('en-US', {maximumFractionDigits: 0}) + '</span>' +
       '</div>';
+  } else {
+    lv.innerHTML = '<span style="color:var(--yellow);font-weight:600">⏳ HOLD — no trade</span> <span style="color:var(--text-dim)">' + (d.reason || 'waiting for 200 EMA bounce setup') + '</span>';
   }
   // BTC recommendation banner
   const rec = document.getElementById('btcRec');
@@ -1160,6 +1162,8 @@ function renderBnf(d) {
     lv.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
       '<span style="color:var(--red);font-weight:700">🛑 Stop: ' + Number(d.stop_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span>' +
       '<span style="color:var(--green);font-weight:700">🎯 Target: ' + Number(d.target_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span></div>';
+  } else {
+    lv.innerHTML = '<span style="color:var(--yellow);font-weight:600">⏳ HOLD — no trade</span> <span style="color:var(--text-dim)">' + (d.reason || 'waiting for 200 EMA bounce setup') + '</span>';
   }
   // BNF recommendation banner
   const rec = document.getElementById('bnfRec');

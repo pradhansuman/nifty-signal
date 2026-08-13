@@ -959,16 +959,17 @@ function initTimeframeToggles() {
 function initQuickNav() {
   const nav = document.getElementById('quickNav');
   if (!nav) return;
-  const chips = Array.from(nav.querySelectorAll('.qnav-chip'));
-  const sections = chips.map(c => document.getElementById(c.dataset.target)).filter(Boolean);
+  // Pair chips with sections, sorted by DOM position (chip order ≠ DOM order)
+  const pairs = Array.from(nav.querySelectorAll('.qnav-chip'))
+    .map(c => ({ chip: c, sec: document.getElementById(c.dataset.target) }))
+    .filter(p => p.sec)
+    .sort((a, b) => (a.sec.compareDocumentPosition(b.sec) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
   // Click → smooth scroll
-  chips.forEach(c => {
-    c.addEventListener('click', () => {
-      const el = document.getElementById(c.dataset.target);
-      if (!el) return;
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      chips.forEach(x => x.classList.remove('active'));
-      c.classList.add('active');
+  pairs.forEach(p => {
+    p.chip.addEventListener('click', () => {
+      p.sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      pairs.forEach(x => x.chip.classList.remove('active'));
+      p.chip.classList.add('active');
     });
   });
   // Scroll-spy: highlight the section currently in view
@@ -979,14 +980,13 @@ function initQuickNav() {
     requestAnimationFrame(() => {
       ticking = false;
       const navH = nav.offsetHeight + 4;
-      let cur = chips[0];
-      for (let i = 0; i < sections.length; i++) {
-        if (sections[i].getBoundingClientRect().top <= navH + 40) cur = chips[i];
-        else break;
+      let cur = pairs[0].chip;
+      for (let i = 0; i < pairs.length; i++) {
+        if (pairs[i].sec.getBoundingClientRect().top <= navH + 40) cur = pairs[i].chip;
       }
-      chips.forEach(x => x.classList.toggle('active', x === cur));
+      pairs.forEach(x => x.chip.classList.toggle('active', x.chip === cur));
       // auto-scroll chip into view if off-screen
-      if (cur && nav.scrollLeft !== undefined) {
+      if (nav.scrollLeft !== undefined) {
         const navRect = nav.getBoundingClientRect();
         const chipRect = cur.getBoundingClientRect();
         if (chipRect.left < navRect.left) nav.scrollLeft += chipRect.left - navRect.left - 8;

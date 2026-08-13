@@ -296,6 +296,26 @@ def api_oi():
     """OI Buildup / Smart Money Flow (cached 2 min)."""
     return jsonify(get_oi_buildup())
 
+@app.route("/api/bnf/chain")
+def api_bnf_chain():
+    return jsonify(get_chain(asset="banknifty"))
+
+@app.route("/api/bnf/expiry")
+def api_bnf_expiry():
+    return jsonify(get_expiry(asset="banknifty"))
+
+@app.route("/api/bnf/ivrank")
+def api_bnf_ivrank():
+    return jsonify(get_iv_rank(asset="banknifty"))
+
+@app.route("/api/bnf/oi")
+def api_bnf_oi():
+    return jsonify(get_oi_buildup(asset="banknifty"))
+
+@app.route("/api/bnf/backtest")
+def api_bnf_backtest():
+    return jsonify(get_backtest(asset="banknifty"))
+
 @app.route("/api/gapgo")
 def api_gapgo():
     """Gap & Go / Gap Fade (cached 60s)."""
@@ -850,6 +870,12 @@ def alert_scheduler():
                         top_pe = ", ".join(f"{r['strike']}(+{r['oi_gain']:,})" for r in oi.get("pe_buildup", [])[:3])
                         _add_alert("critical", f"{emoji} OI BUILDUP: {oi_sig}",
                             f"{oi.get('reason', '')}\nCE loading: {top_ce or 'none'}\nPE loading: {top_pe or 'none'}")
+                    # Bank Nifty OI snapshots too
+                    take_snapshot(force=True, asset="banknifty")
+                    oib = get_oi_buildup(force=True, asset="banknifty")
+                    if oib.get("signal") in ("BUY_CALLS", "BUY_PUTS"):
+                        _add_alert("critical", f"🏦 BNF OI BUILDUP: {oib['signal']}",
+                            f"{oib.get('reason', '')}")
                 except Exception:
                     pass
 

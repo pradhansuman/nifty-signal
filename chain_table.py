@@ -7,10 +7,13 @@ Cached 60s.
 import json, os, time, requests, sys
 from datetime import datetime, timedelta
 
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", "chain_cache.json")
 CACHE_TTL = 60
-
-_cache = {"ts": 0, "data": None}
+WORKSPACE = os.path.dirname(os.path.abspath(__file__))
+ASSETS = {
+    "nifty": {"symbol": "NSE_INDEX|Nifty 50", "cache": "chain_cache.json"},
+    "banknifty": {"symbol": "NSE_INDEX|Nifty Bank", "cache": "bnf_chain_cache.json"},
+}
+_cache = {"nifty": {"ts": 0, "data": None}, "banknifty": {"ts": 0, "data": None}}
 
 from tomorrow_outlook import get_outlook
 
@@ -31,34 +34,62 @@ def _next_tuesday():
     return (today + timedelta(days=days)).strftime("%Y-%m-%d")
 
 
-def get_chain(force=False, strike_range=8):
+def _monthly_last_tuesday():
+    today = datetime.now()
+    if today.month == 12:
+        nxt = datetime(today.year + 1, 1, 1)
+    else:
+        nxt = datetime(today.year, today.month + 1, 1)
+    last_day = nxt - timedelta(days=1)
+    days_back = (last_day.weekday() - 1) % 7
+    return (last_day - timedelta(days=days_back)).strftime("%Y-%m-%d")
+
+
+def _find_available_expiry(token, symbol, preferred, max_scan=20):
+    """Try preferred expiry, then scan forward up to max_scan days for a live series."""
+    try:
+        for off in range(0, max_scan):
+            d = datetime.strptime(preferred, "%Y-%m-%d") + timedelta(days=off)
+            exp = d.strftime("%Y-%m-%d")
+            r = requests.get(
+                "https://api.upstox.com/v2/option/chain",
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                params={"instrument_key": symbol, "expiry_date": exp},
+                timeout=12)
+            if r.status_code == 200:
+                data = r.json().get("data", [])
+                if data:
+                    return exp, data
+    except Exception:
+        pass
+    return preferred, None
+
+
+def get_chain(force=False, strike_range=8, asset="nifty"):
+    cfg = ASSETS.get(asset)
+    if not cfg:
+        return {"error": f"Unknown asset {asset}"}
+    c = _cache.setdefault(asset, {"ts": 0, "data": None})
     now = time.time()
-    if not force and _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
-        return _cache["data"]
+    if not force and c["data"] and (now - c["ts"]) < CACHE_TTL:
+        return c["data"]
 
     out = {"error": None, "expiry": None, "atm": None, "call_wall": None, "put_wall": None,
-           "call_wall_oi": 0, "put_wall_oi": 0, "rows": [], "chain_spot": None}
+           "call_wall_oi": 0, "put_wall_oi": 0, "rows": [], "chain_spot": None, "asset": asset}
 
     token = _token()
     if not token:
         out["error"] = "No Upstox token"
         return out
 
-    expiry = _next_tuesday()
+    expiry = _next_tuesday() if asset == "nifty" else _monthly_last_tuesday()
     out["expiry"] = expiry
     try:
-        r = requests.get(
-            "https://api.upstox.com/v2/option/chain",
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-            params={"instrument_key": "NSE_INDEX|Nifty 50", "expiry_date": expiry},
-            timeout=15)
-        if r.status_code != 200:
-            out["error"] = f"Upstox {r.status_code}"
-            _cache["ts"], _cache["data"] = now, out
-            return out
-        data = r.json().get("data", [])
+        expiry, data = _find_available_expiry(token, cfg["symbol"], expiry)
+        out["expiry"] = expiry
         if not data:
             out["error"] = "Empty chain"
+            c["ts"], c["data"] = now, out
             return out
     except Exception as e:
         out["error"] = str(e)[:80]
@@ -124,10 +155,10 @@ def get_chain(force=False, strike_range=8):
     except Exception:
         pass
 
-    _cache["ts"] = now
-    _cache["data"] = out
+        c["ts"] = now
+    c["data"] = out
     try:
-        with open(CACHE_FILE, "w") as f:
+        with open(os.path.join(WORKSPACE, ".openclaw", "tmp", cfg["cache"]), "w") as f:
             json.dump(out, f)
     except Exception:
         pass

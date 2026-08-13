@@ -730,16 +730,19 @@ function renderBtc(d) {
 }
 
 // ── IV Rank ──
-async function fetchIvRank() {
+async function fetchIvRank(prefix) {
+  prefix = prefix || '';
   try {
-    const resp = await fetch('/api/ivrank?_=' + Date.now());
+    const resp = await fetch((prefix ? '/api/bnf/ivrank' : '/api/ivrank') + '?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    renderIvRank(await resp.json());
+    renderIvRank(await resp.json(), prefix);
   } catch(e) {}
 }
 
-function renderIvRank(d) {
-  const el = id => document.getElementById(id);
+function renderIvRank(d, prefix) {
+  prefix = prefix || '';
+  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const el = id => document.getElementById(P(id));
   if (!el('ivRankVal')) return;
   el('ivRange').textContent = (d.low_52w != null ? d.low_52w : '--') + ' – ' + (d.high_52w != null ? d.high_52w : '--');
 
@@ -754,6 +757,8 @@ function renderIvRank(d) {
   pctEl.style.color = pct <= 25 ? 'var(--green)' : pct >= 75 ? 'var(--red)' : 'var(--yellow)';
 
   el('ivCurrentVal').textContent = d.current_vix != null ? d.current_vix : '--';
+  const atmIv = document.getElementById(P('atmIvVal'));
+  if (atmIv) atmIv.textContent = d.atm_iv != null ? d.atm_iv : '--';
 
   const readEl = el('ivRead');
   readEl.textContent = d.read || '';
@@ -761,16 +766,19 @@ function renderIvRank(d) {
 }
 
 // ── Backtest ──
-async function fetchBacktest() {
+async function fetchBacktest(prefix) {
+  prefix = prefix || '';
   try {
-    const resp = await fetch('/api/backtest?_=' + Date.now());
+    const resp = await fetch((prefix ? '/api/bnf/backtest' : '/api/backtest') + '?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    renderBacktest(await resp.json());
+    renderBacktest(await resp.json(), prefix);
   } catch(e) {}
 }
 
-function renderBacktest(d) {
-  const el = id => document.getElementById(id);
+function renderBacktest(d, prefix) {
+  prefix = prefix || '';
+  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const el = id => document.getElementById(P(id));
   if (!el('btTrades')) return;
   if (d.error) { el('btRead').textContent = d.error; return; }
   el('btPeriod').textContent = d.period ? d.period.slice(0, 10) + ' → ' + d.period.slice(-10) : '';
@@ -811,6 +819,14 @@ async function fetchChain() {
   } catch(e) {}
 }
 
+async function fetchBnfChain() {
+  try {
+    const resp = await fetch('/api/bnf/chain?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderChain(await resp.json(), 'bnf');
+  } catch(e) {}
+}
+
 function fmtOID(n) {
   if (n == null) return '--';
   if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
@@ -818,20 +834,22 @@ function fmtOID(n) {
   return n;
 }
 
-function renderChain(d) {
-  const el = id => document.getElementById(id);
-  if (!el('chainRows')) return;
+function renderChain(d, prefix) {
+  prefix = prefix || '';
+  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const id = s => document.getElementById(P(s));
+  if (!id('chainRows')) return;
   if (d.error) {
-    el('chainMeta').textContent = d.error;
+    id('chainMeta').textContent = d.error;
     return;
   }
-  el('chainMeta').textContent = (d.expiry || '') + ' · Spot ' + (d.chain_spot != null ? Number(d.chain_spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--');
-  const walls = el('chainWalls');
+  id('chainMeta').textContent = (d.expiry || '') + ' · Spot ' + (d.chain_spot != null ? Number(d.chain_spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--');
+  const walls = id('chainWalls');
   walls.innerHTML = d.call_wall ? '🧱 Call wall: <b style="color:var(--red)">' + d.call_wall + '</b> (OI ' + fmtOID(d.call_wall_oi) + ') · ' : '' +
     (d.put_wall ? 'Put wall: <b style="color:var(--green)">' + d.put_wall + '</b> (OI ' + fmtOID(d.put_wall_oi) + ')' : '');
 
   // Prominent spot price — Upstox chain spot, fall back to main signal spot
-  const spotBig = el('chainSpotBig');
+  const spotBig = id('chainSpotBig');
   let sp = d.chain_spot;
   if (sp == null && typeof cachedSignal !== 'undefined' && cachedSignal && cachedSignal.spot) sp = cachedSignal.spot;
   let spotTxt = sp != null ? Number(sp).toLocaleString('en-IN', {maximumFractionDigits: 2}) : '--';
@@ -850,7 +868,7 @@ function renderChain(d) {
   }
   spotBig.innerHTML = spotTxt;
 
-  const tb = el('chainRows');
+  const tb = id('chainRows');
   tb.innerHTML = '';
   const rows = d.rows || [];
   // Rank top-3 volume for CE and PE
@@ -1067,29 +1085,36 @@ async function fetchBnf() {
 }
 
 // ── OI Buildup (Smart Money) ──
-async function fetchOi() {
+async function fetchOi(prefix) {
+  prefix = prefix || '';
   try {
-    const resp = await fetch('/api/oi?_=' + Date.now());
+    const resp = await fetch((prefix ? '/api/bnf/oi' : '/api/oi') + '?_=' + Date.now());
     if (!resp.ok) return;
-    const d = await resp.json();
-    const bias = document.getElementById('oiBias');
+    renderOi(await resp.json(), prefix);
+  } catch(e) {}
+}
+
+function renderOi(d, prefix) {
+  prefix = prefix || '';
+  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const id = s => document.getElementById(P(s));
+    const bias = id('oiBias');
     if (!bias) return;
     const colors = {BULLISH: 'var(--green)', BEARISH: 'var(--red)', NEUTRAL: 'var(--yellow)'};
     bias.textContent = d.bias || '--';
     bias.style.color = colors[d.bias] || 'var(--text-dim)';
     bias.style.background = (colors[d.bias] || '#222') + '22';
-    document.getElementById('oiReason').textContent =
+    id('oiReason').textContent =
       d.reason || d.error || 'Collecting OI snapshots… (need 2 samples, ~10 min)';
     const ce = d.ce_buildup || [], pe = d.pe_buildup || [];
-    document.getElementById('oiCe').innerHTML =
+    id('oiCe').innerHTML =
       '<b style="color:var(--green)">▲ CE loading</b><br>' +
       (ce.length ? ce.slice(0, 4).map(r => `${r.strike} +${r.oi_gain.toLocaleString('en-IN')} OI`).join('<br>')
                  : '<span style="color:var(--text-dim)">none</span>');
-    document.getElementById('oiPe').innerHTML =
+    id('oiPe').innerHTML =
       '<b style="color:var(--red)">▼ PE loading</b><br>' +
       (pe.length ? pe.slice(0, 4).map(r => `${r.strike} +${r.oi_gain.toLocaleString('en-IN')} OI`).join('<br>')
                  : '<span style="color:var(--text-dim)">none</span>');
-  } catch(e) {}
 }
 
 // ── Gap & Go / Gap Fade ──
@@ -1159,16 +1184,19 @@ function renderBnf(d) {
 }
 
 // ── Expiry Countdown ──
-async function fetchExpiry() {
+async function fetchExpiry(prefix) {
+  prefix = prefix || '';
   try {
-    const resp = await fetch('/api/expiry?_=' + Date.now());
+    const resp = await fetch((prefix ? '/api/bnf/expiry' : '/api/expiry') + '?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    renderExpiry(await resp.json());
+    renderExpiry(await resp.json(), prefix);
   } catch(e) {}
 }
 
-function renderExpiry(d) {
-  const el = id => document.getElementById(id);
+function renderExpiry(d, prefix) {
+  prefix = prefix || '';
+  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const el = id => document.getElementById(P(id));
   if (!el('expiryRead')) return;
   const g = el('expiryGamma');
   g.textContent = (d.gamma_risk || '--').toUpperCase();
@@ -1206,12 +1234,17 @@ fetchSignal();
 fetchIvRank();
 fetchBacktest();
 fetchChain();
+fetchBnfChain();
 fetchChart();
 fetchBtcChart();
 fetchBnfChart();
 fetchOi();
+fetchOi('bnf');
 fetchGap();
 fetchExpiry();
+fetchExpiry('bnf');
+fetchIvRank('bnf');
+fetchBacktest('bnf');
 fetchWeekly();
 initTimeframeToggles();
 fetchFiiDii();
@@ -1232,7 +1265,12 @@ setInterval(fetchFiiDii, 300000);
 setInterval(fetchOutlook, 300000);
 setInterval(fetchBtc, 60000);
 setInterval(fetchOi, 120000);
+setInterval(() => fetchOi('bnf'), 120000);
 setInterval(fetchGap, 60000);
+setInterval(fetchBnfChain, 60000);
+setInterval(() => fetchExpiry('bnf'), 600000);
+setInterval(() => fetchIvRank('bnf'), 300000);
+setInterval(() => fetchBacktest('bnf'), 3600000);
 setInterval(fetchBnf, 60000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);

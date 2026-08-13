@@ -23,38 +23,42 @@ from datetime import datetime
 from chain_table import get_chain
 
 WORKSPACE = os.path.dirname(os.path.abspath(__file__))
-SNAPSHOT_FILE = os.path.join(WORKSPACE, ".openclaw", "tmp", "oi_snapshots.json")
 CACHE_TTL = 120
 LOOKBACK_MIN = 60        # baseline window for buildup comparison
 SNAPSHOT_MAX = 60        # keep ~5h of snapshots (every 5 min)
 SCORE_THRESHOLD = 0.8    # % of total OI moved to trigger a signal
 
-_cache = {"ts": 0, "data": None}
+_cache = {"nifty": {"ts": 0, "data": None}, "banknifty": {"ts": 0, "data": None}}
 
 
-def _load_snapshots():
+def _snapshot_file(asset):
+    return os.path.join(WORKSPACE, ".openclaw", "tmp", f"oi_snapshots_{asset}.json")
+
+
+def _load_snapshots(asset="nifty"):
     try:
-        with open(SNAPSHOT_FILE) as f:
+        with open(_snapshot_file(asset)) as f:
             return json.load(f)
     except Exception:
         return []
 
 
-def _save_snapshots(snaps):
-    os.makedirs(os.path.dirname(SNAPSHOT_FILE), exist_ok=True)
-    with open(SNAPSHOT_FILE, "w") as f:
+def _save_snapshots(snaps, asset="nifty"):
+    os.makedirs(os.path.dirname(_snapshot_file(asset)), exist_ok=True)
+    with open(_snapshot_file(asset), "w") as f:
         json.dump(snaps, f)
 
 
-def take_snapshot(force=True):
+def take_snapshot(force=True, asset="nifty"):
     """Fetch current chain and append an OI snapshot. Returns snapshot dict."""
-    chain = get_chain(force=force)
+    chain = get_chain(force=force, asset=asset)
     if chain.get("error") or not chain.get("rows"):
         return None
     snap = {
         "ts": time.time(),
         "time": datetime.now().strftime("%H:%M"),
         "spot": chain.get("chain_spot") or chain.get("spot"),
+        "asset": asset,
         "strikes": {},
     }
     for r in chain["rows"]:
@@ -63,7 +67,7 @@ def take_snapshot(force=True):
             "ce_oi": r.get("ce_oi") or 0,
             "pe_oi": r.get("pe_oi") or 0,
         }
-    snaps = _load_snapshots()
+    snaps = _load_snapshots(asset)
     # Don't store two snapshots in the same minute
     if snaps and snaps[-1].get("time") == snap["time"]:
         snaps[-1] = snap
@@ -71,7 +75,7 @@ def take_snapshot(force=True):
         snaps.append(snap)
     if len(snaps) > SNAPSHOT_MAX:
         snaps = snaps[-SNAPSHOT_MAX:]
-    _save_snapshots(snaps)
+    _save_snapshots(snaps, asset)
     return snap
 
 
@@ -117,20 +121,21 @@ def _buildup(current, baseline):
     }
 
 
-def get_oi_buildup(force=False):
+def get_oi_buildup(force=False, asset="nifty"):
     """Return current OI buildup signal (cached 2 min)."""
+    c = _cache.setdefault(asset, {"ts": 0, "data": None})
     now = time.time()
-    if not force and _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
-        return _cache["data"]
+    if not force and c["data"] and (now - c["ts"]) < CACHE_TTL:
+        return c["data"]
 
-    snaps = _load_snapshots()
+    snaps = _load_snapshots(asset)
     out = {"error": None, "signal": "WAIT", "bias": "NEUTRAL", "score": 0,
            "ce_buildup": [], "pe_buildup": [], "spot": None,
-           "baseline_time": None, "current_time": None}
+           "baseline_time": None, "current_time": None, "asset": asset}
 
     if len(snaps) < 2:
         out["error"] = "Collecting OI snapshots… (need 2 samples, ~10 min)"
-        _cache["ts"], _cache["data"] = now, out
+        c["ts"], c["data"] = now, out
         return out
 
     current = snaps[-1]
@@ -163,7 +168,7 @@ def get_oi_buildup(force=False):
         f"CE buildup +{b['ce_sum']:,} OI vs PE +{b['pe_sum']:,} OI "
         f"(last {LOOKBACK_MIN} min) → score {b['score']:+.2f}% of total OI"
     )
-    _cache["ts"], _cache["data"] = now, out
+    c["ts"], c["data"] = now, out
     return out
 
 

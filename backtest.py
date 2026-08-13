@@ -19,7 +19,7 @@ COST = 0.0005
 TIME_STOP = 48   # 48 hourly bars (~2 trading days) — best variant from param scan
 TARGET_PCT = 1.0 # 1.0% target — best variant from param scan
 
-_cache = {"ts": 0, "data": None}
+_cache = {"nifty": {"ts": 0, "data": None}, "banknifty": {"ts": 0, "data": None}}
 
 
 def _ema(s, span):
@@ -47,17 +47,21 @@ def _adx(high, low, close, period=14):
     return dx.ewm(alpha=1 / period, adjust=False).mean(), pdi, mdi
 
 
-def run_backtest(variant="base"):
-    df = yf.download("^NSEI", period="2y", interval="1h", auto_adjust=False)
+ASSET_SYMBOLS = {"nifty": "^NSEI", "banknifty": "^NSEBANK"}
+
+
+def run_backtest(variant="base", asset="nifty"):
+    symbol = ASSET_SYMBOLS.get(asset, "^NSEI")
+    df = yf.download(symbol, period="2y", interval="1h", auto_adjust=False)
     if df is None or df.empty:
-        return {"error": "No Nifty 1h data"}
+        return {"error": f"No {asset} 1h data"}
     if hasattr(df.columns, "levels") and len(df.columns.levels) > 1:
         df.columns = df.columns.get_level_values(0)
     df = df.dropna()
 
     # VIX series for filter (daily → forward fill to hourly)
     vix_df = None
-    if variant != "base":
+    if variant != "base" and asset == "nifty":
         try:
             vix_df = yf.download("^INDIAVIX", period="2y", interval="1d", auto_adjust=False)
             if hasattr(vix_df.columns, "levels") and len(vix_df.columns.levels) > 1:
@@ -188,13 +192,14 @@ def run_backtest(variant="base"):
     }
 
 
-def get_backtest(force=False):
+def get_backtest(force=False, asset="nifty"):
+    c = _cache.setdefault(asset, {"ts": 0, "data": None})
     now = time.time()
-    if not force and _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
-        return _cache["data"]
+    if not force and c["data"] and (now - c["ts"]) < CACHE_TTL:
+        return c["data"]
     results = {}
-    for v in ("base", "time", "time_vix"):
-        r = run_backtest(v)
+    for v in ("base",) if asset != "nifty" else ("base", "time", "time_vix"):
+        r = run_backtest(v, asset)
         if "error" not in r:
             results[v] = r
     if not results:

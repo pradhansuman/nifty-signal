@@ -10,25 +10,41 @@ import json, os, time
 import yfinance as yf
 import pandas as pd
 
-CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", "ivrank_cache.json")
 CACHE_TTL = 1800
+WORKSPACE = os.path.dirname(os.path.abspath(__file__))
+_cache = {"nifty": {"ts": 0, "data": None}, "banknifty": {"ts": 0, "data": None}}
 
-_cache = {"ts": 0, "data": None}
+
+def _bnf_atm_iv():
+    """Bank Nifty ATM IV from its option chain (no BNF-specific VIX exists)."""
+    try:
+        from chain_table import get_chain
+        d = get_chain(force=False, asset="banknifty")
+        atm = d.get("atm")
+        for r in d.get("rows", []):
+            if r.get("strike") == atm:
+                ce_iv = r.get("ce_iv") or r.get("pe_iv")
+                return ce_iv if ce_iv else None
+    except Exception:
+        pass
+    return None
 
 
-def get_iv_rank(force=False):
+def get_iv_rank(force=False, asset="nifty"):
+    c = _cache.setdefault(asset, {"ts": 0, "data": None})
     now = time.time()
-    if not force and _cache["data"] and (now - _cache["ts"]) < CACHE_TTL:
-        return _cache["data"]
+    if not force and c["data"] and (now - c["ts"]) < CACHE_TTL:
+        return c["data"]
 
     out = {"error": None, "current_vix": None, "high_52w": None, "low_52w": None,
-           "iv_rank": None, "iv_percentile": None, "read": "Data unavailable"}
+           "iv_rank": None, "iv_percentile": None, "read": "Data unavailable", "asset": asset,
+           "atm_iv": None, "note": ""}
 
     try:
         hist = yf.Ticker("^INDIAVIX").history(period="1y", interval="1d", auto_adjust=False)
         if hist is None or hist.empty:
             out["error"] = "No VIX history"
-            _cache["ts"], _cache["data"] = now, out
+            c["ts"], c["data"] = now, out
             return out
 
         if hasattr(hist.columns, "levels") and len(hist.columns.levels) > 1:
@@ -37,12 +53,17 @@ def get_iv_rank(force=False):
         closes = hist["Close"].dropna()
         if len(closes) < 60:
             out["error"] = "Insufficient VIX history"
-            _cache["ts"], _cache["data"] = now, out
+            c["ts"], c["data"] = now, out
             return out
 
         current = float(closes.iloc[-1])
         high = float(closes.max())
         low = float(closes.min())
+
+        if asset == "banknifty":
+            # BNF has no own VIX — use market VIX rank as context + BNF ATM IV
+            out["atm_iv"] = _bnf_atm_iv()
+            out["note"] = "BNF uses India VIX as market-wide proxy (no BNF-specific VIX)."
         # IV Rank
         rank = round((current - low) / (high - low) * 100, 1) if high > low else None
         # IV Percentile
@@ -71,10 +92,10 @@ def get_iv_rank(force=False):
     except Exception as e:
         out["error"] = str(e)[:100]
 
-    _cache["ts"] = now
-    _cache["data"] = out
+    c["ts"] = now
+    c["data"] = out
     try:
-        with open(CACHE_FILE, "w") as f:
+        with open(os.path.join(WORKSPACE, ".openclaw", "tmp", f"ivrank_{asset}_cache.json"), "w") as f:
             json.dump(out, f)
     except Exception:
         pass

@@ -48,3 +48,5 @@ nifty_analysis_*.json
 .openclaw/tmp/*.png
 .openclaw/tmp/shot*.py
 .openclaw/tmp/oi_snapshots.json
+.openclaw/tmp/*.py
+.openclaw/tmp/oi_snapshots_*.json

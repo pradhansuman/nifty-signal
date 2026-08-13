@@ -937,6 +937,85 @@ async function fetchBnfChart(interval) {
   } catch(e) {}
 }
 
+async function fetchSensex() {
+  try {
+    const resp = await fetch('/api/sensex?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    renderSensex(await resp.json());
+  } catch(e) {}
+}
+
+function renderSensex(d) {
+  const el = id => document.getElementById(id);
+  if (!el('sensexSpot')) return;
+  const spot = d.spot;
+  el('sensexSpot').textContent = spot != null ? Number(spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
+  el('sensexSpot').style.color = d.ema_distance_pct != null && d.ema_distance_pct < 0 ? 'var(--red)' : 'var(--green)';
+
+  const sigEl = el('sensexSignal');
+  const sig = d.signal || 'WAIT';
+  sigEl.textContent = sig === 'BUY_LONG' ? '🟢 LONG' : sig === 'BUY_SHORT' ? '🔴 SHORT' : sig === 'EXIT_LONGS' ? '⚠️ EXIT L' : sig === 'EXIT_SHORTS' ? '⚠️ EXIT S' : '⏳ WAIT';
+  sigEl.style.color = sig === 'BUY_LONG' ? 'var(--green)' : sig === 'BUY_SHORT' ? 'var(--red)' : sig === 'WAIT' ? 'var(--yellow)' : 'var(--text-dim)';
+
+  const chg = d.change_pct;
+  const chgEl = el('sensexChg');
+  chgEl.textContent = chg != null ? (chg > 0 ? '+' : '') + chg + '%' : '--';
+  chgEl.style.color = chg > 0 ? 'var(--green)' : chg < 0 ? 'var(--red)' : 'var(--text-dim)';
+
+  const dist = d.ema_distance_pct;
+  const distEl = el('sensexDist');
+  distEl.textContent = dist != null ? (dist > 0 ? '+' : '') + dist + '%' : '--';
+  distEl.style.color = dist > 0 ? 'var(--green)' : dist < 0 ? 'var(--red)' : 'var(--yellow)';
+
+  el('sensexReason').textContent = d.reason || '';
+  el('sensexEma').textContent = d.ema_200 != null ? Number(d.ema_200).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
+  el('sensexAdx').textContent = d.adx != null ? d.adx : '--';
+  el('sensexRsi').textContent = d.rsi != null ? d.rsi : '--';
+  el('sensexDi').textContent = d.di_plus != null && d.di_minus != null ? d.di_plus + ' / ' + d.di_minus : '--';
+
+  const lv = el('sensexLevels');
+  lv.innerHTML = '';
+  if (d.stop_level && d.target_level) {
+    lv.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap">' +
+      '<span style="color:var(--red);font-weight:700">🛑 Stop: ' + Number(d.stop_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span>' +
+      '<span style="color:var(--green);font-weight:700">🎯 Target: ' + Number(d.target_level).toLocaleString('en-IN', {maximumFractionDigits: 0}) + '</span></div>';
+  } else {
+    lv.innerHTML = '<span style="color:var(--yellow);font-weight:600">⏳ HOLD — no trade</span> <span style="color:var(--text-dim)">' + (d.reason || 'waiting for 200 EMA bounce setup') + '</span>';
+  }
+
+  const rec = document.getElementById('sensexRec');
+  if (rec && d.recommendation) {
+    rec.style.display = 'block';
+    rec.textContent = '💡 ' + d.recommendation;
+    rec.style.background = d.action === 'BUY' ? 'rgba(0,200,83,0.12)' : d.action === 'SELL' ? 'rgba(255,23,68,0.12)' : 'rgba(255,193,7,0.08)';
+    rec.style.color = d.action === 'BUY' ? 'var(--green)' : d.action === 'SELL' ? 'var(--red)' : 'var(--yellow)';
+  }
+
+  const al = document.getElementById('sensexAlertsList');
+  if (al && d.alerts && d.alerts.length) {
+    al.innerHTML = d.alerts.slice().reverse().map(a => {
+      const color = a.signal === 'BUY_LONG' ? 'var(--green)' : a.signal === 'BUY_SHORT' ? 'var(--red)' : 'var(--yellow)';
+      return '<div style="padding:4px 6px;border-left:3px solid ' + color + ';background:rgba(124,58,237,0.05);margin:3px 0;border-radius:4px">' +
+        '<b style="color:' + color + '">' + a.signal + '</b> <span style="color:var(--text-dim)">' + a.date + ' ' + a.time + ' <span style="opacity:0.6">(was ' + a.prev + ')</span></span><br>' +
+        '<span style="color:var(--text-dim)">' + a.reason + '</span></div>';
+    }).join('');
+  } else if (al) {
+    al.innerHTML = '<div style="color:var(--text-dim);padding:8px;text-align:center">No signal changes yet today</div>';
+  }
+}
+
+async function fetchSensexChart(interval) {
+  try {
+    const q = interval ? '&interval=' + interval : '';
+    const resp = await fetch('/api/chart?asset=sensex&_=' + Date.now() + q);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
+    drawChart(d, 'sensexChart', 'sensexSpotTag', {line: '#f59e0b', ema: '#7c3aed'});
+    const lbl = document.getElementById('sensexTfLabel');
+    if (lbl && d.interval) lbl.textContent = d.interval + ' bars';
+  } catch(e) {}
+}
+
 // Timeframe toggles
 function initTimeframeToggles() {
   const bind = (id, fn) => {
@@ -953,6 +1032,7 @@ function initTimeframeToggles() {
   bind('tfNifty', tf => fetchChart(tf));
   bind('tfBtc', tf => fetchBtcChart(tf));
   bind('tfBnf', tf => fetchBnfChart(tf));
+  bind('tfSensex', tf => fetchSensexChart(tf));
 }
 
 // Quick-nav section jumper + scroll-spy
@@ -1278,9 +1358,9 @@ function renderWeekly(d) {
 
 // ── Init ──
 // Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
-fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart();
+fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart(); fetchSensexChart();
 fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles(); initQuickNav();
-setTimeout(() => { fetchBtc(); fetchBnf(); fetchOi(); fetchOi('bnf'); }, 800);
+setTimeout(() => { fetchBtc(); fetchBnf(); fetchSensex(); fetchOi(); fetchOi('bnf'); }, 800);
 setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
 setTimeout(() => { fetchBacktest(); fetchBacktest('bnf'); }, 5000);
 fetchFiiDii();

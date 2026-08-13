@@ -23,6 +23,7 @@ from telegram_alert import send_telegram, get_chat_id_from_updates, save_config,
 import telegram_alert
 from chart_data import get_chart_data
 from banknifty_monitor import get_banknifty_signal
+from sensex_monitor import get_sensex_signal
 from expiry_countdown import get_expiry
 from weekly_review import get_weekly_report, build_weekly_report
 from oi_buildup import get_oi_buildup, take_snapshot
@@ -133,6 +134,7 @@ def get_full_analysis():
 _signal_cache = {"ts": 0, "data": None}
 _btc_cache = {"ts": 0, "data": None}
 _bnf_cache = {"ts": 0, "data": None}
+_sensex_cache = {"ts": 0, "data": None}
 _last_tg_push = 0
 _signal_lock = threading.Lock()
 # ── Telegram queue: every alert is enqueued, batched sender flushes → nothing lost ──
@@ -197,7 +199,7 @@ def _track_asset_alert(asset, signal, reason):
         try:
             if telegram_alert.is_configured():
                 emoji = "🟢" if signal == "BUY_LONG" else "🔴" if signal == "BUY_SHORT" else "⏳"
-                label = "₿ BTC" if asset == "btc" else "🏦 BNF"
+                label = "₿ BTC" if asset == "btc" else "🏦 BNF" if asset == "banknifty" else "🇮🇳 SENSEX"
                 _push_tg(f"{emoji} <b>{label} signal: {signal}</b>\n{reason[:150]}")
         except Exception:
             pass
@@ -346,6 +348,19 @@ def api_banknifty():
     data = dict(_bnf_cache["data"])
     _track_asset_alert("banknifty", data.get("signal"), data.get("reason"))
     data["alerts"] = _asset_alert_list("banknifty")
+    return jsonify(data)
+
+
+@app.route("/api/sensex")
+def api_sensex():
+    """Sensex 200 EMA bounce signal (cached 60s)."""
+    import time as _t
+    if _sensex_cache["data"] is None or (_t.time() - _sensex_cache["ts"]) > 60:
+        _sensex_cache["data"] = get_sensex_signal("1h")
+        _sensex_cache["ts"] = _t.time()
+    data = dict(_sensex_cache["data"])
+    _track_asset_alert("sensex", data.get("signal"), data.get("reason"))
+    data["alerts"] = _asset_alert_list("sensex")
     return jsonify(data)
 
 @app.route("/api/expiry")
@@ -956,6 +971,7 @@ def warmup_caches():
         (lambda: get_chain(asset="banknifty"), (), 5),
         (lambda: get_btc_signal("1h"), (), 7),
         (lambda: get_banknifty_signal(), (), 9),
+        (lambda: get_sensex_signal("1h"), (), 10),
         (fiidii_summary, (), 11),
         (get_outlook, (), 13),
         (lambda: get_iv_rank(asset="nifty"), (), 15),

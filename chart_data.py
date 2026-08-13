@@ -13,6 +13,7 @@ ASSETS = {
     "nifty": {"symbol": "^NSEI", "period": "1y", "interval": "1d", "points": 120},
     "btc": {"symbol": "BTC-USD", "period": "10d", "interval": "1h", "points": 168},
     "banknifty": {"symbol": "^NSEBANK", "period": "10d", "interval": "1h", "points": 110},
+    "sensex": {"symbol": "^BSESN", "period": "10d", "interval": "1h", "points": 110},
 }
 
 # Timeframe presets per asset: interval -> (period, points)
@@ -23,6 +24,8 @@ TIMEFRAMES = {
              "5m": ("1mo", 140), "2m": ("5d", 130), "1m": ("2d", 130)},
     "banknifty": {"1h": ("10d", 110), "15m": ("5d", 110),
                    "5m": ("1mo", 140), "2m": ("5d", 130), "1m": ("2d", 130)},
+    "sensex": {"1h": ("10d", 110), "15m": ("5d", 110),
+                "5m": ("1mo", 140), "2m": ("5d", 130), "1m": ("2d", 130)},
 }
 _cache = {"ts": {}, "data": {}}
 

@@ -93,22 +93,25 @@ def save_order_log(order):
 
 # ── Order Building ──
 
-def build_order(signal_type, direction, strike, expiry, lots, premium=None):
+def build_order(signal_type, direction, strike, expiry, lots, premium=None, option_type=None):
     """
     Build an order object. In dry-run mode, returns the planned order without executing.
     signal_type: 'ema_bounce' | 'contrarian' | 'orb' | 'vwap' | 'btst_exit'
     direction: 'BUY' | 'SELL'
+    option_type: 'CE' | 'PE' — pass explicitly so the instrument is unambiguous
     """
     lot_size = 65
     qty = lots * lot_size
     
     # Map to Upstox transaction type
     txn_type = "BUY" if direction == "BUY" else "SELL"
+    option_type = option_type or ("CE" if txn_type == "BUY" else "PE")
     
     order = {
         "signal_type": signal_type,
         "transaction_type": txn_type,
-        "instrument": f"NIFTY {strike} {'CE' if 'CE' in str(strike) or txn_type == 'BUY' else 'PE'}",
+        "instrument": f"NIFTY {strike} {option_type}",
+        "option_type": option_type,
         "strike": strike,
         "expiry": expiry,
         "lots": lots,
@@ -122,7 +125,7 @@ def build_order(signal_type, direction, strike, expiry, lots, premium=None):
 
 # ── Trade Execution ──
 
-def execute_trade(signal_type, direction, strike, expiry, lots, premium=None):
+def execute_trade(signal_type, direction, strike, expiry, lots, premium=None, option_type=None):
     """Execute a trade or log it in dry-run mode."""
     state = load_state()
     cfg = load_config()
@@ -141,7 +144,7 @@ def execute_trade(signal_type, direction, strike, expiry, lots, premium=None):
     if lots > cfg["max_lots_per_trade"]:
         return {"status": "blocked", "reason": f"Max lots per trade ({cfg['max_lots_per_trade']}) exceeded"}
     
-    order = build_order(signal_type, direction, strike, expiry, lots, premium)
+    order = build_order(signal_type, direction, strike, expiry, lots, premium, option_type)
     
     if not cfg["live_mode"]:
         # DRY-RUN: just log it
@@ -187,6 +190,8 @@ def execute_trade(signal_type, direction, strike, expiry, lots, premium=None):
                 "order_id": order["order_id"],
                 "strike": strike,
                 "direction": direction,
+                "option_type": order.get("option_type"),
+                "expiry": expiry,
                 "lots": lots,
                 "entry_time": state["last_order_time"],
             })
@@ -278,13 +283,15 @@ def toggle_strategy(strategy_name, enable):
 
 # ── Paper P&L Tracking ──
 
-def track_paper_entry(signal_type, direction, strike, lots, premium):
-    """Record a simulated entry position."""
+def track_paper_entry(signal_type, direction, strike, lots, premium, option_type=None, expiry=None):
+    """Record a simulated entry position. option_type: 'CE' | 'PE', expiry: display string."""
     state = load_state()
     pos = {
         "id": len(state["active_positions"]) + len(state.get("closed_trades", [])) + 1,
         "signal_type": signal_type,
         "direction": direction,
+        "option_type": option_type or ("CE" if direction == "BUY" else "PE"),
+        "expiry": expiry,
         "strike": strike,
         "lots": lots,
         "entry_premium": premium,
@@ -304,9 +311,11 @@ def track_paper_exit(position_id, exit_premium):
             entry = pos["entry_premium"]
             lots = pos["lots"]
             
-            if pos["direction"] == "SELL":
+            if pos.get("option_type") == "PE" and pos["direction"] == "SELL":
+                # Sold put (not used by this user — buyer only) — buy back cheaper
                 pnl = round((entry - exit_premium) * lots * lot_size, 2)
             else:
+                # Bought CE or PE — exit - entry
                 pnl = round((exit_premium - entry) * lots * lot_size, 2)
             
             pnl_pct = round(pnl / (entry * lots * lot_size) * 100, 2) if entry and lots else 0
@@ -329,11 +338,12 @@ def track_paper_exit(position_id, exit_premium):
     return None
 
 def track_paper_exit_all(exit_premium, trade_direction="long"):
-    """Close ALL open positions matching the direction."""
+    """Close ALL open positions matching the direction ('long' → CE, 'short' → PE)."""
     results = []
     state = load_state()
+    want_type = "CE" if trade_direction == "long" else "PE"
     for pos in list(state["active_positions"]):
-        if pos["direction"] == ("SELL" if trade_direction == "short" else "BUY"):
+        if pos.get("option_type") == want_type:
             r = track_paper_exit(pos["id"], exit_premium)
             if r:
                 results.append(r)

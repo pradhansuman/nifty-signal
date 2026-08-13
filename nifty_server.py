@@ -192,21 +192,46 @@ def api_signal():
     try:
         sig_name = signal.get("signal", "")
         if sig_name in ("BUY_CALLS", "BUY_PUTS"):
-            direction = "BUY" if sig_name == "BUY_CALLS" else "SELL"
+            direction = "BUY"
+            option_type = "CE" if sig_name == "BUY_CALLS" else "PE"
             strike = signal.get("entry_strike", 0)
             premium = signal.get("entry_premium") or 0
-            # Check if we already have an active position
+            expiry = signal.get("expiry") or signal.get("selected_expiry") or ""
+            # Check if we already have an active position on the same option
             from algo_trader import load_state
             st = load_state()
-            existing = [p for p in st.get("active_positions", []) if p.get("direction") == direction and p.get("signal_type","") == "ema_bounce"]
+            existing = [p for p in st.get("active_positions", [])
+                        if p.get("option_type") == option_type
+                        and p.get("strike") == strike
+                        and p.get("signal_type", "") == "ema_bounce"]
             if not existing:
-                pos = track_paper_entry("ema_bounce", direction, strike, 1, premium)
+                pos = track_paper_entry("ema_bounce", direction, strike, 1, premium, option_type, expiry)
                 signal["paper_entry"] = pos
+                # 🔔 Telegram push — every entry trigger
+                try:
+                    if telegram_alert.is_configured():
+                        emoji = "🟢" if option_type == "CE" else "🔴"
+                        telegram_alert.send_telegram(
+                            f"{emoji} <b>ENTRY {option_type}: BUY {strike} {option_type} {expiry}</b>\n"
+                            f"Premium ₹{premium:.2f} | 1 lot (65) | ema_bounce | DRY RUN")
+                except Exception:
+                    pass
         elif sig_name in ("EXIT_LONGS", "EXIT_SHORTS"):
             current_premium = signal.get("entry_premium") or signal.get("btst_premium") or 0
             results = track_paper_exit_all(current_premium, "long" if sig_name == "EXIT_LONGS" else "short")
             if results:
-                signal["paper_exit"] = {"count": len(results), "total_pnl": sum(r["pnl"] for r in results)}
+                total_pnl = sum(r["pnl"] for r in results)
+                signal["paper_exit"] = {"count": len(results), "total_pnl": total_pnl}
+                # 🔔 Telegram push — every exit trigger
+                try:
+                    if telegram_alert.is_configured():
+                        side = "CE (long)" if sig_name == "EXIT_LONGS" else "PE (short)"
+                        sign = "🟢" if total_pnl >= 0 else "🔴"
+                        telegram_alert.send_telegram(
+                            f"{sign} <b>EXIT {side}</b> — {len(results)} position(s) closed\n"
+                            f"P&L: ₹{total_pnl:+,.2f} ({signal.get('signal')})")
+                except Exception:
+                    pass
     except Exception:
         pass  # Non-critical
     

@@ -549,19 +549,23 @@ async function fetchAlgoStatus() {
     
     if (positions.length) {
       html += '<div style="font-size:10px;font-weight:700;color:var(--text-dim);margin-top:4px">Open Positions:</div>';
-      html += positions.map(p =>
-        `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
-          #${p.id} ${p.direction} ${p.strike} ${p.lots}L @ ₹${p.entry_premium} (${p.signal_type})
-        </div>`
-      ).join('');
+      html += positions.map(p => {
+        const ot = p.option_type || (p.direction === 'SELL' ? 'PE' : 'CE');
+        const exp = p.expiry ? (' ' + String(p.expiry).slice(0, 6)) : '';
+        return `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
+          #${p.id} ${p.direction} <b>${p.strike} ${ot}${exp}</b> ${p.lots}L @ ₹${p.entry_premium} (${p.signal_type})
+        </div>`;
+      }).join('');
     }
     
     if (closedTrades.length) {
       html += '<div style="font-size:10px;font-weight:700;color:var(--text-dim);margin-top:4px">Closed P&L:</div>';
       html += closedTrades.slice(-5).reverse().map(t => {
+        const ot = t.option_type || (t.direction === 'SELL' ? 'PE' : 'CE');
+        const exp = t.expiry ? (' ' + String(t.expiry).slice(0, 6)) : '';
         const pnlClass = (t.pnl||0) >= 0 ? 'var(--green)' : 'var(--red)';
         return `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
-          #${t.id} ${t.direction} ${t.strike}: <span style="color:${pnlClass}">₹${(t.pnl||0).toLocaleString('en-IN')} (${t.pnl_pct||0}%)</span>
+          #${t.id} ${t.direction} ${t.strike} ${ot}${exp}: <span style="color:${pnlClass}">₹${(t.pnl||0).toLocaleString('en-IN')} (${t.pnl_pct||0}%)</span>
         </div>`;
       }).join('');
     }

@@ -5,7 +5,7 @@ Serves the analysis pipeline as a REST API + hosts the PWA frontend.
 Run this on the Mac, access from mobile via local network.
 """
 
-import json, math, sys, os, time, subprocess
+import json, math, sys, os, time, subprocess, threading
 from datetime import datetime
 from flask import Flask, jsonify, send_from_directory, request, Response
 import warnings
@@ -121,6 +121,35 @@ _signal_cache = {"ts": 0, "data": None}
 _btc_cache = {"ts": 0, "data": None}
 _bnf_cache = {"ts": 0, "data": None}
 _last_tg_push = 0
+# ── Telegram queue: every alert is enqueued, batched sender flushes → nothing lost ──
+_tg_queue = []
+_tg_lock = threading.Lock()
+
+
+def _push_tg(text):
+    """Enqueue a Telegram message (batched sender flushes every ~20s)."""
+    with _tg_lock:
+        _tg_queue.append(text)
+        if len(_tg_queue) > 50:  # hard cap — drop oldest if runaway
+            _tg_queue.pop(0)
+
+
+def tg_sender():
+    """Background thread: drain queue → send batched Telegram messages."""
+    while True:
+        time.sleep(20)
+        with _tg_lock:
+            batch = _tg_queue[:8]
+            del _tg_queue[:8]
+        if not batch or not telegram_alert.is_configured():
+            continue
+        try:
+            msg = "\n\n".join(batch)
+            if len(msg) > 3500:
+                msg = msg[:3500] + "\n…"
+            telegram_alert.send_telegram(msg)
+        except Exception:
+            pass
 
 _asset_alerts = {}  # asset:date -> list of signal-change alerts
 _asset_last_signal = {}  # asset -> last signal
@@ -153,12 +182,9 @@ def _track_asset_alert(asset, signal, reason):
             pass
         try:
             if telegram_alert.is_configured():
-                now = time.time()
-                if now - _last_tg_push > 60:
-                    _last_tg_push = now
-                    emoji = "🟢" if signal == "BUY_LONG" else "🔴" if signal == "BUY_SHORT" else "⏳"
-                    label = "₿ BTC" if asset == "btc" else "🏦 BNF"
-                    telegram_alert.send_telegram(f"{emoji} <b>{label} signal: {signal}</b>\n{reason[:150]}")
+                emoji = "🟢" if signal == "BUY_LONG" else "🔴" if signal == "BUY_SHORT" else "⏳"
+                label = "₿ BTC" if asset == "btc" else "🏦 BNF"
+                _push_tg(f"{emoji} <b>{label} signal: {signal}</b>\n{reason[:150]}")
         except Exception:
             pass
     except Exception:
@@ -211,7 +237,7 @@ def api_signal():
                 try:
                     if telegram_alert.is_configured():
                         emoji = "🟢" if option_type == "CE" else "🔴"
-                        telegram_alert.send_telegram(
+                        _push_tg(
                             f"{emoji} <b>ENTRY {option_type}: BUY {strike} {option_type} {expiry}</b>\n"
                             f"Premium ₹{premium:.2f} | 1 lot (65) | ema_bounce | DRY RUN")
                 except Exception:
@@ -227,7 +253,7 @@ def api_signal():
                     if telegram_alert.is_configured():
                         side = "CE (long)" if sig_name == "EXIT_LONGS" else "PE (short)"
                         sign = "🟢" if total_pnl >= 0 else "🔴"
-                        telegram_alert.send_telegram(
+                        _push_tg(
                             f"{sign} <b>EXIT {side}</b> — {len(results)} position(s) closed\n"
                             f"P&L: ₹{total_pnl:+,.2f} ({signal.get('signal')})")
                 except Exception:
@@ -637,16 +663,9 @@ def _add_alert(level, title, body):
         _alert_log.pop(0)
     _save_alerts()
     print(f"[ALERT {level.upper()}] {title}: {body[:100]}")
-    # Push to Telegram (only for actionable levels, throttled)
-    try:
-        if level in ("critical", "warning") and telegram_alert.is_configured():
-            now = time.time()
-            if now - _last_tg_push > 60:  # max 1 push/min
-                _last_tg_push = now
-                emoji = "🔴" if level == "critical" else "⚠️"
-                telegram_alert.send_telegram(f"{emoji} <b>{title}</b>\n{body}")
-    except Exception:
-        pass
+    # Push to Telegram — EVERY alert (info/warning/critical), batched, never dropped
+    emoji = {"critical": "🔴", "warning": "⚠️", "info": "ℹ️"}.get(level, "🔔")
+    _push_tg(f"{emoji} <b>{title}</b>\n{body}")
 
 @app.route("/api/alerts")
 def api_alerts():
@@ -905,6 +924,9 @@ if __name__ == "__main__":
         scheduler = threading.Thread(target=alert_scheduler, daemon=True)
         scheduler.start()
         print("   Alerts:  Background scheduler started")
+        tgs = threading.Thread(target=tg_sender, daemon=True)
+        tgs.start()
+        print("   Telegram: Batched sender started")
     
     # Always start paper tracking heartbeat
     pth = threading.Thread(target=paper_tracking_heartbeat, daemon=True)

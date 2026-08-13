@@ -1066,6 +1066,51 @@ async function fetchBnf() {
   } catch(e) {}
 }
 
+// ── OI Buildup (Smart Money) ──
+async function fetchOi() {
+  try {
+    const resp = await fetch('/api/oi?_=' + Date.now());
+    if (!resp.ok) return;
+    const d = await resp.json();
+    const bias = document.getElementById('oiBias');
+    if (!bias) return;
+    const colors = {BULLISH: 'var(--green)', BEARISH: 'var(--red)', NEUTRAL: 'var(--yellow)'};
+    bias.textContent = d.bias || '--';
+    bias.style.color = colors[d.bias] || 'var(--text-dim)';
+    bias.style.background = (colors[d.bias] || '#222') + '22';
+    document.getElementById('oiReason').textContent =
+      d.reason || d.error || 'Collecting OI snapshots… (need 2 samples, ~10 min)';
+    const ce = d.ce_buildup || [], pe = d.pe_buildup || [];
+    document.getElementById('oiCe').innerHTML =
+      '<b style="color:var(--green)">▲ CE loading</b><br>' +
+      (ce.length ? ce.slice(0, 4).map(r => `${r.strike} +${r.oi_gain.toLocaleString('en-IN')} OI`).join('<br>')
+                 : '<span style="color:var(--text-dim)">none</span>');
+    document.getElementById('oiPe').innerHTML =
+      '<b style="color:var(--red)">▼ PE loading</b><br>' +
+      (pe.length ? pe.slice(0, 4).map(r => `${r.strike} +${r.oi_gain.toLocaleString('en-IN')} OI`).join('<br>')
+                 : '<span style="color:var(--text-dim)">none</span>');
+  } catch(e) {}
+}
+
+// ── Gap & Go / Gap Fade ──
+async function fetchGap() {
+  try {
+    const resp = await fetch('/api/gapgo?_=' + Date.now());
+    if (!resp.ok) return;
+    const d = await resp.json();
+    const sig = document.getElementById('gapSignal');
+    if (!sig) return;
+    const map = {GAP_GO_BUY: '🟢 GAP & GO → BUY CE', GAP_FADE_BUY: '🔴 GAP FADE → BUY PE',
+                 GAP_FILL_WATCH: '⏳ WATCH FILL', WAIT: 'WAIT'};
+    sig.textContent = map[d.signal] || d.signal || '--';
+    sig.style.color = d.signal === 'GAP_GO_BUY' ? 'var(--green)'
+      : d.signal === 'GAP_FADE_BUY' ? 'var(--red)' : 'var(--yellow)';
+    document.getElementById('gapDetail').textContent =
+      `Gap ${d.gap_pct != null ? d.gap_pct + '%' : '--'} | Open ${d.open || '--'} | VWAP ${d.vwap || '--'} | Price ${d.price || '--'}`;
+    document.getElementById('gapReason').textContent = d.reason || d.error || '';
+  } catch(e) {}
+}
+
 function renderBnf(d) {
   const el = id => document.getElementById(id);
   if (!el('bnfSpot')) return;
@@ -1164,6 +1209,8 @@ fetchChain();
 fetchChart();
 fetchBtcChart();
 fetchBnfChart();
+fetchOi();
+fetchGap();
 fetchExpiry();
 fetchWeekly();
 initTimeframeToggles();
@@ -1184,6 +1231,8 @@ setInterval(fetchExpiry, 600000);
 setInterval(fetchFiiDii, 300000);
 setInterval(fetchOutlook, 300000);
 setInterval(fetchBtc, 60000);
+setInterval(fetchOi, 120000);
+setInterval(fetchGap, 60000);
 setInterval(fetchBnf, 60000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);

@@ -27,6 +27,8 @@ DEFAULT_CONFIG = {
         "orb": False,            # Opening range breakout
         "vwap": False,           # VWAP reversion
         "btst_exit": False,      # Auto-exit BTST
+        "oi_buildup": False,     # Smart-money OI positioning
+        "gap_go": False,         # Gap & Go / Gap Fade
     },
     "lot_size": 65,
 }
@@ -39,6 +41,11 @@ def load_config():
             for k, v in DEFAULT_CONFIG.items():
                 if k not in cfg:
                     cfg[k] = v
+            # Deep-merge nested dicts (e.g. new strategies added later)
+            for k, v in DEFAULT_CONFIG.items():
+                if isinstance(v, dict) and isinstance(cfg.get(k), dict):
+                    for kk, vv in v.items():
+                        cfg[k].setdefault(kk, vv)
             return cfg
     save_config(DEFAULT_CONFIG)
     return dict(DEFAULT_CONFIG)

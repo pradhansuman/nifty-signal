@@ -352,6 +352,23 @@
     </div>
   </div>
 
+  <!-- OI Buildup / Smart Money (Nifty section) -->
+  <div class="card" id="oiCard">
+    <div class="card-header"><span class="label">🧠 OI Buildup (Smart Money)</span><span style="font-size:10px;color:var(--text-dim)" id="oiBias" class="pill">--</span></div>
+    <div style="font-size:11px;color:var(--text-dim)" id="oiReason">Collecting OI snapshots…</div>
+    <div style="display:flex;gap:12px;margin-top:6px;font-size:10px">
+      <div style="flex:1" id="oiCe"></div>
+      <div style="flex:1" id="oiPe"></div>
+    </div>
+  </div>
+
+  <!-- Gap & Go / Gap Fade (Nifty section) -->
+  <div class="card" id="gapCard">
+    <div class="card-header"><span class="label">⚡ Gap & Go / Fade</span><span style="font-size:10px;color:var(--text-dim)" id="gapSignal" class="pill">--</span></div>
+    <div style="font-size:11px;color:var(--text-dim)" id="gapDetail">9:15–9:45 window only</div>
+    <div style="font-size:10px;margin-top:4px;color:var(--text-dim)" id="gapReason"></div>
+  </div>
+
   <!-- Expiry Countdown (Nifty section) -->
   <div class="card" id="expiryCard">
     <div class="card-header"><span class="label">⏳ Expiry Countdown</span><span style="font-size:10px;color:var(--text-dim)" id="expiryGamma" class="pill">--</span></div>
@@ -823,6 +840,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260813a"></script>
+<script src="/dash.js?v=20260813b"></script>
 </body>
 </html>

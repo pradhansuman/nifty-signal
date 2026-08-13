@@ -25,6 +25,8 @@ from chart_data import get_chart_data
 from banknifty_monitor import get_banknifty_signal
 from expiry_countdown import get_expiry
 from weekly_review import get_weekly_report, build_weekly_report
+from oi_buildup import get_oi_buildup, take_snapshot
+from gap_go import compute_gap_signal
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 @app.before_request
@@ -276,6 +278,16 @@ def api_fiidii():
 def api_outlook():
     """Tomorrow outlook: GIFT Nifty gap + US cues (cached 5 min)."""
     return jsonify(get_outlook())
+
+@app.route("/api/oi")
+def api_oi():
+    """OI Buildup / Smart Money Flow (cached 2 min)."""
+    return jsonify(get_oi_buildup())
+
+@app.route("/api/gapgo")
+def api_gapgo():
+    """Gap & Go / Gap Fade (cached 60s)."""
+    return jsonify(compute_gap_signal())
 
 @app.route("/api/btc")
 def api_btc():
@@ -693,6 +705,8 @@ def alert_scheduler():
     last_eod_summary = None
     last_orb_check = None
     last_intraday_check = None
+    last_oi_signal = None
+    last_gap_check = None
     
     while True:
         try:
@@ -795,6 +809,37 @@ def alert_scheduler():
                             f"{ema.get('reason', '')} | Spot: {ema.get('spot')} | "
                             f"EMA9: {ema.get('ema9')} | EMA21: {ema.get('ema21')}")
                 except Exception as e:
+                    pass
+
+            # ── OI Buildup (smart money) — snapshot every 5 min + alert on bias flip ──
+            if in_market and current_minute.endswith(("00", "05", "10", "15", "20", "25",
+                                                      "30", "35", "40", "45", "50", "55")):
+                try:
+                    take_snapshot(force=True)
+                    oi = get_oi_buildup(force=True)
+                    oi_sig = oi.get("signal")
+                    if oi_sig in ("BUY_CALLS", "BUY_PUTS") and oi_sig != last_oi_signal:
+                        last_oi_signal = oi_sig
+                        emoji = "🟢" if oi_sig == "BUY_CALLS" else "🔴"
+                        top_ce = ", ".join(f"{r['strike']}(+{r['oi_gain']:,})" for r in oi.get("ce_buildup", [])[:3])
+                        top_pe = ", ".join(f"{r['strike']}(+{r['oi_gain']:,})" for r in oi.get("pe_buildup", [])[:3])
+                        _add_alert("critical", f"{emoji} OI BUILDUP: {oi_sig}",
+                            f"{oi.get('reason', '')}\nCE loading: {top_ce or 'none'}\nPE loading: {top_pe or 'none'}")
+                except Exception:
+                    pass
+
+            # ── Gap & Go / Gap Fade (9:15-9:45, every 5 min) ──
+            if in_market and current_minute.endswith(("00", "05", "10", "15", "20", "25",
+                                                      "30", "35", "40", "45", "50", "55")) \
+                    and last_gap_check != current_minute:
+                last_gap_check = current_minute
+                try:
+                    gap = compute_gap_signal(force=True)
+                    if gap.get("signal") in ("GAP_GO_BUY", "GAP_FADE_BUY", "GAP_FILL_WATCH"):
+                        emoji = {"GAP_GO_BUY": "🟢", "GAP_FADE_BUY": "🔴", "GAP_FILL_WATCH": "⏳"}[gap["signal"]]
+                        _add_alert("critical", f"{emoji} {gap['signal']}",
+                            f"{gap.get('reason', '')} | Price: {gap.get('price')} | VWAP: {gap.get('vwap')}")
+                except Exception:
                     pass
             
             # ── BTST close-out at 3:25 PM ──

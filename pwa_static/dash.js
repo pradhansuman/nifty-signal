@@ -899,7 +899,7 @@ async function fetchBtcChart(interval) {
     const resp = await fetch('/api/chart?asset=btc&_=' + Date.now() + q);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const d = await resp.json();
-    drawChart(d, 'btcChart', null, {line: '#f7931a', ema: '#7c3aed'});
+    drawChart(d, 'btcChart', 'btcSpotTag', {line: '#f7931a', ema: '#7c3aed'});
     const lbl = document.getElementById('btcTfLabel');
     if (lbl && d.interval) lbl.textContent = d.interval + ' bars';
   } catch(e) {}
@@ -911,7 +911,7 @@ async function fetchBnfChart(interval) {
     const resp = await fetch('/api/chart?asset=banknifty&_=' + Date.now() + q);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const d = await resp.json();
-    drawChart(d, 'bnfChart', null, {line: '#00bcd4', ema: '#7c3aed'});
+    drawChart(d, 'bnfChart', 'bnfSpotTag', {line: '#00bcd4', ema: '#7c3aed'});
     const lbl = document.getElementById('bnfTfLabel');
     if (lbl && d.interval) lbl.textContent = d.interval + ' bars';
   } catch(e) {}

@@ -1230,23 +1230,12 @@ function renderWeekly(d) {
 }
 
 // ── Init ──
-fetchSignal();
-fetchIvRank();
-fetchBacktest();
-fetchChain();
-fetchBnfChain();
-fetchChart();
-fetchBtcChart();
-fetchBnfChart();
-fetchOi();
-fetchOi('bnf');
-fetchGap();
-fetchExpiry();
-fetchExpiry('bnf');
-fetchIvRank('bnf');
-fetchBacktest('bnf');
-fetchWeekly();
-initTimeframeToggles();
+// Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
+fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart();
+fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles();
+setTimeout(() => { fetchBtc(); fetchBnf(); fetchOi(); fetchOi('bnf'); }, 800);
+setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
+setTimeout(() => { fetchBacktest(); fetchBacktest('bnf'); }, 5000);
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();

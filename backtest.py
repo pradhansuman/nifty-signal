@@ -8,7 +8,7 @@ Exits: stop at 0.5% beyond EMA, 0.8% break, ADX<15, 12-bar time stop.
 Costs 0.05%/side. Returns in index % moves.
 Cached 1 hour.
 """
-import json, os, time
+import json, os, time, threading
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -48,6 +48,7 @@ def _adx(high, low, close, period=14):
 
 
 ASSET_SYMBOLS = {"nifty": "^NSEI", "banknifty": "^NSEBANK"}
+WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 
 
 def run_backtest(variant="base", asset="nifty"):
@@ -192,27 +193,68 @@ def run_backtest(variant="base", asset="nifty"):
     }
 
 
-def get_backtest(force=False, asset="nifty"):
-    c = _cache.setdefault(asset, {"ts": 0, "data": None})
-    now = time.time()
-    if not force and c["data"] and (now - c["ts"]) < CACHE_TTL:
-        return c["data"]
+def _compute_backtest(asset="nifty"):
+    """Run all variants and pick best by expectancy (slow — call off the hot path)."""
     results = {}
     for v in ("base",) if asset != "nifty" else ("base", "time", "time_vix"):
         r = run_backtest(v, asset)
         if "error" not in r:
             results[v] = r
     if not results:
-        out = {"error": "Backtest failed"}
-    else:
-        # Pick best by expectancy
-        best_key = max(results, key=lambda k: results[k]["expectancy"])
-        out = results[best_key]
-        out["variant"] = best_key
-        out["variants"] = {
-            k: {"trades": v["trades"], "win_rate": v["win_rate"], "expectancy": v["expectancy"], "profit_factor": v["profit_factor"]}
-            for k, v in results.items()
-        }
+        return {"error": "Backtest failed"}
+    best_key = max(results, key=lambda k: results[k]["expectancy"])
+    out = dict(results[best_key])
+    out["variant"] = best_key
+    out["variants"] = {
+        k: {"trades": v["trades"], "win_rate": v["win_rate"], "expectancy": v["expectancy"], "profit_factor": v["profit_factor"]}
+        for k, v in results.items()
+    }
+    return out
+
+
+def _disk_path(asset):
+    return os.path.join(WORKSPACE, ".openclaw", "tmp", f"backtest_{asset}_cache.json")
+
+
+def _load_disk(asset):
+    try:
+        with open(_disk_path(asset)) as f:
+            d = json.load(f)
+        if d.get("ts") and time.time() - d["ts"] < 43200:  # 12h freshness
+            return d["data"]
+    except Exception:
+        pass
+    return None
+
+
+def _save_disk(asset, data):
+    try:
+        os.makedirs(os.path.dirname(_disk_path(asset)), exist_ok=True)
+        with open(_disk_path(asset), "w") as f:
+            json.dump({"ts": time.time(), "data": data}, f, default=str)
+    except Exception:
+        pass
+
+
+_compute_lock = threading.Lock()
+
+
+def get_backtest(force=False, asset="nifty"):
+    c = _cache.setdefault(asset, {"ts": 0, "data": None})
+    now = time.time()
+    if not force and c["data"] and (now - c["ts"]) < CACHE_TTL:
+        return c["data"]
+    # Disk cache first — survive restarts without 60s recompute
+    disk = _load_disk(asset)
+    if disk and not force:
+        c["ts"], c["data"] = now, disk
+        return disk
+    # Slow path — compute with a lock so only one thread does it
+    with _compute_lock:
+        out = _compute_backtest(asset)
+        _save_disk(asset, out)
+        c["ts"], c["data"] = now, out
+        return out
         exp = out["expectancy"]
         pf = out.get("profit_factor") or 0
         vname = {"base": "Base rules", "time": "Morning entries only", "time_vix": "Morning + VIX<18"}.get(best_key, best_key)

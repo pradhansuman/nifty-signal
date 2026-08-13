@@ -955,6 +955,49 @@ function initTimeframeToggles() {
   bind('tfBnf', tf => fetchBnfChart(tf));
 }
 
+// Quick-nav section jumper + scroll-spy
+function initQuickNav() {
+  const nav = document.getElementById('quickNav');
+  if (!nav) return;
+  const chips = Array.from(nav.querySelectorAll('.qnav-chip'));
+  const sections = chips.map(c => document.getElementById(c.dataset.target)).filter(Boolean);
+  // Click → smooth scroll
+  chips.forEach(c => {
+    c.addEventListener('click', () => {
+      const el = document.getElementById(c.dataset.target);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      chips.forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+    });
+  });
+  // Scroll-spy: highlight the section currently in view
+  let ticking = false;
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      const navH = nav.offsetHeight + 4;
+      let cur = chips[0];
+      for (let i = 0; i < sections.length; i++) {
+        if (sections[i].getBoundingClientRect().top <= navH + 40) cur = chips[i];
+        else break;
+      }
+      chips.forEach(x => x.classList.toggle('active', x === cur));
+      // auto-scroll chip into view if off-screen
+      if (cur && nav.scrollLeft !== undefined) {
+        const navRect = nav.getBoundingClientRect();
+        const chipRect = cur.getBoundingClientRect();
+        if (chipRect.left < navRect.left) nav.scrollLeft += chipRect.left - navRect.left - 8;
+        else if (chipRect.right > navRect.right) nav.scrollLeft += chipRect.right - navRect.right + 8;
+      }
+    });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+}
+
 // Chart state registry for resize redraws
 const chartState = {};
 
@@ -1236,7 +1279,7 @@ function renderWeekly(d) {
 // ── Init ──
 // Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
 fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart();
-fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles();
+fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles(); initQuickNav();
 setTimeout(() => { fetchBtc(); fetchBnf(); fetchOi(); fetchOi('bnf'); }, 800);
 setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
 setTimeout(() => { fetchBacktest(); fetchBacktest('bnf'); }, 5000);

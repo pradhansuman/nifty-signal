@@ -1084,12 +1084,15 @@ if __name__ == "__main__":
         tunnel = detect_tunnel_url()
         if tunnel:
             print(f"   Tunnel:  {tunnel}")
-        scheduler = threading.Thread(target=alert_scheduler, daemon=True)
-        scheduler.start()
-        print("   Alerts:  Background scheduler started")
-        tgs = threading.Thread(target=tg_sender, daemon=True)
-        tgs.start()
-        print("   Telegram: Batched sender started")
+        if os.environ.get("NO_SCHEDULER", "") == "true":
+            print("   Alerts:  DISABLED via NO_SCHEDULER (dashboard-only mode)")
+        else:
+            scheduler = threading.Thread(target=alert_scheduler, daemon=True)
+            scheduler.start()
+            print("   Alerts:  Background scheduler started")
+            tgs = threading.Thread(target=tg_sender, daemon=True)
+            tgs.start()
+            print("   Telegram: Batched sender started")
         wu = threading.Thread(target=warmup_caches, daemon=True)
         wu.start()
         print("   Warmup:  Background cache pre-compute started")

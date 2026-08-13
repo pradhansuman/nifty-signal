@@ -54,7 +54,9 @@ def run_script(script_name):
     """Run a Python script and return parsed JSON."""
     if IS_CLOUD:
         return _run_script_import(script_name)
-    return _run_script_subprocess(script_name)
+    # In-process import everywhere: no subprocess cold-start (was ~60s per recompute).
+    # Scripts must expose main() -> dict (all of ours do).
+    return _run_script_import(script_name)
 
 def _run_script_import(script_name):
     """Import module and call main() directly (no subprocess, works on Render)."""
@@ -102,8 +104,17 @@ def get_signal():
     now = time.time()
     if _last_signal and (now - _last_update) < CACHE_TTL:
         return _last_signal
-    _last_signal = run_script("nifty_monitor.py")
-    _last_update = now
+    # Single-flight lock: if another request is already recomputing, serve stale
+    # data instead of stacking duplicate heavy computations.
+    if not _signal_lock.acquire(blocking=False):
+        if _last_signal:
+            return _last_signal
+        _signal_lock.acquire()
+    try:
+        _last_signal = run_script("nifty_monitor.py")
+        _last_update = time.time()
+    finally:
+        _signal_lock.release()
     return _last_signal
 
 def get_full_analysis():
@@ -123,6 +134,7 @@ _signal_cache = {"ts": 0, "data": None}
 _btc_cache = {"ts": 0, "data": None}
 _bnf_cache = {"ts": 0, "data": None}
 _last_tg_push = 0
+_signal_lock = threading.Lock()
 # ── Telegram queue: every alert is enqueued, batched sender flushes → nothing lost ──
 _tg_queue = []
 _tg_lock = threading.Lock()
@@ -707,6 +719,7 @@ def alert_scheduler():
     last_intraday_check = None
     last_oi_signal = None
     last_gap_check = None
+    last_market_open_push = None
     
     while True:
         try:
@@ -720,6 +733,18 @@ def alert_scheduler():
                 continue
             
             in_market = _is_market_open()
+
+            # ── Market-open status push at 9:15 (always pings, even on WAIT) ──
+            if in_market and current_minute == "09:15" and last_market_open_push != today:
+                last_market_open_push = today
+                try:
+                    sig = get_signal()
+                    _add_alert("info", "🕘 MARKET OPEN — Morning Status",
+                        f"Nifty {sig.get('spot', 'N/A')} | VIX {sig.get('vix', 'N/A')} | "
+                        f"PCR {sig.get('oi_pcr', 'N/A')} | Signal: {sig.get('signal', 'N/A')} | "
+                        f"200 EMA {sig.get('ema_200', 'N/A')} | IV Rank {sig.get('iv_rank', 'N/A')}%")
+                except Exception as e:
+                    _add_alert("warning", "Market Open Push Failed", str(e)[:150])
             
             # ── Pre-market brief at 9:00 AM ──
             if current_minute == "09:00" and last_premarket_date != today:
@@ -954,6 +979,19 @@ def serve_static(path):
 
 
 if __name__ == "__main__":
+    # Global socket timeout: no request may hang forever on a dead network call
+    import socket as _socket
+    _socket.setdefaulttimeout(20)
+
+    # ── Single-instance guard: exit if port already taken (prevents double schedulers) ──
+    _probe = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+    try:
+        _probe.bind(("0.0.0.0", PORT))
+        _probe.close()
+    except OSError:
+        print(f"⚠️  Port {PORT} already in use — another instance is running. Exiting.")
+        sys.exit(0)
+
     print(f"🚀 Nifty Signal Server starting on port {PORT}")
     print(f"   Local:   http://localhost:{PORT}")
     if not IS_CLOUD:
@@ -980,4 +1018,4 @@ if __name__ == "__main__":
     
     print()
     
-    app.run(host="0.0.0.0", port=PORT, debug=False)
+    app.run(host="0.0.0.0", port=PORT, debug=False, threaded=True)

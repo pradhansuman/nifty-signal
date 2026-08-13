@@ -741,7 +741,7 @@ async function fetchIvRank(prefix) {
 
 function renderIvRank(d, prefix) {
   prefix = prefix || '';
-  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const P = s => prefix ? prefix + s.charAt(0).toUpperCase() + s.slice(1) : s;
   const el = id => document.getElementById(P(id));
   if (!el('ivRankVal')) return;
   el('ivRange').textContent = (d.low_52w != null ? d.low_52w : '--') + ' – ' + (d.high_52w != null ? d.high_52w : '--');
@@ -777,7 +777,7 @@ async function fetchBacktest(prefix) {
 
 function renderBacktest(d, prefix) {
   prefix = prefix || '';
-  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const P = s => prefix ? prefix + s.charAt(0).toUpperCase() + s.slice(1) : s;
   const el = id => document.getElementById(P(id));
   if (!el('btTrades')) return;
   if (d.error) { el('btRead').textContent = d.error; return; }
@@ -836,7 +836,7 @@ function fmtOID(n) {
 
 function renderChain(d, prefix) {
   prefix = prefix || '';
-  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const P = s => prefix ? prefix + s.charAt(0).toUpperCase() + s.slice(1) : s;
   const id = s => document.getElementById(P(s));
   if (!id('chainRows')) return;
   if (d.error) {
@@ -1096,7 +1096,7 @@ async function fetchOi(prefix) {
 
 function renderOi(d, prefix) {
   prefix = prefix || '';
-  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const P = s => prefix ? prefix + s.charAt(0).toUpperCase() + s.slice(1) : s;
   const id = s => document.getElementById(P(s));
     const bias = id('oiBias');
     if (!bias) return;
@@ -1195,7 +1195,7 @@ async function fetchExpiry(prefix) {
 
 function renderExpiry(d, prefix) {
   prefix = prefix || '';
-  const P = s => prefix + s.charAt(0).toUpperCase() + s.slice(1);
+  const P = s => prefix ? prefix + s.charAt(0).toUpperCase() + s.slice(1) : s;
   const el = id => document.getElementById(P(id));
   if (!el('expiryRead')) return;
   const g = el('expiryGamma');

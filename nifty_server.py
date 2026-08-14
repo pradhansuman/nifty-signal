@@ -163,7 +163,10 @@ def _push_tg(text):
 
 
 def tg_sender():
-    """Background thread: drain queue → send batched Telegram messages."""
+    """Background thread: drain queue → send batched Telegram messages.
+    On the local Mac (non-cloud), checks the cloud instance first: if Render is
+    awake, it pushes and we skip (one sender). If Render is down/sleeping,
+    this instance takes over → no missed alerts."""
     while True:
         time.sleep(20)
         with _tg_lock:
@@ -171,6 +174,8 @@ def tg_sender():
             del _tg_queue[:8]
         if not batch or not telegram_alert.is_configured():
             continue
+        if not IS_CLOUD and _render_alive():
+            continue  # Render is up → it handles the push (avoid duplicates)
         try:
             msg = "\n\n".join(batch)
             if len(msg) > 3500:
@@ -181,6 +186,27 @@ def tg_sender():
 
 _asset_alerts = {}  # asset:date -> list of signal-change alerts
 _asset_last_signal = {}  # asset -> last signal
+_render_probe = {"ts": 0, "alive": False}
+
+
+def _render_alive():
+    """Is the Render cloud instance processing right now? (cached 45s)
+    Fast answer (<7s) = scheduler running → it pushes. Slow/timeout = free-tier
+    sleep or down → the local instance must push instead."""
+    import time as _t
+    now = _t.time()
+    if now - _render_probe["ts"] < 45:
+        return _render_probe["alive"]
+    alive = False
+    try:
+        import urllib.request
+        t0 = _t.time()
+        with urllib.request.urlopen("https://nifty-signal-n684.onrender.com/api/health", timeout=7) as r:
+            alive = r.status == 200 and (_t.time() - t0) < 7.0
+    except Exception:
+        alive = False
+    _render_probe.update({"ts": now, "alive": alive})
+    return alive
 
 
 def _track_asset_alert(asset, signal, reason):

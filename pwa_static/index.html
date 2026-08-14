@@ -654,6 +654,38 @@
   
 </div>
 
+<!-- NIFTY Option Chain Table (main page) -->
+  <div class="card" id="chainTableCard">
+    <div class="card-header">
+      <span class="label">📋 Nifty Option Chain</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="chainMeta">--</span>
+    </div>
+    <div style="text-align:center;margin:2px 0 8px">
+      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">NIFTY SPOT</div>
+      <div id="chainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
+    </div>
+    <div style="font-size:11px;margin-bottom:6px" id="chainWalls"></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:var(--text-dim);text-align:right">
+            <th style="text-align:left;padding:3px 4px">Strike</th>
+            <th style="padding:3px 4px">CE ₹</th>
+            <th style="padding:3px 4px">CE OI</th>
+            <th style="padding:3px 4px">CE Vol</th>
+            <th style="padding:3px 4px">IV</th>
+            <th style="padding:3px 4px">PE ₹</th>
+            <th style="padding:3px 4px">PE OI</th>
+            <th style="padding:3px 4px">PE Vol</th>
+          </tr>
+        </thead>
+        <tbody id="chainRows">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 <!-- ── BITCOIN SECTION ── -->
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">₿ ─── BITCOIN (24/7) ─── ₿</div>
 
@@ -810,12 +842,9 @@
     <div style="font-size:12px;line-height:1.7" id="bnfExpiryRead">Loading...</div>
   </div>
 
-  <!-- BNF Option Chain Table -->
-  <div class="card" id="bnfChainCard">
-    <div class="card-header">
-      <span class="label" data-i18n="bnf-chain">📋 BNF Option Chain</span>
-      <span style="font-size:10px;color:var(--text-dim)" id="bnfChainMeta">--</span>
-    </div>
+  <!-- BNF Option Chain Table (collapsible — tap to expand) -->
+  <details id="bnfChainCollapse" style="border:1px solid var(--border);border-radius:14px;padding:10px 12px;background:var(--card)">
+    <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--text-dim);user-select:none"><span data-i18n="bnf-chain">🏦 Bank Nifty Option Chain</span> <span style="font-size:11px;color:var(--blue)">(tap to expand)</span> <span style="font-size:10px;color:var(--text-dim)" id="bnfChainMeta">--</span></summary>
     <div style="text-align:center;margin:2px 0 8px">
       <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">BANK NIFTY SPOT</div>
       <div id="bnfChainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
@@ -840,7 +869,7 @@
         </tbody>
       </table>
     </div>
-  </div>
+  </details>
 
   <!-- BNF IV Rank -->
   <div class="card" id="bnfIvRankCard">
@@ -1094,37 +1123,6 @@
       <div class="level-pill target" id="entryLevel">--</div>
       <div class="level-pill target" id="targetLevelPill">--</div>
       <div class="level-pill stop" id="stopLevelPill">--</div>
-    </div>
-  </div>
-<!-- Option Chain Table -->
-  <div class="card" id="chainTableCard">
-    <div class="card-header">
-      <span class="label">📋 Option Chain</span>
-      <span style="font-size:10px;color:var(--text-dim)" id="chainMeta">--</span>
-    </div>
-    <div style="text-align:center;margin:2px 0 8px">
-      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">NIFTY SPOT</div>
-      <div id="chainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
-    </div>
-    <div style="font-size:11px;margin-bottom:6px" id="chainWalls"></div>
-    <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead>
-          <tr style="color:var(--text-dim);text-align:right">
-            <th style="text-align:left;padding:3px 4px">Strike</th>
-            <th style="padding:3px 4px">CE ₹</th>
-            <th style="padding:3px 4px">CE OI</th>
-            <th style="padding:3px 4px">CE Vol</th>
-            <th style="padding:3px 4px">IV</th>
-            <th style="padding:3px 4px">PE ₹</th>
-            <th style="padding:3px 4px">PE OI</th>
-            <th style="padding:3px 4px">PE Vol</th>
-          </tr>
-        </thead>
-        <tbody id="chainRows">
-          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
-        </tbody>
-      </table>
     </div>
   </div>
 <!-- Tomorrow Outlook -->

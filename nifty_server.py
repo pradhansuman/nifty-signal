@@ -684,11 +684,18 @@ def _scalp_refresh_statuses():
         prem = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type"))
         if prem is None:
             continue
-        if c.get("target") and prem >= c["target"]:
+        # Options (nifty/bnf): both CE and PE profit when PREMIUM rises, so
+        # target is always above entry, stop below — works for both signals.
+        # Spot assets (sensex/btc): LONG target above entry; SHORT target BELOW
+        # entry (stop above) — the comparison must be direction-aware.
+        is_spot_short = c.get("asset") in ("sensex", "btc") and c.get("signal") == "SCALP_SHORT"
+        target_hit = prem <= c["target"] if is_spot_short else prem >= c["target"]
+        stop_hit = prem >= c["stop"] if is_spot_short else prem <= c["stop"]
+        if c.get("target") and target_hit:
             c["status"] = "TARGET_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
             c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
             events.append((c, "target"))
-        elif c.get("stop") and prem <= c["stop"]:
+        elif c.get("stop") and stop_hit:
             c["status"] = "STOP_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
             c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
             events.append((c, "stop"))

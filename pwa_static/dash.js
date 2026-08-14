@@ -1735,6 +1735,7 @@ refreshStrategies(); refreshBtcStrategies(); refreshBnfStrategies(); refreshSens
 async function fetchAssetScalper(asset, p) {
   const banner = document.getElementById(p + 'ScalperBanner');
   if (!banner) return;
+  const cur = asset === 'btc' ? '$' : '₹';
   try {
     const resp = await fetch('/api/scalper?asset=' + asset + '&_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -1743,18 +1744,18 @@ async function fetchAssetScalper(asset, p) {
     if (upd) upd.textContent = d.timestamp || '';
     const levels = document.getElementById(p + 'ScalperLevels');
     if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
-      banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
+      banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ' + cur + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
       banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
-      document.getElementById(p + 'ScalperEntry').textContent = 'Entry ₹' + d.call.entry;
-      document.getElementById(p + 'ScalperTarget').textContent = '🎯 ₹' + d.call.target;
-      document.getElementById(p + 'ScalperStop').textContent = '🛑 ₹' + d.call.stop;
+      document.getElementById(p + 'ScalperEntry').textContent = 'Entry ' + cur + d.call.entry;
+      document.getElementById(p + 'ScalperTarget').textContent = '🎯 ' + cur + d.call.target;
+      document.getElementById(p + 'ScalperStop').textContent = '🛑 ' + cur + d.call.stop;
       levels.style.display = 'flex';
     } else if (d.signal === 'SCALP_SHORT' && d.call && !d.call.blocked) {
-      banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ₹' + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
+      banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ' + cur + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
       banner.style.background = '#280a0a'; banner.style.color = '#ff8080';
-      document.getElementById(p + 'ScalperEntry').textContent = 'Entry ₹' + d.call.entry;
-      document.getElementById(p + 'ScalperTarget').textContent = '🎯 ₹' + d.call.target;
-      document.getElementById(p + 'ScalperStop').textContent = '🛑 ₹' + d.call.stop;
+      document.getElementById(p + 'ScalperEntry').textContent = 'Entry ' + cur + d.call.entry;
+      document.getElementById(p + 'ScalperTarget').textContent = '🎯 ' + cur + d.call.target;
+      document.getElementById(p + 'ScalperStop').textContent = '🛑 ' + cur + d.call.stop;
       levels.style.display = 'flex';
     } else if (d.call && d.call.blocked) {
       banner.textContent = '🚫 ' + (d.signal === 'SCALP_LONG' ? 'LONG' : 'SHORT') + ' blocked — ' + (d.call.block_reason || 'spread too wide');
@@ -1778,7 +1779,7 @@ async function fetchAssetScalper(asset, p) {
           const border = st === 'TARGET_HIT' ? '#00c853' : st === 'STOP_HIT' ? '#ff1744' : st === 'EXPIRED' ? '#64748b' : '#ffab00';
           const label = st === 'TARGET_HIT' ? '🎯 HIT' : st === 'STOP_HIT' ? '🛑 STOP' : st === 'EXPIRED' ? 'EXPIRED' : '● ACTIVE';
           const chip = st === 'TARGET_HIT' ? 'strat-ok' : st === 'STOP_HIT' ? 'strat-bad' : st === 'EXPIRED' ? 'strat-off' : 'strat-wait';
-          return stratRowHTML(c.time + ' · exp ' + (c.expires_at || '--'), label, c.option + ' @ ₹' + c.entry + ' → 🎯 ₹' + c.target + ' / 🛑 ₹' + c.stop, chip === 'strat-ok' ? 'ok' : chip === 'strat-bad' ? 'bad' : chip === 'strat-off' ? 'off' : 'wait')
+          return stratRowHTML(c.time + ' · exp ' + (c.expires_at || '--'), label, c.option + ' @ ' + cur + c.entry + ' → 🎯 ' + cur + c.target + ' / 🛑 ' + cur + c.stop, chip === 'strat-ok' ? 'ok' : chip === 'strat-bad' ? 'bad' : chip === 'strat-off' ? 'off' : 'wait')
             .replace('<div class="strat-row"', '<div class="strat-row" style="border-left-color:' + border + '"');
         }).join('');
       }

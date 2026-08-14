@@ -939,6 +939,14 @@ def api_scalper():
             c["data"] = {"error": str(e), "asset": asset}
         c["ts"] = _t.time()
     out = dict(c["data"] or {})
+    # Stable call view: show the FIXED logged call (entry/target/stop/expiry
+    # don't drift on every refresh) when one is ACTIVE for this asset.
+    active = next((x for x in _scalp_calls if x.get("asset") == asset and x.get("status") == "ACTIVE"), None)
+    if active and out.get("call"):
+        out["call"] = dict(out["call"])
+        for k in ("option", "strike", "entry", "target", "stop", "expires_at"):
+            if active.get(k) is not None:
+                out["call"][k] = active[k]
     out["calls"] = list(reversed([x for x in _scalp_calls if x.get("asset") == asset]))
     out["pnl"] = _scalp_summary()
     return jsonify(_clean_nan(out))
@@ -1373,11 +1381,12 @@ def alert_scheduler():
                 except Exception as e:
                     pass
 
-            # ── Scalper (5m momentum + live option call) every 5 min ──
-            if in_market and current_minute[-2:] in _FIVE_MIN_MARKS and last_scalp_check != current_minute:
+            # ── Scalper sweep every 5 min — BTC 24/7, indices only in market hours ──
+            if current_minute[-2:] in _FIVE_MIN_MARKS and last_scalp_check != current_minute:
                 last_scalp_check = current_minute
-                # ⚡ Scalper sweep — all assets (nifty/bnf/sensex spot/btc spot)
                 for _a in SCALP_ASSETS:
+                    if _a != "btc" and not in_market:
+                        continue  # indices: market hours only; BTC trades 24/7
                     try:
                         _scalp_tick(_a)
                     except Exception:

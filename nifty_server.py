@@ -34,7 +34,12 @@ app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
 def _git_hash():
     """Short git commit hash (cached) — surfaced on both hosts so the user can
-    verify Mac ⇄ Render parity at a glance instead of re-auditing git push state."""
+    verify Mac ⇄ Render parity at a glance instead of re-auditing git push state.
+    Render injects RENDER_GIT_COMMIT (the image has no .git / git binary);
+    locally we shell out to git rev-parse."""
+    env_h = os.environ.get("RENDER_GIT_COMMIT") or os.environ.get("GIT_COMMIT")
+    if env_h:
+        return str(env_h)[:8]
     try:
         import subprocess
         out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],

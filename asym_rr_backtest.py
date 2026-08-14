@@ -25,7 +25,7 @@ def in_window(ts, windows):
     return any(a <= hm <= b for a, b in windows)
 
 
-def run_backtest(df, target_pct, stop_pct, hold_bars=3, regime_filter=True, windows=WINDOWS, gated=True):
+def run_backtest(df, target_pct, stop_pct, hold_bars=3, regime_filter=True, windows=WINDOWS, gated=True, trend_min=0.8, adx_min=25):
     P = precompute(df)
     adx = _adx(df) if gated else None
     n = len(df)
@@ -64,10 +64,10 @@ def run_backtest(df, target_pct, stop_pct, hold_bars=3, regime_filter=True, wind
         spot = float(P["closes"].iloc[i])
         e200 = float(P["ema200"].iloc[i])
         if gated:
-            # match production gates: trend >= 0.8% and ADX >= 25
-            if abs(spot - e200) / e200 * 100 < 0.8:
+            # per-asset gates: trend % and ADX threshold (tunable)
+            if abs(spot - e200) / e200 * 100 < trend_min:
                 continue
-            if float(adx.iloc[i]) < 25:
+            if float(adx.iloc[i]) < adx_min:
                 continue
         entry_px = float(P["closes"].iloc[i + 1])
         if sc >= 3:
@@ -110,17 +110,60 @@ def sweep(asset, profiles, hold_bars=3, gated=True):
         summarize(trades, "target {:.2f}% / stop {:.2f}% (R:R {:.2f})".format(tp * 100, sp * 100, rr))
 
 
+def gate_sweep(asset, hold_bars=3, target_pct=0.005, stop_pct=0.005):
+    """Sweep per-asset trend_min / adx_min thresholds to find the gate combo
+    that turns the scalper profitable with a sane signal rate (~1-4/day)."""
+    sym = SYMBOLS[asset]
+    df = get_bars(asset, period="60d", interval="5m")
+    if df is None or len(df) < 500:
+        print("{}: FAIL".format(asset))
+        return
+    windows = None if asset == "btc" else WINDOWS
+    sessions = len(set(df.index.date))
+    print("\n=== {} GATE SWEEP ({} bars, {} sessions, hold {} bars, symmetric ±{:.1f}%) ===".format(
+        asset.upper(), len(df), sessions, hold_bars, target_pct * 100))
+    print("{:>18} | {:>6} {:>7} {:>6} {:>8} {:>8}  {:>6}".format(
+        "trend_min/adx_min", "trades", "/day", "WR", "PF", "net pts", "status"))
+    best = None
+    for tm in (0.8, 1.0, 1.5, 2.0, 2.5, 3.0):
+        for am in (25, 30, 35, 40):
+            t = run_backtest(df, target_pct, stop_pct, hold_bars, True, windows, True, tm, am)
+            if not t:
+                continue
+            wins = [x[1] for x in t if x[1] > 0]
+            losses = [x[1] for x in t if x[1] <= 0]
+            pf = (sum(wins) / abs(sum(losses))) if losses else float("inf")
+            wr = len(wins) / len(t)
+            per_day = len(t) / sessions
+            net = sum(x[1] for x in t)
+            status = "✅" if (pf >= 1.2 and per_day <= 5) else ("★" if pf >= 1.0 else "")
+            print("{:>8}% / {:>6}  | {:>6} {:>7.1f} {:>6.0%} {:>8.2f} {:>8.0f}  {}".format(
+                tm, am, len(t), per_day, wr, pf, net, status))
+            if pf >= 1.0 and 1 <= per_day <= 5:
+                if best is None or pf > best[0]:
+                    best = (pf, tm, am, len(t), per_day, wr, net)
+    if best:
+        print("\nBEST: trend>=%.1f%% + ADX>=%d → PF %.2f, %d trades (%.1f/day), WR %.0f%%, net %.0f pts" %
+              (best[1], best[2], best[0], best[3], best[4], best[5] * 100, best[6]))
+    else:
+        print("\nNo combo hit PF>=1.0 at 1-5 trades/day — BTC 5m scalper may be unprofitable at this hold.")
+
+
 if __name__ == "__main__":
-    # (target_pct, stop_pct) — symmetric baseline + asymmetric profiles
-    profiles = [
-        (0.005, 0.005),   # 1.0 : 1  (current BTC default)
-        (0.0075, 0.005),  # 1.5 : 1
-        (0.01, 0.005),    # 2.0 : 1
-        (0.0087, 0.0052), # ~1.67 : 1 (user's example profile)
-        (0.008, 0.004),   # 2.0 : 1 tighter stop
-    ]
-    for asset in ("btc", "nifty"):
-        try:
-            sweep(asset, profiles)
-        except Exception as e:
-            print("{}: ERROR {}".format(asset, e))
+    import sys as _s
+    if len(_s.argv) > 1 and _s.argv[1] == "gates":
+        gate_sweep("btc")
+    else:
+        # (target_pct, stop_pct) — symmetric baseline + asymmetric profiles
+        profiles = [
+            (0.005, 0.005),   # 1.0 : 1  (current BTC default)
+            (0.0075, 0.005),  # 1.5 : 1
+            (0.01, 0.005),    # 2.0 : 1
+            (0.0087, 0.0052), # ~1.67 : 1 (user's example profile)
+            (0.008, 0.004),   # 2.0 : 1 tighter stop
+        ]
+        for asset in ("btc", "nifty"):
+            try:
+                sweep(asset, profiles)
+            except Exception as e:
+                print("{}: ERROR {}".format(asset, e))

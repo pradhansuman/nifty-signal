@@ -433,3 +433,17 @@ class FundingGateTest(unittest.TestCase):
         tun = scalper._load_tuning()
         self.assertIn("funding_gate", tun)
         self.assertGreater(tun["funding_gate"], 0)
+
+
+class PerAssetGateOverrideTest(unittest.TestCase):
+    """BTC uses its own (stricter) trend/ADX gates than the global defaults."""
+
+    def test_btc_has_stricter_gates(self):
+        self.assertEqual(scalper.ASSETS["btc"].get("trend_min"), 1.0)
+        self.assertEqual(scalper.ASSETS["btc"].get("adx_min"), 30)
+        self.assertGreater(scalper.ASSETS["btc"]["trend_min"], 0.8)  # stricter than global
+        self.assertGreater(scalper.ASSETS["btc"]["adx_min"], 25)
+
+    def test_nifty_uses_global_defaults(self):
+        self.assertIsNone(scalper.ASSETS["nifty"].get("trend_min"))
+        self.assertIsNone(scalper.ASSETS["nifty"].get("adx_min"))

@@ -29,7 +29,10 @@ ASSETS = {
     "nifty":  {"symbol": "^NSEI",    "lot": 65, "options": True,  "vix": True,  "spot_tp": None,   "label": "NIFTY"},
     "bnf":    {"symbol": "^NSEBANK", "lot": 15, "options": True,  "vix": True,  "spot_tp": None,   "label": "BANK NIFTY"},
     "sensex": {"symbol": "^BSESN",   "lot": 20, "options": False, "vix": True,  "spot_tp": 0.0015, "label": "SENSEX"},
-    "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": True,  "vix": False, "spot_tp": 0.005,  "label": "BITCOIN"},
+    "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": True,  "vix": False, "spot_tp": 0.005,  "label": "BITCOIN",
+               # Per-asset gates (backtest 2026-08-14, 60d 5m): BTC's 5m chop needs
+               # stricter trend/ADX than Nifty — trend 1.0% + ADX 30 flips PF 0.98→1.08.
+               "trend_min": 1.0, "adx_min": 30},
 }
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -410,7 +413,9 @@ def main(asset="nifty"):
         reasons.append("below ORB low {:.0f}".format(orb_low))
 
     tun = _load_tuning()
-    score_min = tun["score_min"]
+    # Per-asset gate overrides (BTC is choppier → stricter gates than Nifty/BNF)
+    cfg = ASSETS[asset]
+    score_min = float(cfg.get("score_min", tun["score_min"]))
     out["score_min"] = score_min
     bias = "LONG" if score >= score_min else "SHORT" if score <= -score_min else "FLAT"
 
@@ -428,7 +433,7 @@ def main(asset="nifty"):
     # ── Trend-strength gate: momentum edge exists ONLY on strong-trend days ──
     # Backtest 2026-08-14 (58 sessions, 4295 bars): |spot-200E| >= 0.8% of spot →
     # 134 trades, 60% WR, PF 1.53, +429 pts. Below 0.5% → PF ~0.93 (loser).
-    trend_min = tun["trend_min"]
+    trend_min = float(cfg.get("trend_min", tun["trend_min"]))
     trend_dist = abs(spot - ema200) / ema200 * 100.0
     out["trend_dist"] = round(trend_dist, 2)
     out["trend_gate"] = trend_min
@@ -439,7 +444,7 @@ def main(asset="nifty"):
         bias = "FLAT"
 
     # ── ADX trend-strength gate (backtest 2026-08-14: ADX>25 → PF 1.82) ──
-    adx_min = tun["adx_min"]
+    adx_min = float(cfg.get("adx_min", tun["adx_min"]))
     adx_series = _adx(df)
     adx_val = float(adx_series.iloc[-1]) if not pd.isna(adx_series.iloc[-1]) else 0.0
     out["adx"] = round(adx_val, 1)

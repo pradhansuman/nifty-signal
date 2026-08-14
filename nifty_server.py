@@ -185,7 +185,7 @@ def tg_sender():
             if len(msg) > 3500:
                 msg = msg[:3500] + "\n…"
             ok, err = telegram_alert.send_telegram(msg)
-            print("[TG] sent {} msgs, ok={} err={}".format(len(batch), ok, err))
+            print("[{}] [TG] sent {} msgs, ok={} err={}".format(datetime.now().strftime("%H:%M:%S"), len(batch), ok, err))
         except Exception as e:
             print("[TG] send failed:", e)
 

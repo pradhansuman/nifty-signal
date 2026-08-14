@@ -174,15 +174,20 @@ def tg_sender():
             del _tg_queue[:8]
         if not batch or not telegram_alert.is_configured():
             continue
-        if not IS_CLOUD and _render_alive():
+        # Render is up → it handles the push (avoid duplicates) — UNLESS
+        # MAC_FORCE_PUSH=1: used while Render runs older code that doesn't
+        # generate the same alerts (e.g. multi-asset scalper); Mac then pushes
+        # everything itself until Render is redeployed.
+        if not IS_CLOUD and _render_alive() and not os.environ.get("MAC_FORCE_PUSH"):
             continue  # Render is up → it handles the push (avoid duplicates)
         try:
             msg = "\n\n".join(batch)
             if len(msg) > 3500:
                 msg = msg[:3500] + "\n…"
-            telegram_alert.send_telegram(msg)
-        except Exception:
-            pass
+            ok, err = telegram_alert.send_telegram(msg)
+            print("[TG] sent {} msgs, ok={} err={}".format(len(batch), ok, err))
+        except Exception as e:
+            print("[TG] send failed:", e)
 
 _asset_alerts = {}  # asset:date -> list of signal-change alerts
 _asset_last_signal = {}  # asset -> last signal

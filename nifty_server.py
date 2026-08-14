@@ -30,6 +30,18 @@ from oi_buildup import get_oi_buildup, take_snapshot
 from gap_go import compute_gap_signal
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
+
+
+def _ist_now():
+    """Current time in IST — Render containers run UTC, so naive datetime.now()
+    would log/display times 5:30h behind. All user-facing times use IST."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
+    except Exception:
+        return datetime.now()
+
+
 @app.before_request
 def log_request():
     """Log every incoming request to /tmp/nifty_requests.log"""
@@ -220,7 +232,7 @@ def _algo_trade(signal_type, direction, strike, expiry, lots, premium, option_ty
     Dedup per strategy per minute; pushes the order to Telegram; logs failures."""
     try:
         from algo_trader import execute_trade
-        now_hm = datetime.now().strftime("%H:%M")
+        now_hm = _ist_now().strftime("%H:%M")
         if _algo_fired.get(signal_type) == now_hm:
             return None
         _algo_fired[signal_type] = now_hm
@@ -244,14 +256,14 @@ def _algo_trade(signal_type, direction, strike, expiry, lots, premium, option_ty
 def _track_asset_alert(asset, signal, reason):
     """Log signal-change alerts for BTC / Bank Nifty, push Telegram on change."""
     try:
-        key = f"{asset}:{datetime.now().date()}"
+        key = f"{asset}:{_ist_now().date()}"
         last = _asset_last_signal.get(asset)
         if last == signal:
             return
         _asset_last_signal[asset] = signal
         entry = {
-            "time": datetime.now().strftime("%H:%M:%S"),
-            "date": datetime.now().strftime("%d-%b"),
+            "time": _ist_now().strftime("%H:%M:%S"),
+            "date": _ist_now().strftime("%d-%b"),
             "signal": signal,
             "reason": reason[:120] if reason else "",
             "prev": last or "—",
@@ -279,7 +291,7 @@ def _track_asset_alert(asset, signal, reason):
 
 
 def _asset_alert_list(asset):
-    key = f"{asset}:{datetime.now().date()}"
+    key = f"{asset}:{_ist_now().date()}"
     if key in _asset_alerts:
         return _asset_alerts[key]
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", f"{asset}_alerts.json")
@@ -345,7 +357,7 @@ def api_signal():
     return jsonify({
         **signal,
         "emoji": emoji.get(sig_name, "⚪"),
-        "updated": datetime.now().strftime("%H:%M:%S"),
+        "updated": _ist_now().strftime("%H:%M:%S"),
     })
 
 @app.route("/api/fiidii")
@@ -518,7 +530,7 @@ def api_summary():
         "scenario_probs": exec_summary.get("scenario_probabilities"),
         "theta_zone": exec_summary.get("theta_zone"),
         "expected_move": exec_summary.get("expected_1sd_move"),
-        "timestamp": datetime.now().strftime("%H:%M:%S"),
+        "timestamp": _ist_now().strftime("%H:%M:%S"),
     })
 
 @app.route("/api/health")
@@ -598,7 +610,7 @@ def _scalp_append_call(asset, sc, call):
     _scalp_calls.append({
         "id": len(_scalp_calls) + 1,
         "asset": asset,
-        "time": datetime.now().strftime("%H:%M:%S"),
+        "time": _ist_now().strftime("%H:%M:%S"),
         "signal": sc.get("signal"),
         "option": call.get("option"),
         "strike": call.get("strike"),
@@ -659,7 +671,7 @@ def _scalp_summary():
 def _scalp_refresh_statuses():
     """Check ACTIVE calls: TARGET_HIT / STOP_HIT / EXPIRED. Returns events to push."""
     events = []
-    now_hm = datetime.now().strftime("%H:%M")
+    now_hm = _ist_now().strftime("%H:%M")
     for c in _scalp_calls:
         if c.get("status") != "ACTIVE":
             continue
@@ -710,7 +722,7 @@ def _scalp_tick(asset):
         if new_call:
             watch.update({
                 "signal": sc_sig, "option": call.get("option"), "entry": call.get("entry"),
-                "ts": datetime.now(), "highest": call.get("entry"),
+                "ts": _ist_now(), "highest": call.get("entry"),
                 "breakeven": False, "trail": False})
             _scalp_append_call(asset, sc, call)
             d_emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
@@ -740,7 +752,7 @@ def _scalp_tick(asset):
                     watch.update({"signal": None, "option": None})
         # Expiry check: call older than its 10-min freshness
         if watch["ts"] and call.get("expires_at"):
-            now_hm = datetime.now().strftime("%H:%M")
+            now_hm = _ist_now().strftime("%H:%M")
             if now_hm > call.get("expires_at") and watch["signal"]:
                 _add_alert("info", "⏳ {} Scalp call expired — no entry taken".format(tag),
                     "{} expired at {} (10-min freshness). Next call when setup re-fires.".format(
@@ -1030,7 +1042,7 @@ def _save_alerts():
 
 def _add_alert(level, title, body):
     alert = {
-        "time": datetime.now().strftime("%H:%M:%S"),
+        "time": _ist_now().strftime("%H:%M:%S"),
         "level": level,  # info, warning, critical
         "title": title,
         "body": body,

@@ -59,13 +59,14 @@ def _load_tuning():
         "adx_min": float(os.environ.get("SCALP_ADX_MIN", "25")),
         "vix_min": float(os.environ.get("SCALP_VIX_MIN", "12")),
         "vix_max": float(os.environ.get("SCALP_VIX_MAX", "18")),
-        "theta_max": float(os.environ.get("SCALP_THETA_MAX", "0.02")),
+        "theta_max": float(os.environ.get("SCALP_THETA_MAX", "0.5")),  # % of premium per 10-min hold
         "window_open": False,  # override: ignore lunch-chop window block
+        "regime_off": False,    # override: allow counter-trend scalps (chatty mode)
     }
     for k, v in t.items():
         if k not in defaults:
             continue
-        if k == "window_open":
+        if k in ("window_open", "regime_off"):
             defaults[k] = bool(v)
         else:
             defaults[k] = float(v)
@@ -160,7 +161,7 @@ def build_call(asset, spot, bias, expiry):
             "target_pts": round(spot * tp, 0), "stop_pts": round(spot * tp, 0),
         }
     try:
-        ch = chain_table.get_chain("banknifty" if asset == "bnf" else "nifty")
+        ch = chain_table.get_chain(asset="banknifty" if asset == "bnf" else "nifty")
         rows = ch.get("rows") or []
         if not rows:
             return None
@@ -194,13 +195,18 @@ def build_call(asset, spot, bias, expiry):
         if best["spread_pct"] > 3.0:
             return {"blocked": True, "block_reason":
                     "spread {:.1f}% of premium — target +10% can't beat it".format(best["spread_pct"])}
-        # ── Theta guard: block when decay is a material % of premium per day ──
+        # ── Theta guard: block only pathological decay. Metric = % of premium
+        #    lost in a 10-min hold (the scalp horizon): abs(theta)/premium * 10/1440.
+        #    Default 0.5 (%/10min) — normal options are 0.05-0.4%; only near-expiry
+        #    monsters exceed it. (Per-day % was misleading: deep-ITM options have
+        #    high theta/premium but negligible 10-min decay.)
         tun_bc = _load_tuning()
         theta_max = tun_bc["theta_max"]
-        if best["theta"] is not None and abs(best["theta"]) / best["ltp"] > theta_max:
+        theta_10 = abs(best["theta"]) / best["ltp"] * (10.0 / 1440.0) * 100.0 if best["theta"] else 0.0
+        if best["theta"] is not None and theta_10 > theta_max:
             return {"blocked": True, "block_reason":
-                    "theta {:.2f} = {:.1f}%/day of premium — decay too fast to scalp".format(
-                        best["theta"], abs(best["theta"]) / best["ltp"] * 100)}
+                    "theta {:.2f} = {:.2f}%/10min of premium — pathological decay".format(
+                        best["theta"], theta_10)}
         prem = best["ltp"]
         # ── Spread-aware target/stop: you BUY at ask, SELL at bid. To net ±10%
         #    (exit at bid), the tracked mid premium must move ±10% PLUS half the
@@ -345,10 +351,10 @@ def main(asset="nifty"):
     ema200 = float(closes.ewm(span=200, adjust=False).mean().iloc[-1])
     out["ema200"] = round(ema200, 2)
     regime_block = None
-    if bias == "LONG" and spot < ema200:
+    if bias == "LONG" and spot < ema200 and not tun.get("regime_off"):
         regime_block = "counter-trend LONG blocked (spot below 200 EMA {:.0f})".format(ema200)
         bias = "FLAT"
-    elif bias == "SHORT" and spot > ema200:
+    elif bias == "SHORT" and spot > ema200 and not tun.get("regime_off"):
         regime_block = "counter-trend SHORT blocked (spot above 200 EMA {:.0f})".format(ema200)
         bias = "FLAT"
 

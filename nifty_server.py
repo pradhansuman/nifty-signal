@@ -576,7 +576,7 @@ def _chain_premium(asset, strike, option_type):
             return None
     try:
         from chain_table import get_chain
-        ch = get_chain("banknifty" if asset == "bnf" else "nifty")
+        ch = get_chain(asset="banknifty" if asset == "bnf" else "nifty")
         for r in ch.get("rows") or []:
             if abs((r.get("strike") or 0) - strike) < 0.01:
                 return r.get("ce_ltp") if option_type == "CE" else r.get("pe_ltp")

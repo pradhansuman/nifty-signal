@@ -50,7 +50,7 @@ class ScalperScoringTest(unittest.TestCase):
         # isolate from the runtime tuning file — tests control gates explicitly
         self.tun = mock.patch.object(scalper, "_load_tuning", return_value={
             "score_min": 3.0, "trend_min": 0.8, "adx_min": 25.0,
-            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.02})
+            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.5})
         self.tun.start()
         self.addCleanup(self.tun.stop)
         self.bars = mock.patch.object(scalper, "get_bars")
@@ -87,7 +87,7 @@ class ScalperScoringTest(unittest.TestCase):
         self.tun.stop()
         t = mock.patch.object(scalper, "_load_tuning", return_value={
             "score_min": 3.0, "trend_min": 99.0, "adx_min": 25.0,
-            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.02})
+            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.5})
         t.start()
         self.addCleanup(t.stop)
         out = scalper.main()
@@ -100,7 +100,7 @@ class ScalperScoringTest(unittest.TestCase):
         self.tun.stop()
         t = mock.patch.object(scalper, "_load_tuning", return_value={
             "score_min": 2.0, "trend_min": 0.4, "adx_min": 18.0,
-            "vix_min": 10.0, "vix_max": 18.0, "theta_max": 0.03})
+            "vix_min": 10.0, "vix_max": 18.0, "theta_max": 0.5})
         t.start()
         self.addCleanup(t.stop)
         out = scalper.main()
@@ -156,7 +156,7 @@ class ScalperBuildCallTest(unittest.TestCase):
         self.addCleanup(self.chain.stop)
         self.tun = mock.patch.object(scalper, "_load_tuning", return_value={
             "score_min": 3.0, "trend_min": 0.8, "adx_min": 25.0,
-            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.02})
+            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.5})
         self.tun.start()
         self.addCleanup(self.tun.stop)
 
@@ -169,13 +169,22 @@ class ScalperBuildCallTest(unittest.TestCase):
         self.assertTrue(call.get("blocked"))
         self.assertIn("spread", call.get("block_reason", ""))
 
-    def test_theta_guard_blocks_fast_decay(self):
-        # theta -5 on 87.5 premium = 5.7%/day > 2% → blocked
-        rows = [chain_row(24350, 87.5, bid=86.5, ask=88.5, delta=0.5, theta=-5.0)]
+    def test_theta_guard_blocks_pathological_decay(self):
+        # theta -300 on 100 premium = 2.08%/10min > 0.5% gate → blocked
+        rows = [chain_row(24350, 100.0, bid=99.0, ask=101.0, delta=0.5, theta=-300.0)]
         scalper.chain_table.get_chain.return_value = mock_chain(rows)
         call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertTrue(call.get("blocked"))
         self.assertIn("theta", call.get("block_reason", ""))
+
+    def test_theta_normal_decay_passes(self):
+        # deep-ITM style: theta -10 on 205 premium = 0.34%/10min → passes (was
+        # wrongly blocked under the old per-day metric)
+        rows = [chain_row(24200, 205.0, bid=204.0, ask=206.0, delta=0.75, theta=-10.0)]
+        scalper.chain_table.get_chain.return_value = mock_chain(rows)
+        call = scalper.build_call("nifty", 24343, "LONG", "2026-08-18")
+        self.assertFalse(call.get("blocked"))
+        self.assertEqual(call["strike"], 24200)
 
     def test_spread_aware_target_stop(self):
         # spread 2.0 (86.5/88.5), half = 1.0, ltp 87.5

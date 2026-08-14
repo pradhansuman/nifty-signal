@@ -4,11 +4,13 @@
   "max_lots_per_day": 10,
   "daily_loss_limit": 10000,
   "enabled_strategies": {
-    "ema_bounce": false,
-    "contrarian": false,
-    "orb": false,
-    "vwap": false,
-    "btst_exit": false
+    "ema_bounce": true,
+    "contrarian": true,
+    "orb": true,
+    "vwap": true,
+    "btst_exit": true,
+    "oi_buildup": true,
+    "gap_go": true
   },
   "lot_size": 65
 }

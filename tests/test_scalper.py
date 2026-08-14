@@ -53,6 +53,13 @@ class ScalperScoringTest(unittest.TestCase):
             "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.5})
         self.tun.start()
         self.addCleanup(self.tun.stop)
+        # strip Nifty's per-asset gate overrides so the _load_tuning mock
+        # (and per-test re-patches) control the gates
+        nifty = {k: v for k, v in scalper.ASSETS["nifty"].items()
+                 if k not in ("score_min", "trend_min", "adx_min", "hold_min")}
+        self.assets = mock.patch.dict(scalper.ASSETS, {"nifty": nifty})
+        self.assets.start()
+        self.addCleanup(self.assets.stop)
         self.bars = mock.patch.object(scalper, "get_bars")
         self.bars.start()
         self.addCleanup(self.bars.stop)
@@ -448,5 +455,16 @@ class PerAssetGateOverrideTest(unittest.TestCase):
         self.assertGreater(scalper.ASSETS["btc"]["adx_min"], 20)
 
     def test_nifty_uses_global_defaults(self):
-        self.assertIsNone(scalper.ASSETS["nifty"].get("trend_min"))
-        self.assertIsNone(scalper.ASSETS["nifty"].get("adx_min"))
+        # All assets now carry their own tuned gates (no bare global fallback)
+        self.assertEqual(scalper.ASSETS["nifty"].get("trend_min"), 1.0)
+        self.assertEqual(scalper.ASSETS["nifty"].get("adx_min"), 30)
+
+    def test_bnf_runs_15m_with_tuned_gates(self):
+        self.assertEqual(scalper.ASSETS["bnf"].get("interval"), "15m")
+        self.assertEqual(scalper.ASSETS["bnf"].get("trend_min"), 0.5)
+        self.assertEqual(scalper.ASSETS["bnf"].get("adx_min"), 30)
+
+    def test_sensex_tuned_gates(self):
+        self.assertEqual(scalper.ASSETS["sensex"].get("trend_min"), 1.0)
+        self.assertEqual(scalper.ASSETS["sensex"].get("adx_min"), 30)
+        self.assertEqual(scalper.ASSETS["sensex"].get("hold_min"), 30)

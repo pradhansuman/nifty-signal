@@ -26,9 +26,16 @@ import delta_exchange  # noqa: E402  (Delta Exchange BTC options chain)
 
 # ── Multi-asset config ──
 ASSETS = {
-    "nifty":  {"symbol": "^NSEI",    "lot": 65, "options": True,  "vix": True,  "spot_tp": None,   "label": "NIFTY"},
-    "bnf":    {"symbol": "^NSEBANK", "lot": 15, "options": True,  "vix": True,  "spot_tp": None,   "label": "BANK NIFTY"},
-    "sensex": {"symbol": "^BSESN",   "lot": 20, "options": False, "vix": True,  "spot_tp": 0.0015, "label": "SENSEX"},
+    "nifty":  {"symbol": "^NSEI",    "lot": 65, "options": True,  "vix": True,  "spot_tp": None,   "label": "NIFTY",
+               # Backtest 2026-08-14 (5m): trend 1.0% + ADX 30 + 30m hold → PF 1.47, 66% WR
+               "trend_min": 1.0, "adx_min": 30, "hold_min": 30},
+    "bnf":    {"symbol": "^NSEBANK", "lot": 15, "options": True,  "vix": True,  "spot_tp": None,   "label": "BANK NIFTY",
+               # Backtest 2026-08-14 (15m): trend 0.5% + ADX 30 + 30m hold → PF 2.21, 56% WR
+               "interval": "15m", "period": "60d",
+               "trend_min": 0.5, "adx_min": 30, "hold_min": 30},
+    "sensex": {"symbol": "^BSESN",   "lot": 20, "options": False, "vix": True,  "spot_tp": 0.0015, "label": "SENSEX",
+               # Backtest 2026-08-14 (5m): trend 1.0% + ADX 30 + 30m hold → PF 1.60, 57% WR
+               "trend_min": 1.0, "adx_min": 30, "hold_min": 30},
     "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": True,  "vix": False, "spot_tp": 0.005,  "label": "BITCOIN",
                # BTC runs on the 1h timeframe (5m is chop: PF ceiling 1.08).
                # Backtest 2026-08-14 (90d 1h): trend 1.5% + ADX 25 + 6h hold →

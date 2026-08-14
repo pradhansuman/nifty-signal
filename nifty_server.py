@@ -832,7 +832,8 @@ def _scalp_tick(asset):
                         sc.get("adx") or 0, sc.get("rsi") or 0,
                         "{:+}".format(sc.get("momentum") or 0), fund_txt,
                         line, call.get("expires_at")))
-            hold_lbl = "6h hold" if asset == "btc" else "10-min freshness"
+            hm = int((_sc.ASSETS.get(asset, {}) or {}).get("hold_min", 10))
+            hold_lbl = "{}h hold".format(hm // 60) if hm >= 60 else "{}m hold".format(hm)
             _add_alert("critical", "{} {} SCALP: {}".format(d_emoji, tag, call.get("option")),
                 "{}\n⏳ expires {} ({}) | Lot ₹{:,} | Spread {}%".format(
                     line, call.get("expires_at"), hold_lbl, call.get("lot_cost") or 0,

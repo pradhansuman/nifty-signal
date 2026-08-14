@@ -842,34 +842,7 @@
     <div style="font-size:12px;line-height:1.7" id="bnfExpiryRead">Loading...</div>
   </div>
 
-  <!-- BNF Option Chain Table (collapsible — tap to expand) -->
-  <details id="bnfChainCollapse" style="border:1px solid var(--border);border-radius:14px;padding:10px 12px;background:var(--card)">
-    <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--text-dim);user-select:none"><span data-i18n="bnf-chain">🏦 Bank Nifty Option Chain</span> <span style="font-size:11px;color:var(--blue)">(tap to expand)</span> <span style="font-size:10px;color:var(--text-dim)" id="bnfChainMeta">--</span></summary>
-    <div style="text-align:center;margin:2px 0 8px">
-      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">BANK NIFTY SPOT</div>
-      <div id="bnfChainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
-    </div>
-    <div style="font-size:11px;margin-bottom:6px" id="bnfChainWalls"></div>
-    <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead>
-          <tr style="color:var(--text-dim);text-align:right">
-            <th style="text-align:left;padding:3px 4px">Strike</th>
-            <th style="padding:3px 4px">CE ₹</th>
-            <th style="padding:3px 4px">CE OI</th>
-            <th style="padding:3px 4px">CE Vol</th>
-            <th style="padding:3px 4px">IV</th>
-            <th style="padding:3px 4px">PE ₹</th>
-            <th style="padding:3px 4px">PE OI</th>
-            <th style="padding:3px 4px">PE Vol</th>
-          </tr>
-        </thead>
-        <tbody id="bnfChainRows">
-          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </details>
+
 
   <!-- BNF IV Rank -->
   <div class="card" id="bnfIvRankCard">
@@ -1157,28 +1130,6 @@
     <div style="font-size:12px;margin-top:6px" id="regimeTransition"></div>
   </div>
 <!-- Position Sizing -->
-  <div class="card" id="sizingCard">
-    <div class="card-header"><span class="label">💰 Position Sizing</span></div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Capital (₹)</label>
-        <input type="number" id="capitalInput" value="100000" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
-      </div>
-      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Risk %</label>
-        <input type="number" id="riskInput" value="2" step="0.5" min="0.5" max="10" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
-      </div>
-    </div>
-    <button onclick="calcPositionSize()" style="width:100%;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;margin-bottom:8px">Calculate</button>
-    <div id="sizingResult" style="font-size:13px;line-height:1.6;display:none"></div>
-  </div>
-<!-- Trailing Stop -->
-  <div class="card" id="trailCard">
-    <div class="card-header"><span class="label">📉 Stop Loss</span></div>
-    <div style="display:flex;gap:12px">
-      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--red)" id="fixedStop">--</div><div style="font-size:11px;color:var(--text-dim)">Fixed Stop</div></div>
-      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--yellow)" id="trailStop">--</div><div style="font-size:11px;color:var(--text-dim)">Trail Stop (0.5%)</div></div>
-      <div style="flex:1"><div style="font-size:18px;font-weight:700" id="stopGap">--</div><div style="font-size:11px;color:var(--text-dim)">Gap</div></div>
-    </div>
-  </div>
 <!-- Levels (BUY only) -->
   <div class="card hidden" id="levelsCard">
     <div class="card-header"><span class="label">Entry / Exit Levels</span></div>
@@ -1188,6 +1139,34 @@
     </div>
   </div>
   </div>
+  <!-- BNF Option Chain (collapsible — tap to expand) -->
+  <details id="bnfChainCollapse" style="border:1px solid var(--border);border-radius:14px;padding:10px 12px;background:var(--card)">
+    <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--text-dim);user-select:none"><span data-i18n="bnf-chain">🏦 Bank Nifty Option Chain</span> <span style="font-size:11px;color:var(--blue)">(tap to expand)</span> <span style="font-size:10px;color:var(--text-dim)" id="bnfChainMeta">--</span></summary>
+    <div style="text-align:center;margin:2px 0 8px">
+      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">BANK NIFTY SPOT</div>
+      <div id="bnfChainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
+    </div>
+    <div style="font-size:11px;margin-bottom:6px" id="bnfChainWalls"></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:var(--text-dim);text-align:right">
+            <th style="text-align:left;padding:3px 4px">Strike</th>
+            <th style="padding:3px 4px">CE ₹</th>
+            <th style="padding:3px 4px">CE OI</th>
+            <th style="padding:3px 4px">CE Vol</th>
+            <th style="padding:3px 4px">IV</th>
+            <th style="padding:3px 4px">PE ₹</th>
+            <th style="padding:3px 4px">PE OI</th>
+            <th style="padding:3px 4px">PE Vol</th>
+          </tr>
+        </thead>
+        <tbody id="bnfChainRows">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </details>
 </details>
 <div class="footer" id="footerText">Refreshing... <span id="versionBadge" style="opacity:.55;font-size:10px;margin-left:6px"></span></div>
 
@@ -1199,6 +1178,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260814e"></script>
+<script src="/dash.js?v=20260814f"></script>
 </body>
 </html>

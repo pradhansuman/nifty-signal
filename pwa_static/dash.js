@@ -347,18 +347,23 @@ function render(s) {
     optionsCard.classList.add('hidden');
   }
 
-  // ── Trailing Stop ──
-  const fixedStop = s.stop_level;
-  const trailStopVal = s.trail_stop;
-  document.getElementById('fixedStop').textContent = fixedStop ? fixedStop.toLocaleString('en-IN') : '--';
-  document.getElementById('trailStop').textContent = trailStopVal ? trailStopVal.toLocaleString('en-IN') : '--';
-  if (trailStopVal && fixedStop) {
-    const gap = trailStopVal - fixedStop;
-    const gapEl = document.getElementById('stopGap');
-    gapEl.textContent = (gap > 0 ? '+' : '') + gap.toFixed(0) + ' pts';
-    gapEl.style.color = gap > 0 ? 'var(--green)' : 'var(--red)';
-    const trailEl = document.getElementById('trailStop');
-    trailEl.style.color = gap > 50 ? 'var(--green)' : 'var(--yellow)';
+  // ── Trailing Stop (card removed from dashboard — null-safe) ──
+  const fixedStopEl = document.getElementById('fixedStop');
+  if (fixedStopEl) {
+    const fixedStop = s.stop_level;
+    const trailStopVal = s.trail_stop;
+    fixedStopEl.textContent = fixedStop ? fixedStop.toLocaleString('en-IN') : '--';
+    const trailStopEl = document.getElementById('trailStop');
+    if (trailStopEl) trailStopEl.textContent = trailStopVal ? trailStopVal.toLocaleString('en-IN') : '--';
+    if (trailStopVal && fixedStop) {
+      const gap = trailStopVal - fixedStop;
+      const gapEl = document.getElementById('stopGap');
+      if (gapEl) {
+        gapEl.textContent = (gap > 0 ? '+' : '') + gap.toFixed(0) + ' pts';
+        gapEl.style.color = gap > 0 ? 'var(--green)' : 'var(--red)';
+        trailStopEl.style.color = gap > 50 ? 'var(--green)' : 'var(--yellow)';
+      }
+    }
   }
   } catch(e) { console.error('Render error:', e); }
 }

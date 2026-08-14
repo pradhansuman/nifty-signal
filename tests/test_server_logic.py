@@ -372,3 +372,40 @@ class OdiaTranslateTest(unittest.TestCase):
                 os.environ.pop("TG_LANG", None)
             else:
                 os.environ["TG_LANG"] = old
+
+
+class ScalpCompactLineTest(unittest.TestCase):
+    """Entry alerts use the compact format the user asked for:
+    'SELL BTC at ~$62,828 | Stop $63,159 | Target $62,277 | Risk $331/BTC | R:R 1.66'"""
+
+    def test_btc_short_line(self):
+        call = {"entry": 62828.0, "stop": 63159.0, "target": 62277.0}
+        line = ns._scalp_compact_line("btc", "SCALP_SHORT", call)
+        self.assertEqual(line, "SELL BTC at ~$62,828 | Stop $63,159 | Target $62,277 | Risk $331/BTC | R:R 1.66")
+
+    def test_btc_long_line(self):
+        call = {"entry": 62828.0, "stop": 62514.0, "target": 63142.0}
+        line = ns._scalp_compact_line("btc", "SCALP_LONG", call)
+        self.assertEqual(line, "BUY BTC at ~$62,828 | Stop $62,514 | Target $63,142 | Risk $314/BTC | R:R 1.00")
+
+    def test_nifty_option_line_rupees_decimals(self):
+        call = {"entry": 73.1, "stop": 65.8, "target": 80.4}
+        line = ns._scalp_compact_line("nifty", "SCALP_LONG", call)
+        self.assertEqual(line, "BUY NIFTY at ~₹73.1 | Stop ₹65.8 | Target ₹80.4 | Risk ₹7.3/NIFTY | R:R 1.00")
+
+    def test_rr_matches_user_example(self):
+        # entry 62828 / stop 63159 / target 62277 → risk 331, rr 551/331 ≈ 1.66
+        call = {"entry": 62828.0, "stop": 63159.0, "target": 62277.0}
+        line = ns._scalp_compact_line("btc", "SCALP_SHORT", call)
+        self.assertIn("R:R 1.66", line)
+
+    def test_odia_translates_compact_line(self):
+        from telegram_alert import odia_translate
+        line = ns._scalp_compact_line("btc", "SCALP_SHORT",
+                                      {"entry": 62828.0, "stop": 63159.0, "target": 62277.0})
+        out = odia_translate(line)
+        self.assertIn("ବିକ", out)          # SELL
+        self.assertIn("ଷ୍ଟପ୍ $63,159", out)  # Stop $
+        self.assertIn("ଟାର୍ଗେଟ୍ $62,277", out)
+        self.assertIn("ରିସ୍କ୍ $331/BTC", out)
+        self.assertIn("R:R 1.66", out)     # untouched

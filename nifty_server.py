@@ -711,6 +711,28 @@ SCALP_EMOJI = {"nifty": "📈", "bnf": "🏦", "sensex": "🇮🇳", "btc": "₿
 # Everything else (WAIT/expired/trail/+5%/+7%/target/stop chatter) is silent
 # unless SCALP_ALERTS_MODE=all is set explicitly.
 _SCALP_VERBOSE_ALERTS = os.environ.get("SCALP_ALERTS_MODE", "signals") == "all"
+
+
+def _fmt_price(v):
+    """Smart price formatting: 1 decimal below 100, commas above."""
+    if v is None:
+        return "?"
+    return "{:,.1f}".format(v) if abs(v) < 100 else "{:,.0f}".format(v)
+
+
+def _scalp_compact_line(asset, sc_sig, call):
+    """Compact entry alert line (user format, 2026-08-14):
+    'SELL BTC at ~$62,828 | Stop $63,159 | Target $62,277 | Risk $331/BTC | R:R 1.66'"""
+    cur = "$" if asset == "btc" else "₹"
+    side = "BUY" if sc_sig == "SCALP_LONG" else "SELL"
+    name = "BTC" if asset == "btc" else asset.upper()
+    e, s, t = call.get("entry"), call.get("stop"), call.get("target")
+    risk = abs(s - e) if (e and s) else 0.0
+    rr = abs(t - e) / risk if (risk and t is not None) else 0.0
+    unit = "BTC" if asset == "btc" else asset.upper()
+    return "{} {} at ~{}{} | Stop {}{} | Target {}{} | Risk {}{}/{} | R:R {:.2f}".format(
+        side, name, cur, _fmt_price(e), cur, _fmt_price(s), cur, _fmt_price(t),
+        cur, _fmt_price(risk), unit, rr)
 _FIVE_MIN_MARKS = ("00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55")
 
 
@@ -739,22 +761,21 @@ def _scalp_tick(asset):
                 "breakeven": False, "trail": False})
             _scalp_append_call(asset, sc, call)
             d_emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
+            line = _scalp_compact_line(asset, sc_sig, call)
             # 🔥 PERFECT SETUP — every gate aligned: dedicated alert first
             if sc.get("perfect"):
                 fund = call.get("funding")
                 fund_txt = " | funding {:.4f}%".format(fund * 100) if fund is not None else ""
                 _add_alert("critical", "🔥 PERFECT SETUP — {} {} {}".format(d_emoji, tag, call.get("option")),
-                    "ALL GATES ALIGNED — score {:+d} | trend {:.2f}% | ADX {:.0f} | RSI {:.0f} | momentum {}{}\nEntry {} | Target {} | Stop {} | ⏳ expires {}".format(
+                    "ALL GATES ALIGNED — score {:+d} | trend {:.2f}% | ADX {:.0f} | RSI {:.0f} | momentum {}{}\n{}\n⏳ expires {}".format(
                         sc.get("score") or 0, sc.get("trend_dist") or 0,
                         sc.get("adx") or 0, sc.get("rsi") or 0,
                         "{:+}".format(sc.get("momentum") or 0), fund_txt,
-                        call.get("entry"), call.get("target"), call.get("stop"),
-                        call.get("expires_at")))
+                        line, call.get("expires_at")))
             _add_alert("critical", "{} {} SCALP: {}".format(d_emoji, tag, call.get("option")),
-                "Entry ₹{} | Target ₹{} (+10%) | Stop ₹{} (-10%) | Expiry {} | Lot ₹{:,} | Spread {}% | ⏳ expires {}\n{}".format(
-                    call.get("entry"), call.get("target"), call.get("stop"),
-                    call.get("expiry"), call.get("lot_cost") or 0,
-                    call.get("spread_pct"), call.get("expires_at"), sc.get("reason", "")))
+                "{}\n⏳ expires {} (10-min freshness) | Lot ₹{:,} | Spread {}%".format(
+                    line, call.get("expires_at"), call.get("lot_cost") or 0,
+                    call.get("spread_pct") or 0))
         else:
             # Same call still active → trailing watch
             prem = call.get("premium")

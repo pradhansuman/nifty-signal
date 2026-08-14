@@ -394,3 +394,42 @@ class DeltaBtcFuturesCallTest(unittest.TestCase):
         self.assertTrue(call["futures"])
         self.assertEqual(call["feed"], "yf-spot")
         self.assertEqual(call["option"], "LONG BTC PERP")
+
+
+class FundingGateTest(unittest.TestCase):
+    """BTC funding-rate gate: skip the side that pays carry."""
+
+    def test_long_blocked_when_funding_positive(self):
+        bias, block = scalper._funding_gate("btc", "LONG", 0.001, 0.0005)
+        self.assertEqual(bias, "FLAT")
+        self.assertIn("longs pay carry", block)
+
+    def test_short_blocked_when_funding_negative(self):
+        bias, block = scalper._funding_gate("btc", "SHORT", -0.001, 0.0005)
+        self.assertEqual(bias, "FLAT")
+        self.assertIn("shorts pay carry", block)
+
+    def test_long_allowed_when_funding_negative(self):
+        bias, block = scalper._funding_gate("btc", "LONG", -0.001, 0.0005)
+        self.assertEqual(bias, "LONG")
+        self.assertIsNone(block)
+
+    def test_short_allowed_when_funding_positive(self):
+        bias, block = scalper._funding_gate("btc", "SHORT", 0.001, 0.0005)
+        self.assertEqual(bias, "SHORT")
+        self.assertIsNone(block)
+
+    def test_neutral_funding_no_block(self):
+        bias, block = scalper._funding_gate("btc", "LONG", 0.0001, 0.0005)
+        self.assertEqual(bias, "LONG")
+        self.assertIsNone(block)
+
+    def test_non_btc_ignored(self):
+        bias, block = scalper._funding_gate("nifty", "LONG", 0.001, 0.0005)
+        self.assertEqual(bias, "LONG")
+        self.assertIsNone(block)
+
+    def test_funding_gate_in_tuning_defaults(self):
+        tun = scalper._load_tuning()
+        self.assertIn("funding_gate", tun)
+        self.assertGreater(tun["funding_gate"], 0)

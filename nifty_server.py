@@ -32,6 +32,22 @@ from gap_go import compute_gap_signal
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
 
+def _git_hash():
+    """Short git commit hash (cached) — surfaced on both hosts so the user can
+    verify Mac ⇄ Render parity at a glance instead of re-auditing git push state."""
+    try:
+        import subprocess
+        out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=5,
+                             cwd=os.path.dirname(os.path.abspath(__file__)))
+        return out.stdout.strip()[:8] if out.returncode == 0 else "unknown"
+    except Exception:
+        return "unknown"
+
+
+GIT_HASH = _git_hash()
+
+
 def _ist_now():
     """Current time in IST — Render containers run UTC, so naive datetime.now()
     would log/display times 5:30h behind. All user-facing times use IST."""
@@ -535,7 +551,8 @@ def api_summary():
 
 @app.route("/api/health")
 def api_health():
-    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat()})
+    return jsonify({"status": "ok", "timestamp": datetime.now().isoformat(),
+                    "version": GIT_HASH, "host": os.environ.get("RENDER", "")})
 
 
 # ── ORB Scalp ──

@@ -66,6 +66,7 @@ def _load_tuning():
         "vix_min": float(os.environ.get("SCALP_VIX_MIN", "12")),
         "vix_max": float(os.environ.get("SCALP_VIX_MAX", "18")),
         "theta_max": float(os.environ.get("SCALP_THETA_MAX", "0.5")),  # % of premium per 10-min hold
+        "funding_gate": float(os.environ.get("SCALP_FUNDING_GATE", "0.0005")),  # BTC: block the crowded carry side (0.05%/8h)
         "window_open": False,  # override: ignore lunch-chop window block
         "regime_off": False,    # override: allow counter-trend scalps (chatty mode)
     }
@@ -278,6 +279,18 @@ def build_call(asset, spot, bias, expiry):
     return None
 
 
+def _funding_gate(asset, bias, funding, gate=0.0005):
+    """BTC funding-rate gate: block the side that pays carry. Returns
+    (bias, block_text). Fail-open (no block) for non-BTC or missing funding."""
+    if asset != "btc" or funding is None or bias == "FLAT":
+        return bias, None
+    if bias == "LONG" and funding > gate:
+        return "FLAT", "funding +{:.3f}% — longs pay carry, skip LONG".format(funding * 100)
+    if bias == "SHORT" and funding < -gate:
+        return "FLAT", "funding {:.3f}% — shorts pay carry, skip SHORT".format(funding * 100)
+    return bias, None
+
+
 def main(asset="nifty"):
     out = {"signal": "WAIT", "bias": "FLAT", "score": 0, "spot": None, "timestamp": _now(), "asset": asset}
     df = get_bars(asset)
@@ -448,6 +461,12 @@ def main(asset="nifty"):
             vix_val, vix_min, vix_max)
         bias = "FLAT"
 
+    # ── BTC funding-rate gate: don't pay carry on the crowded side ──
+    # Positive funding → longs pay shorts → SHORT earns, LONG costs. Skip the
+    # paying side when funding is meaningfully one-sided (fail-open when None).
+    funding_block = None
+    bias, funding_block = _funding_gate(asset, bias, out.get("funding"), tun.get("funding_gate", 0.0005))
+
     # ── Time-of-day window: avoid lunch chop (BTC = 24/7) ──
     now_dt = datetime.now(IST)
     hm = now_dt.hour * 60 + now_dt.minute
@@ -487,7 +506,7 @@ def main(asset="nifty"):
 
     if bias == "FLAT":
         out["signal"] = "WAIT"
-        block_txt = regime_block or trend_block or adx_block or vix_block or window_block
+        block_txt = regime_block or trend_block or adx_block or vix_block or funding_block or window_block
         out["reason"] = "No scalp edge — score {:+d} (need ±{:.0f}). {}{}".format(
             score, score_min, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
         return out

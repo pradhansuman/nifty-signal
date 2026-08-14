@@ -1810,6 +1810,18 @@ setInterval(fetchScalper, 30000);
 setInterval(() => { fetchAssetScalper('bnf', 'bnf'); fetchAssetScalper('sensex', 'sx'); fetchAssetScalper('btc', 'btc'); }, 30000);
 setInterval(refreshStrategies, 120000);
 setInterval(refreshBtcStrategies, 60000);
+
+// ── Version badge: show git commit hash (Mac ⇄ Render parity at a glance) ──
+async function fetchVersion() {
+  try {
+    const r = await fetch('/api/health?_=' + Date.now());
+    const d = await r.json();
+    const el = document.getElementById('versionBadge');
+    if (el) el.textContent = 'v' + (d.version || '?') + (d.host ? ' · cloud' : '');
+  } catch (e) {}
+}
+fetchVersion();
+setInterval(fetchVersion, 120000);
 setInterval(refreshBnfStrategies, 60000);
 setInterval(refreshSensexStrategies, 60000);
 setInterval(fetchIvRank, 300000);

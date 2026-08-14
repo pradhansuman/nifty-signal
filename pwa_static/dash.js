@@ -1312,6 +1312,9 @@ async function fetchScalper() {
       add('RSI (14)', d.rsi != null ? d.rsi.toFixed(0) : '--', d.rsi != null ? (d.rsi > 70 ? 'overbought' : d.rsi < 30 ? 'oversold' : 'neutral') : '', 'wait');
       add('Stoch', d.stoch_k != null ? 'K ' + d.stoch_k.toFixed(0) + ' / D ' + (d.stoch_d != null ? d.stoch_d.toFixed(0) : '--') : '--', d.stoch_k != null ? (d.stoch_k > 80 ? 'overbought' : d.stoch_k < 20 ? 'oversold' : 'neutral') : '', 'wait');
       add('Momentum (3 bar)', d.momentum != null ? (d.momentum >= 0 ? '+' : '') + d.momentum.toFixed(1) : '--', d.momentum != null ? (Math.abs(d.momentum) > 5 ? 'strong move' : 'quiet') : '', d.momentum != null && Math.abs(d.momentum) > 5 ? 'wait' : 'wait');
+      const gate = d.trend_gate != null ? d.trend_gate : 0.8;
+      const strong = d.trend_dist != null && d.trend_dist >= gate;
+      add('Trend (200E)', d.trend_dist != null ? (strong ? 'STRONG' : 'WEAK') : '--', d.trend_dist != null ? '|spot−200E| ' + d.trend_dist.toFixed(2) + '% vs gate ' + gate + '%' : '', strong ? 'ok' : 'bad');
       if (d.orb_high != null) {
         const inOrb = d.spot >= d.orb_low && d.spot <= d.orb_high;
         add('Opening Range', inOrb ? 'INSIDE' : (d.spot > d.orb_high ? 'ABOVE' : 'BELOW'), 'ORB ' + Number(d.orb_high).toLocaleString('en-IN') + ' / ' + Number(d.orb_low).toLocaleString('en-IN'), inOrb ? 'wait' : (d.spot > d.orb_high ? 'ok' : 'bad'));

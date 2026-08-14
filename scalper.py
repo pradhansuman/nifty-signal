@@ -11,6 +11,7 @@ Output: JSON for GET /api/scalper (cached 30s server-side).
 """
 
 import json
+import os
 import sys
 from datetime import datetime
 
@@ -235,6 +236,19 @@ def main():
         regime_block = "counter-trend SHORT blocked (spot above 200 EMA {:.0f})".format(ema200)
         bias = "FLAT"
 
+    # ── Trend-strength gate: momentum edge exists ONLY on strong-trend days ──
+    # Backtest 2026-08-14 (58 sessions, 4295 bars): |spot-200E| >= 0.8% of spot →
+    # 134 trades, 60% WR, PF 1.53, +429 pts. Below 0.5% → PF ~0.93 (loser).
+    trend_min = float(os.environ.get("SCALP_TREND_MIN", "0.8"))
+    trend_dist = abs(spot - ema200) / ema200 * 100.0
+    out["trend_dist"] = round(trend_dist, 2)
+    out["trend_gate"] = trend_min
+    trend_block = None
+    if bias != "FLAT" and trend_dist < trend_min:
+        trend_block = "trend too weak (|spot-200E| {:.2f}% < {:.1f}% gate) — momentum has no edge in chop".format(
+            trend_dist, trend_min)
+        bias = "FLAT"
+
     # ── Time-of-day window: avoid lunch chop ──
     now_dt = datetime.now(IST)
     hm = now_dt.hour * 60 + now_dt.minute
@@ -260,7 +274,7 @@ def main():
 
     if bias == "FLAT":
         out["signal"] = "WAIT"
-        block_txt = regime_block or window_block
+        block_txt = regime_block or trend_block or window_block
         out["reason"] = "No scalp edge — score {:+d} (need ±3). {}{}".format(
             score, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
         return out

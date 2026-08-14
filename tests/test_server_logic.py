@@ -443,3 +443,34 @@ class ScalpOptionLineTest(unittest.TestCase):
         self.assertIn("24,300 CE @ ₹164.75", out)
         self.assertIn("🎯 ₹181.38", out)    # emoji target survives
         self.assertIn("🛑 ₹148.12", out)    # emoji stop survives
+
+
+class OdiaReasonTranslateTest(unittest.TestCase):
+    """Gate-reason phrases (the alert body text) now translate to Odia."""
+
+    def test_trend_reason_translated(self):
+        from telegram_alert import odia_translate
+        out = odia_translate("No scalp edge — score +3 (need ±3). trend too weak (|spot-200E| 0.9% < 1.0% gate) — momentum has no edge in chop")
+        self.assertIn("ଟ୍ରେଣ୍ଡ୍ ଦୁର୍ବଳ", out)
+        self.assertIn("ଚପ୍ ରେ ମୋମେଣ୍ଟମ୍ ର କୌଣସି ଧାର ନାହିଁ", out)
+        self.assertIn("ସ୍କୋର୍ +3", out)
+
+    def test_adx_and_vwap_reason(self):
+        from telegram_alert import odia_translate
+        out = odia_translate("ADX 13 < 25 — no sustained trend. below VWAP 24300; RSI 47 neutral")
+        self.assertIn("ସ୍ଥାୟୀ ଟ୍ରେଣ୍ଡ୍ ନାହିଁ", out)
+        self.assertIn("VWAP ତଳେ", out)
+        self.assertIn("ନିରପେକ୍ଷ", out)
+
+    def test_overbought_golden_cross(self):
+        from telegram_alert import odia_translate
+        out = odia_translate("fresh golden cross; RSI 97 overbought; above ORB high")
+        self.assertIn("ଗୋଲ୍ଡେନ୍ କ୍ରସ୍", out)
+        self.assertIn("ଓଭରବଟ୍", out)
+        self.assertIn("ORB ହାଇ ଉପରେ", out)
+
+    def test_funding_reason(self):
+        from telegram_alert import odia_translate
+        out = odia_translate("funding +0.080% — longs pay carry, skip LONG")
+        self.assertIn("କ୍ୟାରି ଦିଏ", out)
+        self.assertIn("ଛାଡ଼", out)

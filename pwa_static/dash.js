@@ -1329,7 +1329,7 @@ async function fetchScalper() {
     const scoreEl = document.getElementById('scalperScore');
     if (scoreEl) scoreEl.textContent = 'Score: ' + (d.score >= 0 ? '+' : '') + d.score + ' (need ±' + (d.score_min != null ? d.score_min : 3) + ') · ' + (d.bias || 'FLAT');
     if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
-      banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry;
+      banner.innerHTML = '<span class="live-badge live-long">🟢 LIVE</span>🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
       document.getElementById('scalperCall').textContent = 'Buy at ask ₹' + (d.call.buy_ask != null ? d.call.buy_ask : d.call.entry) + ' · Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--') + ' (target/stop net of spread)';
       document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
@@ -1337,7 +1337,7 @@ async function fetchScalper() {
       document.getElementById('scalperStop').textContent = '🛑 ₹' + d.call.stop;
       document.getElementById('scalperLevels').style.display = 'flex';
     } else if (d.signal === 'SCALP_SHORT' && d.call && !d.call.blocked) {
-      banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ₹' + d.call.entry;
+      banner.innerHTML = '<span class="live-badge live-short">🔴 LIVE</span>🔴 SHORT — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#280a0a'; banner.style.color = '#ff8080';
       document.getElementById('scalperCall').textContent = 'Buy at ask ₹' + (d.call.buy_ask != null ? d.call.buy_ask : d.call.entry) + ' · Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--') + ' (target/stop net of spread)';
       document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
@@ -1744,14 +1744,14 @@ async function fetchAssetScalper(asset, p) {
     if (upd) upd.textContent = d.timestamp || '';
     const levels = document.getElementById(p + 'ScalperLevels');
     if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
-      banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ' + cur + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
+      banner.innerHTML = '<span class="live-badge live-long">🟢 LIVE</span>🟢 LONG — ' + d.call.option + ' @ ' + cur + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
       banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
       document.getElementById(p + 'ScalperEntry').textContent = 'Entry ' + cur + d.call.entry;
       document.getElementById(p + 'ScalperTarget').textContent = '🎯 ' + cur + d.call.target;
       document.getElementById(p + 'ScalperStop').textContent = '🛑 ' + cur + d.call.stop;
       levels.style.display = 'flex';
     } else if (d.signal === 'SCALP_SHORT' && d.call && !d.call.blocked) {
-      banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ' + cur + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
+      banner.innerHTML = '<span class="live-badge live-short">🔴 LIVE</span>🔴 SHORT — ' + d.call.option + ' @ ' + cur + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
       banner.style.background = '#280a0a'; banner.style.color = '#ff8080';
       document.getElementById(p + 'ScalperEntry').textContent = 'Entry ' + cur + d.call.entry;
       document.getElementById(p + 'ScalperTarget').textContent = '🎯 ' + cur + d.call.target;

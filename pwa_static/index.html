@@ -146,6 +146,17 @@
   .level-pill.target { background: #00c85315; color: #00c853; border: 1px solid #00c85333; }
   .level-pill.stop { background: #ff174415; color: #ff1744; border: 1px solid #ff174433; }
 
+  /* Pulsing LIVE badge on active scalp-call banners */
+  .live-badge {
+    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.5px;
+    padding: 2px 7px; border-radius: 20px; margin-right: 5px; vertical-align: 1px;
+    color: #fff; white-space: nowrap;
+  }
+  .live-badge.live-long  { background: #00c853; animation: livePulseGreen 1.5s ease-in-out infinite; }
+  .live-badge.live-short { background: #ff1744; animation: livePulseRed 1.5s ease-in-out infinite; }
+  @keyframes livePulseRed   { 0%,100%{box-shadow:0 0 0 0 rgba(255,23,68,0.7)} 50%{box-shadow:0 0 0 8px rgba(255,23,68,0)} }
+  @keyframes livePulseGreen { 0%,100%{box-shadow:0 0 0 0 rgba(0,200,83,0.7)} 50%{box-shadow:0 0 0 8px rgba(0,200,83,0)} }
+
   .action-card {
     background: linear-gradient(135deg, var(--accent), #5b21b6);
     border-radius: var(--radius);

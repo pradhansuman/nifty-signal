@@ -244,7 +244,10 @@
     <h1>Nifty Signal</h1>
     <span class="time" id="clock">--:--</span>
   </div>
-  <div><span class="dot live"></span> LIVE</div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <button id="langToggle" onclick="toggleLang()" title="ଓଡ଼ିଆ ଭାଷା / English" style="padding:3px 10px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:11px;cursor:pointer">🌐 ଓଡ଼ିଆ</button>
+    <span class="dot live"></span> LIVE
+  </div>
 </div>
 
 <!-- Quick Nav (sticky section jump) -->
@@ -268,7 +271,7 @@
 
   <!-- Alerts (TOP — always visible) -->
   <div class="card" id="alertsCard" style="border-color:#ff174433">
-    <div class="card-header"><span class="label">🔔 Live Alerts</span><span style="font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px;display:none" id="alertBadge">0</span><span style="font-size:11px;color:var(--text-dim)" id="tunnelBadge"></span></div>
+    <div class="card-header"><span class="label" data-i18n="live-alerts">🔔 Live Alerts</span><span style="font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px;display:none" id="alertBadge">0</span><span style="font-size:11px;color:var(--text-dim)" id="tunnelBadge"></span></div>
     <div id="alertsList" style="max-height:280px;overflow-y:auto;font-size:12px;line-height:1.5">
       <div style="color:var(--text-dim);padding:12px;text-align:center">Waiting for market signals...</div>
     </div>
@@ -279,7 +282,7 @@
   <!-- Scalper (top priority) -->
   <div class="card" id="scalperCard" style="border-color:#ffab0055">
   <div class="card-header">
-    <span class="label">⚡ Active Scalp Call</span>
+    <span class="label" data-i18n="active-scalp">⚡ Active Scalp Call</span>
     <span class="value" id="scalperUpdated">--</span>
   </div>
   <div id="scalperBanner" style="font-size:16px;font-weight:800;padding:10px;border-radius:10px;text-align:center;background:#141b22">Loading...</div>
@@ -289,19 +292,19 @@
     <div class="level-pill target" id="scalperTarget">--</div>
     <div class="level-pill stop" id="scalperStop">--</div>
   </div>
-  <div class="card-header" style="margin-top:10px"><span class="label">📜 Today's Scalp Calls <span style="font-size:10px;color:var(--text-dim)">(kept alive till expiry)</span></span><span class="value" id="scalperCallsCount">--</span></div>
+  <div class="card-header" style="margin-top:10px"><span class="label" data-i18n="today-scalp">📜 Today's Scalp Calls <span style="font-size:10px;color:var(--text-dim)">(kept alive till expiry)</span></span><span class="value" id="scalperCallsCount">--</span></div>
   <div class="strat-grid" id="scalperHistory"><div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">Loading...</div></div>
-  <div class="card-header" style="margin-top:10px"><span class="label">💰 Scalp Dry-Run P&amp;L (paper)</span><span class="value" id="scalperPnl">--</span></div>
+  <div class="card-header" style="margin-top:10px"><span class="label" data-i18n="scalp-pnl">💰 Scalp Dry-Run P&amp;L (paper)</span><span class="value" id="scalperPnl">--</span></div>
   <div class="strat-grid" id="scalperPnlGrid"></div>
 </div>
 
 <div class="card">
-  <div class="card-header"><span class="label">📊 Scalper Gauges</span><span class="value" id="scalperScore">--</span></div>
+  <div class="card-header"><span class="label" data-i18n="scalp-gauges">📊 Scalper Gauges</span><span class="value" id="scalperScore">--</span></div>
   <div class="strat-grid" id="scalperGauges"></div>
 </div>
 
 <div class="card" id="bnfScalperCard" style="border-color:#ffab0055">
-  <div class="card-header"><span class="label">🏦 Bank Nifty Scalper <span style="font-size:10px;color:var(--text-dim)">5m scalp · option calls</span></span><span class="value" id="bnfScalperUpd">--</span></div>
+  <div class="card-header"><span class="label" data-i18n="bnf-scalper">🏦 Bank Nifty Scalper <span style="font-size:10px;color:var(--text-dim)">5m scalp · option calls</span></span><span class="value" id="bnfScalperUpd">--</span></div>
   <div id="bnfScalperBanner" style="font-size:14px;font-weight:800;padding:8px;border-radius:10px;text-align:center;background:#141b22">Loading...</div>
   <div class="level-row" id="bnfScalperLevels" style="display:none">
     <div class="level-pill target" id="bnfScalperEntry">--</div>
@@ -312,7 +315,7 @@
 </div>
 
 <div class="card" id="sxScalperCard" style="border-color:#ffab0055">
-  <div class="card-header"><span class="label">🇮🇳 Sensex Scalper <span style="font-size:10px;color:var(--text-dim)">5m scalp · spot calls</span></span><span class="value" id="sxScalperUpd">--</span></div>
+  <div class="card-header"><span class="label" data-i18n="sx-scalper">🇮🇳 Sensex Scalper <span style="font-size:10px;color:var(--text-dim)">5m scalp · spot calls</span></span><span class="value" id="sxScalperUpd">--</span></div>
   <div id="sxScalperBanner" style="font-size:14px;font-weight:800;padding:8px;border-radius:10px;text-align:center;background:#141b22">Loading...</div>
   <div class="level-row" id="sxScalperLevels" style="display:none">
     <div class="level-pill target" id="sxScalperEntry">--</div>
@@ -323,7 +326,7 @@
 </div>
 
 <div class="card" id="btcScalperCard" style="border-color:#ffab0055">
-  <div class="card-header"><span class="label">₿ BTC Scalper <span style="font-size:10px;color:var(--text-dim)">5m scalp · spot calls · 24/7</span></span><span class="value" id="btcScalperUpd">--</span></div>
+  <div class="card-header"><span class="label" data-i18n="btc-scalper">₿ BTC Scalper <span style="font-size:10px;color:var(--text-dim)">5m scalp · spot calls · 24/7</span></span><span class="value" id="btcScalperUpd">--</span></div>
   <div id="btcScalperBanner" style="font-size:14px;font-weight:800;padding:8px;border-radius:10px;text-align:center;background:#141b22">Loading...</div>
   <div class="level-row" id="btcScalperLevels" style="display:none">
     <div class="level-pill target" id="btcScalperEntry">--</div>
@@ -334,7 +337,7 @@
 </div>
 
   <div class="card" id="strategiesCard">
-    <div class="card-header"><span class="label">🧭 Nifty Strategy Status</span><span class="value" id="stratUpdated">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="nifty-strat">🧭 Nifty Strategy Status</span><span class="value" id="stratUpdated">--</span></div>
     <div id="strategiesList" class="strat-grid">
       <div style="color:var(--text-dim);padding:8px;text-align:center">Loading strategy statuses...</div>
     </div>
@@ -411,7 +414,7 @@
   <!-- Options OI (from Upstox) -->
   <div class="card" id="optionsCard">
     <div class="card-header">
-      <span class="label">📊 Options Chain</span>
+      <span class="label" data-i18n="options-chain">📊 Options Chain</span>
       <span class="value" id="optionsSource">--</span>
     </div>
     <div class="gauge-row">
@@ -445,7 +448,7 @@
   <!-- Nifty Chart -->
   <div class="card" id="chartCard">
     <div class="card-header">
-      <span class="label">📈 Nifty + 200 EMA</span>
+      <span class="label" data-i18n="nifty-200ema">📈 Nifty + 200 EMA</span>
       <span style="font-size:10px;color:var(--text-dim)" id="niftyTfLabel">daily bars</span>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap" id="tfNifty">
@@ -467,7 +470,7 @@
 
   <!-- OI Buildup / Smart Money (Nifty section) -->
   <div class="card" id="oiCard">
-    <div class="card-header"><span class="label">🧠 OI Buildup (Smart Money)</span><span style="font-size:10px;color:var(--text-dim)" id="oiBias" class="pill">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="oi-buildup">🧠 OI Buildup (Smart Money)</span><span style="font-size:10px;color:var(--text-dim)" id="oiBias" class="pill">--</span></div>
     <div style="font-size:11px;color:var(--text-dim)" id="oiReason">Collecting OI snapshots…</div>
     <div style="display:flex;gap:12px;margin-top:6px;font-size:10px">
       <div style="flex:1" id="oiCe"></div>
@@ -477,14 +480,14 @@
 
   <!-- Gap & Go / Gap Fade (Nifty section) -->
   <div class="card" id="gapCard">
-    <div class="card-header"><span class="label">⚡ Gap & Go / Fade</span><span style="font-size:10px;color:var(--text-dim)" id="gapSignal" class="pill">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="gap-go">⚡ Gap & Go / Fade</span><span style="font-size:10px;color:var(--text-dim)" id="gapSignal" class="pill">--</span></div>
     <div style="font-size:11px;color:var(--text-dim)" id="gapDetail">9:15–9:45 window only</div>
     <div style="font-size:10px;margin-top:4px;color:var(--text-dim)" id="gapReason"></div>
   </div>
 
   <!-- Expiry Countdown (Nifty section) -->
   <div class="card" id="expiryCard">
-    <div class="card-header"><span class="label">⏳ Expiry Countdown</span><span style="font-size:10px;color:var(--text-dim)" id="expiryGamma" class="pill">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="expiry-count">⏳ Expiry Countdown</span><span style="font-size:10px;color:var(--text-dim)" id="expiryGamma" class="pill">--</span></div>
     <div style="font-size:12px;line-height:1.7" id="expiryRead">Loading...</div>
   </div>
 
@@ -516,7 +519,7 @@
   <!-- Smart Money (FII/DII) -->
   <div class="card" id="fiiDiiCard">
     <div class="card-header">
-      <span class="label">🏦 Smart Money (FII/DII)</span>
+      <span class="label" data-i18n="fii-dii">🏦 Smart Money (FII/DII)</span>
       <span style="font-size:10px;color:var(--text-dim)" id="fiiDate">--</span>
     </div>
     <div class="gauge-row">
@@ -561,7 +564,7 @@
 
   <!-- Intraday (VWAP + EMA) -->
   <div class="card" id="intradayCard">
-    <div class="card-header"><span class="label">📊 Intraday Signals</span><span style="font-size:11px;color:var(--text-dim)">5-min bars</span></div>
+    <div class="card-header"><span class="label" data-i18n="intraday-sig">📊 Intraday Signals</span><span style="font-size:11px;color:var(--text-dim)">5-min bars</span></div>
     <div style="display:flex;gap:8px">
       <div style="flex:1;padding:8px;border-radius:8px;background:var(--bg)" id="vwapBox">
         <div style="font-size:12px;font-weight:700;margin-bottom:2px">VWAP Reversion</div>
@@ -583,7 +586,7 @@
   <!-- Trade Journal -->
   <div class="card" id="journalCard">
     <div class="card-header">
-      <span class="label">📒 Trade Journal</span>
+      <span class="label" data-i18n="journal">📒 Trade Journal</span>
       <button onclick="toggleJournal()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:11px;cursor:pointer">+ Log Trade</button>
     </div>
     <!-- Stats -->
@@ -625,7 +628,7 @@
     <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px" id="algoLimits"></div>
     <div id="algoStrategies" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
     <div id="algoOrders" style="max-height:150px;overflow-y:auto;font-size:11px"></div>
-    <div class="card-header" style="margin-top:8px"><span class="label">⚡ Scalp Dry-Run Calls (paper)</span><span class="value" id="algoScalpPnl" style="font-size:11px">--</span></div>
+    <div class="card-header" style="margin-top:8px"><span class="label" data-i18n="algo-scalp">⚡ Scalp Dry-Run Calls (paper)</span><span class="value" id="algoScalpPnl" style="font-size:11px">--</span></div>
     <div id="algoScalpCalls" style="max-height:180px;overflow-y:auto;font-size:11px"></div>
     <div style="margin-top:6px;font-size:10px;color:var(--red);display:none" id="algoWarning">
       ⚠️ To enable LIVE trading: POST /api/algo/toggle with confirm="CONFIRM_LIVE"
@@ -639,7 +642,7 @@
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">₿ ─── BITCOIN (24/7) ─── ₿</div>
 
 <div class="card" id="btcCard">
-  <div class="card-header"><span class="label">🪙 BTC Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
+  <div class="card-header"><span class="label" data-i18n="btc-signal">🪙 BTC Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
   <div class="gauge-row">
     <div class="gauge">
       <div class="g-value" id="btcSpot">--</div>
@@ -707,7 +710,7 @@
 </div>
 
 <div class="card" id="btcAlertsCard">
-  <div class="card-header"><span class="label">🔔 BTC Alerts</span></div>
+  <div class="card-header"><span class="label" data-i18n="btc-alerts">🔔 BTC Alerts</span></div>
   <div id="btcAlertsList" style="max-height:180px;overflow-y:auto;font-size:11px;line-height:1.6">
     <div style="color:var(--text-dim);padding:8px;text-align:center">Watching for signal changes...</div>
   </div>
@@ -715,7 +718,7 @@
 
   <!-- BTC Strategy Status -->
   <div class="card" id="btcStrategiesCard">
-    <div class="card-header"><span class="label">🧭 BTC Strategy Status</span><span class="value" id="btcStratUpdated">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="btc-strat">🧭 BTC Strategy Status</span><span class="value" id="btcStratUpdated">--</span></div>
     <div id="btcStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
   </div>
 
@@ -723,7 +726,7 @@
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">🏦 ─── BANK NIFTY ─── 🏦</div>
 
 <div class="card" id="bnfCard">
-  <div class="card-header"><span class="label">🏦 BNF Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
+  <div class="card-header"><span class="label" data-i18n="bnf-signal">🏦 BNF Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
   <div class="gauge-row">
     <div class="gauge">
       <div class="g-value" id="bnfSpot">--</div>
@@ -787,14 +790,14 @@
 
 <!-- BNF Expiry Countdown -->
   <div class="card" id="bnfExpiryCard">
-    <div class="card-header"><span class="label">⏳ BNF Expiry Countdown</span><span style="font-size:10px;color:var(--text-dim)" id="bnfExpiryGamma" class="pill">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="bnf-expiry">⏳ BNF Expiry Countdown</span><span style="font-size:10px;color:var(--text-dim)" id="bnfExpiryGamma" class="pill">--</span></div>
     <div style="font-size:12px;line-height:1.7" id="bnfExpiryRead">Loading...</div>
   </div>
 
   <!-- BNF Option Chain Table -->
   <div class="card" id="bnfChainCard">
     <div class="card-header">
-      <span class="label">📋 BNF Option Chain</span>
+      <span class="label" data-i18n="bnf-chain">📋 BNF Option Chain</span>
       <span style="font-size:10px;color:var(--text-dim)" id="bnfChainMeta">--</span>
     </div>
     <div style="text-align:center;margin:2px 0 8px">
@@ -848,7 +851,7 @@
 
   <!-- BNF OI Buildup -->
   <div class="card" id="bnfOiCard">
-    <div class="card-header"><span class="label">🧠 BNF OI Buildup</span><span style="font-size:10px;color:var(--text-dim)" id="bnfOiBias" class="pill">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="bnf-oi">🧠 BNF OI Buildup</span><span style="font-size:10px;color:var(--text-dim)" id="bnfOiBias" class="pill">--</span></div>
     <div style="font-size:11px;color:var(--text-dim)" id="bnfOiReason">Collecting OI snapshots…</div>
     <div style="display:flex;gap:12px;margin-top:6px;font-size:10px">
       <div style="flex:1" id="bnfOiCe"></div>
@@ -885,7 +888,7 @@
   </div>
 
 <div class="card" id="bnfAlertsCard">
-  <div class="card-header"><span class="label">🔔 BNF Alerts</span></div>
+  <div class="card-header"><span class="label" data-i18n="bnf-alerts">🔔 BNF Alerts</span></div>
   <div id="bnfAlertsList" style="max-height:180px;overflow-y:auto;font-size:11px;line-height:1.6">
     <div style="color:var(--text-dim);padding:8px;text-align:center">Watching for signal changes...</div>
   </div>
@@ -893,7 +896,7 @@
 
   <!-- BNF Strategy Status -->
   <div class="card" id="bnfStrategiesCard">
-    <div class="card-header"><span class="label">🧭 Bank Nifty Strategy Status</span><span class="value" id="bnfStratUpdated">--</span></div>
+    <div class="card-header"><span class="label" data-i18n="bnf-strat">🧭 Bank Nifty Strategy Status</span><span class="value" id="bnfStratUpdated">--</span></div>
     <div id="bnfStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
   </div>
 
@@ -901,7 +904,7 @@
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">🇮🇳 ─── SENSEX ─── 🇮🇳</div>
 
 <div class="card" id="sensexCard">
-  <div class="card-header"><span class="label">🇮🇳 Sensex Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
+  <div class="card-header"><span class="label" data-i18n="sx-signal">🇮🇳 Sensex Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
   <div class="gauge-row">
     <div class="gauge">
       <div class="g-value" id="sensexSpot">--</div>
@@ -928,7 +931,7 @@
 
 
 <div class="card">
-  <div class="card-header"><span class="label">📊 Sensex Technicals</span></div>
+  <div class="card-header"><span class="label" data-i18n="sx-tech">📊 Sensex Technicals</span></div>
   <div class="gauge-row">
     <div class="gauge">
       <div class="g-value" id="sensexEma">--</div>
@@ -950,7 +953,7 @@
 </div>
 
 <div class="card" id="sensexChartCard">
-  <div class="card-header"><span class="label">📈 SENSEX + 200 EMA</span><span style="font-size:10px;color:var(--text-dim)" id="sensexTfLabel">1h bars</span></div>
+  <div class="card-header"><span class="label" data-i18n="sx-200ema">📈 SENSEX + 200 EMA</span><span style="font-size:10px;color:var(--text-dim)" id="sensexTfLabel">1h bars</span></div>
   <div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap" id="tfSensex">
     <button class="tf-btn active" data-tf="1h">1H</button>
     <button class="tf-btn" data-tf="15m">15M</button>

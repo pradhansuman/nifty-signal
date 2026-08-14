@@ -5,6 +5,64 @@ document.getElementById('debugInfo').textContent = 'JS loaded ✅';
 let cachedSignal = null;
 let deferredPrompt = null;
 
+// ── Locale: English ⇄ ଓଡ଼ିଆ (Odia) ──
+const L10N = {
+  'live-alerts': '🔔 ଲାଇଭ୍ ଆଲର୍ଟ',
+  'active-scalp': '⚡ ସକ୍ରିୟ ସ୍କାଲ୍ପ୍ କଲ୍',
+  'today-scalp': "📜 ଆଜିର ସ୍କାଲ୍ପ୍ କଲ୍",
+  'scalp-pnl': '💰 ସ୍କାଲ୍ପ୍ ଡ୍ରାଏ-ରନ୍ ଲାଭ/କ୍ଷତି (ପେପର)',
+  'scalp-gauges': '📊 ସ୍କାଲ୍ପର୍ ଗେଜ୍',
+  'bnf-scalper': '🏦 ବ୍ୟାଙ୍କ୍ ନିଫ୍ଟି ସ୍କାଲ୍ପର୍',
+  'sx-scalper': '🇮🇳 ସେନସେକ୍ସ ସ୍କାଲ୍ପର୍',
+  'btc-scalper': '₿ ବିଟକଏନ୍ ସ୍କାଲ୍ପର୍',
+  'nifty-strat': '🧭 ନିଫ୍ଟି ରଣନୀତି ସ୍ଥିତି',
+  'options-chain': '📊 ଅପ୍ସନ୍ ଚେନ୍',
+  'nifty-200ema': '📈 ନିଫ୍ଟି + ୨୦୦ EMA',
+  'oi-buildup': '🧠 OI ବିଲ୍ଡଅପ୍ (ସ୍ମାର୍ଟ୍ ମନି)',
+  'gap-go': '⚡ ଗ୍ୟାପ୍ ଆଣ୍ଡ୍ ଗୋ / ଫେଡ୍',
+  'expiry-count': '⏳ ଏକ୍ସପାୟରୀ କାଉଣ୍ଟଡାଉନ୍',
+  'fii-dii': '🏦 ସ୍ମାର୍ଟ୍ ମନି (FII/DII)',
+  'intraday-sig': '📊 ଇଣ୍ଟ୍ରାଡେ ସିଗନାଲ୍',
+  'journal': '📒 ଟ୍ରେଡ୍ ଜର୍ଣ୍ଣାଲ୍',
+  'algo-scalp': '⚡ ସ୍କାଲ୍ପ୍ ଡ୍ରାଏ-ରନ୍ କଲ୍ (ପେପର)',
+  'btc-signal': '🪙 BTC ସିଗନାଲ୍',
+  'btc-alerts': '🔔 BTC ଆଲର୍ଟ',
+  'btc-strat': '🧭 BTC ରଣନୀତି ସ୍ଥିତି',
+  'bnf-signal': '🏦 BNF ସିଗନାଲ୍',
+  'bnf-expiry': '⏳ BNF ଏକ୍ସପାୟରୀ କାଉଣ୍ଟଡାଉନ୍',
+  'bnf-chain': '📋 BNF ଅପ୍ସନ୍ ଚେନ୍',
+  'bnf-oi': '🧠 BNF OI ବିଲ୍ଡଅପ୍',
+  'bnf-alerts': '🔔 BNF ଆଲର୍ଟ',
+  'bnf-strat': '🧭 ବ୍ୟାଙ୍କ୍ ନିଫ୍ଟି ରଣନୀତି ସ୍ଥିତି',
+  'sx-signal': '🇮🇳 ସେନସେକ୍ସ ସିଗନାଲ୍',
+  'sx-tech': '📊 ସେନସେକ୍ସ ଟେକ୍ନିକାଲ୍',
+  'sx-200ema': '📈 SENSEX + ୨୦୦ EMA',
+};
+let curLang = localStorage.getItem('dash_lang') || 'en';
+function applyLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    if (curLang === 'or' && L10N[k]) el.innerHTML = L10N[k];
+    else if (curLang === 'or' && !L10N[k]) el.innerHTML = el.innerHTML; // keep as-is
+    else el.innerHTML = el.getAttribute('data-i18n-en') || el.innerHTML;
+  });
+  const t = document.getElementById('langToggle');
+  if (t) t.textContent = curLang === 'or' ? '🌐 English' : '🌐 ଓଡ଼ିଆ';
+  document.documentElement.lang = curLang;
+}
+function toggleLang() {
+  curLang = curLang === 'or' ? 'en' : 'or';
+  localStorage.setItem('dash_lang', curLang);
+  applyLang();
+}
+// remember English originals so toggling back restores exactly
+(function seedLang() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    if (!el.getAttribute('data-i18n-en')) el.setAttribute('data-i18n-en', el.innerHTML);
+  });
+  if (curLang === 'or') applyLang();
+})();
+
 // ── PWA Install ──
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();

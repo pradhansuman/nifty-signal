@@ -291,3 +291,29 @@ class ScalpSpotShortResolutionTest(unittest.TestCase):
         with mock.patch.object(ns, "_chain_premium", return_value=110.0):
             events = ns._scalp_refresh_statuses()
         self.assertEqual(c["status"], "TARGET_HIT")
+
+
+class ScalpSignalsOnlyAlertsTest(unittest.TestCase):
+    """SCALP_ALERTS_MODE=signals (default): ONLY buy/sell entry alerts fire.
+    WAIT/expired/trail/target/stop chatter is suppressed, but watch state and
+    call resolution still run (no stale watches)."""
+
+    def _make_watch(self, signal="SCALP_LONG", option="NIFTY 24350 CE", entry=100.0):
+        return {"signal": signal, "option": option, "entry": entry, "ts": None,
+                "highest": entry, "breakeven": False, "trail": False}
+
+    def test_default_signals_mode_flag(self):
+        # default (no env) → verbose off
+        self.assertFalse(ns._SCALP_VERBOSE_ALERTS)
+
+    def test_signals_only_still_resolves_calls(self):
+        c = {"id": 1, "asset": "nifty", "signal": "SCALP_LONG", "option": "NIFTY 24350 CE",
+             "strike": 24350, "option_type": "CE", "entry": 100.0, "target": 110.0,
+             "stop": 90.0, "expires_at": "23:59", "status": "ACTIVE"}
+        ns._scalp_calls = [c]
+        with mock.patch.object(ns, "_scalp_save_calls"), \
+             mock.patch.object(ns, "_chain_premium", return_value=110.0):
+            events = ns._scalp_refresh_statuses()
+        self.assertEqual(c["status"], "TARGET_HIT")  # resolution still runs
+        self.assertEqual(len(events), 1)
+        self.assertFalse(ns._SCALP_VERBOSE_ALERTS)  # but no alert would be pushed

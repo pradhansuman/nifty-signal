@@ -162,7 +162,7 @@ def execute_trade(signal_type, direction, strike, expiry, lots, premium=None, op
     
     # LIVE MODE — place real order via Upstox
     try:
-        token = _get_upstox_token()
+        token = _get_trading_token()
         if not token:
             return {"status": "error", "reason": "No Upstox token"}
         
@@ -174,7 +174,7 @@ def execute_trade(signal_type, direction, strike, expiry, lots, premium=None, op
             "validity": "DAY",
             "price": 0,
             "trigger_price": 0,
-            "instrument_token": _instrument_key(strike, direction, expiry),
+            "instrument_token": _instrument_key(strike, order.get("option_type") or "CE", expiry),
             "order_type": "MARKET",
             "transaction_type": order["transaction_type"],
             "disclosed_quantity": 0,
@@ -228,12 +228,55 @@ def _get_upstox_token():
     except:
         pass
     return ""
+
+
+def _get_trading_token():
+    """Order placement needs a TRADING-scope token.
+    Prefer the OAuth access token (auto-refreshed daily); the 1-year analytics
+    token is READ-ONLY and Upstox will reject orders with it (logged as failure)."""
+    tok = os.environ.get("UPSTOX_TOKEN", "")
+    if tok:
+        return tok
+    try:
+        import importlib.util
+        cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".openclaw", "tmp", "upstox_config.py")
+        spec = importlib.util.spec_from_file_location("upstox_config", cfg_path)
+        m = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(m)
+        at = getattr(m, "UPSTOX_ACCESS_TOKEN", "") or ""
+        if at:
+            return at
+    except Exception:
+        pass
+    try:
+        from upstox_token import get_token
+        return get_token()
+    except Exception:
+        return ""
     return ""
 
 
-def _instrument_key(strike, direction, expiry):
-    """Build Upstox instrument key. NSE_FO format."""
-    return f"NSE_FO|{strike}"  # Simplified — real key needs lookup
+def _instrument_key(strike, option_type, expiry):
+    """Resolve the exact Upstox instrument key for an option.
+    Prefers the live chain's instrument_key (NSE_FO|<token>); falls back to the
+    compound NSE_FO format (NSE_FO|NIFTY|<strike>|<CE/PE>|<DD-MMM-YYYY>)."""
+    try:
+        from chain_table import get_chain
+        ch = get_chain()
+        for r in ch.get("rows") or []:
+            if abs((r.get("strike") or 0) - strike) < 0.01:
+                key = r.get("ce_key") if option_type == "CE" else r.get("pe_key")
+                if key:
+                    return key
+    except Exception:
+        pass
+    try:
+        from datetime import datetime
+        d = datetime.strptime(str(expiry).split()[0], "%Y-%m-%d")
+        exp_str = d.strftime("%d-%b-%Y").upper()
+        return "NSE_FO|NIFTY|{}|{}|{}".format(int(strike), option_type, exp_str)
+    except Exception:
+        return "NSE_FO|{}".format(int(strike))
 
 
 def get_algo_status():

@@ -106,6 +106,8 @@ def get_chain(force=False, strike_range=8, asset="nifty"):
         pg = item.get("put_options", {}).get("option_greeks", {})
         row = {
             "strike": strike,
+            "ce_key": item.get("call_options", {}).get("instrument_key"),
+            "pe_key": item.get("put_options", {}).get("instrument_key"),
             "ce_ltp": ce.get("ltp"), "ce_oi": ce.get("oi"), "ce_vol": ce.get("volume"),
             "ce_iv": cg.get("iv"), "ce_delta": cg.get("delta"),
             "ce_bid": ce.get("bid_price"), "ce_ask": ce.get("ask_price"),

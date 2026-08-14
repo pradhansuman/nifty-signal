@@ -187,6 +187,7 @@ def tg_sender():
 _asset_alerts = {}  # asset:date -> list of signal-change alerts
 _asset_last_signal = {}  # asset -> last signal
 _render_probe = {"ts": 0, "alive": False}
+_algo_fired = {}  # signal_type -> "HH:MM" (dedup: at most one order per strategy per minute)
 
 
 def _render_alive():
@@ -207,6 +208,32 @@ def _render_alive():
         alive = False
     _render_probe.update({"ts": now, "alive": alive})
     return alive
+
+
+def _algo_trade(signal_type, direction, strike, expiry, lots, premium, option_type, reason=""):
+    """Feed a signal into the algo engine (paper order now; real order when live).
+    Dedup per strategy per minute; pushes the order to Telegram; logs failures."""
+    try:
+        from algo_trader import execute_trade
+        now_hm = datetime.now().strftime("%H:%M")
+        if _algo_fired.get(signal_type) == now_hm:
+            return None
+        _algo_fired[signal_type] = now_hm
+        res = execute_trade(signal_type, direction, strike, expiry, lots, premium, option_type)
+        status = res.get("status")
+        if status in ("dry_run", "live"):
+            order = res.get("order", {})
+            if telegram_alert.is_configured():
+                mode = "DRY RUN" if status == "dry_run" else "LIVE"
+                _push_tg("🤖 <b>{} {}: {} {} {} {}</b>\nPremium ₹{} | {} lot(s) | {}".format(
+                    mode, signal_type.upper(), direction, int(strike) if strike else "--",
+                    option_type, expiry or "", premium or 0, lots, reason or ""))
+        elif status == "error":
+            _add_alert("warning", "⚠️ Algo {} order FAILED".format(signal_type),
+                       str(res.get("detail") or res.get("reason") or "")[:200])
+        return res
+    except Exception:
+        return None
 
 
 def _track_asset_alert(asset, signal, reason):
@@ -288,15 +315,9 @@ def api_signal():
             if not existing:
                 pos = track_paper_entry("ema_bounce", direction, strike, 1, premium, option_type, expiry)
                 signal["paper_entry"] = pos
-                # 🔔 Telegram push — every entry trigger
-                try:
-                    if telegram_alert.is_configured():
-                        emoji = "🟢" if option_type == "CE" else "🔴"
-                        _push_tg(
-                            f"{emoji} <b>ENTRY {option_type}: BUY {strike} {option_type} {expiry}</b>\n"
-                            f"Premium ₹{premium:.2f} | 1 lot (65) | ema_bounce | DRY RUN")
-                except Exception:
-                    pass
+                # 🤖 Feed the algo engine — paper order now, real order when live
+                _algo_trade("ema_bounce", direction, strike, expiry, 1, premium, option_type,
+                            reason="200 EMA bounce signal")
         elif sig_name in ("EXIT_LONGS", "EXIT_SHORTS"):
             current_premium = signal.get("entry_premium") or signal.get("btst_premium") or 0
             results = track_paper_exit_all(current_premium, "long" if sig_name == "EXIT_LONGS" else "short")
@@ -895,6 +916,12 @@ def alert_scheduler():
                     if cs in ("SELL_CALLS", "SELL_PUTS"):
                         _add_alert("critical", f"🔄 Contrarian: {cs}",
                             sig.get("contrarian_reason", ""))
+                        # 🤖 Algo feed — buyer-only mapping: SELL_CALLS (bearish) → buy PE, SELL_PUTS → buy CE
+                        _algo_trade("contrarian", "BUY",
+                                    sig.get("atm_strike") or sig.get("entry_strike"),
+                                    sig.get("selected_expiry", ""), 1, None,
+                                    "PE" if cs == "SELL_CALLS" else "CE",
+                                    reason=(sig.get("contrarian_reason") or "")[:80])
                 except Exception as e:
                     _add_alert("warning", "Monitor Check Failed", str(e)[:200])
             
@@ -909,6 +936,17 @@ def alert_scheduler():
                         _add_alert("critical", f"⚡ ORB: {orb['signal']}",
                             f"{orb.get('reason', '')} | Entry: {orb.get('entry_strike')} | "
                             f"Target: {orb.get('target_strike')} | Stop: {orb.get('stop_strike')}")
+                        o_dir = "BUY" if orb.get("signal") == "ORB_BUY" else "SELL"
+                        o_type = "CE" if orb.get("signal") == "ORB_BUY" else "PE"
+                        o_strike = orb.get("entry_strike")
+                        o_exp = orb.get("expiry") or ""
+                        if not o_exp:
+                            try:
+                                o_exp = get_signal().get("selected_expiry", "")
+                            except Exception:
+                                pass
+                        _algo_trade("orb", o_dir, o_strike, o_exp, 1, None, o_type,
+                                    reason=(orb.get("reason") or "")[:80])
                 except Exception as e:
                     pass
             
@@ -922,6 +960,15 @@ def alert_scheduler():
                     if vwap and vwap.get("signal") in ("VWAP_BUY", "VWAP_SELL"):
                         _add_alert("critical", f"📊 VWAP: {vwap['signal']}",
                             f"{vwap.get('reason', '')} | Spot: {vwap.get('spot')} | VWAP: {vwap.get('vwap')}")
+                        try:
+                            s_ref = get_signal()
+                            _algo_trade("vwap", "BUY" if vwap["signal"] == "VWAP_BUY" else "SELL",
+                                        s_ref.get("atm_strike") or s_ref.get("entry_strike"),
+                                        s_ref.get("selected_expiry", ""), 1, None,
+                                        "CE" if vwap["signal"] == "VWAP_BUY" else "PE",
+                                        reason=(vwap.get("reason") or "")[:80])
+                        except Exception:
+                            pass
                     # EMA crossover
                     ema = intra.get("ema", {})
                     if ema and ema.get("signal") in ("EMA_BUY", "EMA_SELL"):
@@ -1001,6 +1048,16 @@ def alert_scheduler():
                         top_pe = ", ".join(f"{r['strike']}(+{r['oi_gain']:,})" for r in oi.get("pe_buildup", [])[:3])
                         _add_alert("critical", f"{emoji} OI BUILDUP: {oi_sig}",
                             f"{oi.get('reason', '')}\nCE loading: {top_ce or 'none'}\nPE loading: {top_pe or 'none'}")
+                        # 🤖 Algo feed — top OI-buildup strike
+                        try:
+                            s_ref = get_signal()
+                            b_list = oi.get("ce_buildup") if oi_sig == "BUY_CALLS" else oi.get("pe_buildup")
+                            b_strike = b_list[0]["strike"] if b_list else (s_ref.get("atm_strike") or 0)
+                            _algo_trade("oi_buildup", "BUY", b_strike, s_ref.get("selected_expiry", ""), 1, None,
+                                        "CE" if oi_sig == "BUY_CALLS" else "PE",
+                                        reason=("OI buildup " + oi_sig))
+                        except Exception:
+                            pass
                     # Bank Nifty OI snapshots too
                     take_snapshot(force=True, asset="banknifty")
                     oib = get_oi_buildup(force=True, asset="banknifty")
@@ -1021,6 +1078,18 @@ def alert_scheduler():
                         emoji = {"GAP_GO_BUY": "🟢", "GAP_FADE_BUY": "🔴", "GAP_FILL_WATCH": "⏳"}[gap["signal"]]
                         _add_alert("critical", f"{emoji} {gap['signal']}",
                             f"{gap.get('reason', '')} | Price: {gap.get('price')} | VWAP: {gap.get('vwap')}")
+                        # 🤖 Algo feed (GAP_GO_BUY = momentum long; GAP_FADE_BUY = fade = short bias)
+                        if gap.get("signal") in ("GAP_GO_BUY", "GAP_FADE_BUY"):
+                            try:
+                                s_ref = get_signal()
+                                is_long = gap["signal"] == "GAP_GO_BUY"
+                                _algo_trade("gap_go", "BUY" if is_long else "SELL",
+                                            s_ref.get("atm_strike") or s_ref.get("entry_strike"),
+                                            s_ref.get("selected_expiry", ""), 1, None,
+                                            "CE" if is_long else "PE",
+                                            reason=(gap.get("reason") or "")[:80])
+                            except Exception:
+                                pass
                 except Exception:
                     pass
             

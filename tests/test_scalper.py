@@ -164,7 +164,7 @@ class ScalperBuildCallTest(unittest.TestCase):
         # spread 10 on 85 ltp ≈ 11.8% > 3% → blocked
         rows = [chain_row(24350, 85.0, bid=80.0, ask=90.0, delta=0.5)]
         scalper.chain_table.get_chain.return_value = mock_chain(rows)
-        call = scalper.build_call(24350, "LONG", "2026-08-18")
+        call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertIsNotNone(call)
         self.assertTrue(call.get("blocked"))
         self.assertIn("spread", call.get("block_reason", ""))
@@ -173,7 +173,7 @@ class ScalperBuildCallTest(unittest.TestCase):
         # theta -5 on 87.5 premium = 5.7%/day > 2% → blocked
         rows = [chain_row(24350, 87.5, bid=86.5, ask=88.5, delta=0.5, theta=-5.0)]
         scalper.chain_table.get_chain.return_value = mock_chain(rows)
-        call = scalper.build_call(24350, "LONG", "2026-08-18")
+        call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertTrue(call.get("blocked"))
         self.assertIn("theta", call.get("block_reason", ""))
 
@@ -181,7 +181,7 @@ class ScalperBuildCallTest(unittest.TestCase):
         # spread 2.0 (86.5/88.5), half = 1.0, ltp 87.5
         rows = [chain_row(24350, 87.5, bid=86.5, ask=88.5, delta=0.5, theta=-0.5)]
         scalper.chain_table.get_chain.return_value = mock_chain(rows)
-        call = scalper.build_call(24350, "LONG", "2026-08-18")
+        call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertFalse(call.get("blocked"))
         self.assertEqual(call["entry"], 87.5)
         self.assertEqual(call["buy_ask"], 88.5)
@@ -193,12 +193,12 @@ class ScalperBuildCallTest(unittest.TestCase):
         # only delta 0.25 candidates → outside 0.40-0.80 → no call
         rows = [chain_row(24350, 87.5, delta=0.25)]
         scalper.chain_table.get_chain.return_value = mock_chain(rows)
-        call = scalper.build_call(24350, "LONG", "2026-08-18")
+        call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertIsNone(call)
 
     def test_no_chain_returns_none(self):
         scalper.chain_table.get_chain.return_value = {"rows": [], "expiry": "2026-08-18"}
-        call = scalper.build_call(24350, "LONG", "2026-08-18")
+        call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertIsNone(call)
 
     def test_tightest_spread_selected(self):
@@ -208,8 +208,25 @@ class ScalperBuildCallTest(unittest.TestCase):
             chain_row(24400, 80.0, bid=77.0, ask=83.0, delta=0.45),    # 7.5% spread
         ]
         scalper.chain_table.get_chain.return_value = mock_chain(rows)
-        call = scalper.build_call(24350, "LONG", "2026-08-18")
+        call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertEqual(call["strike"], 24350)
+
+    def test_spot_call_btc(self):
+        # BTC: no options → spot-level call, no chain needed
+        call = scalper.build_call("btc", 64000.0, "LONG", "INTRAday")
+        self.assertFalse(call.get("blocked"))
+        self.assertEqual(call["entry"], 64000.0)
+        self.assertEqual(call["target"], round(64000.0 * 1.005, 2))
+        self.assertEqual(call["stop"], round(64000.0 * 0.995, 2))
+        self.assertIsNone(call["delta"])
+        self.assertEqual(call["expiry"], "INTRAday")
+
+    def test_spot_call_sensex(self):
+        call = scalper.build_call("sensex", 77800.0, "SHORT", "INTRAday")
+        self.assertFalse(call.get("blocked"))
+        self.assertEqual(call["entry"], 77800.0)
+        self.assertEqual(call["target"], round(77800.0 * 0.9985, 2))  # short: target below
+        self.assertEqual(call["stop"], round(77800.0 * 1.0015, 2))
 
 
 if __name__ == "__main__":

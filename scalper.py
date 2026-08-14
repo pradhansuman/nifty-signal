@@ -23,9 +23,14 @@ import yfinance as yf
 sys.path.insert(0, ".")
 import chain_table  # noqa: E402  (Upstox option chain for live premiums)
 
-SYMBOL = "^NSEI"
+# ── Multi-asset config ──
+ASSETS = {
+    "nifty":  {"symbol": "^NSEI",    "lot": 65, "options": True,  "vix": True,  "spot_tp": None,   "label": "NIFTY"},
+    "bnf":    {"symbol": "^NSEBANK", "lot": 15, "options": True,  "vix": True,  "spot_tp": None,   "label": "BANK NIFTY"},
+    "sensex": {"symbol": "^BSESN",   "lot": 20, "options": False, "vix": True,  "spot_tp": 0.0015, "label": "SENSEX"},
+    "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": False, "vix": False, "spot_tp": 0.005,  "label": "BITCOIN"},
+}
 IST = pytz.timezone("Asia/Kolkata")
-LOT = 65
 
 
 def _now():
@@ -101,8 +106,8 @@ def _adx(df, n=14):
     return dx.ewm(alpha=1 / n, adjust=False).mean()
 
 
-def get_bars(period="5d", interval="5m"):
-    df = yf.download(SYMBOL, period=period, interval=interval, progress=False, auto_adjust=True)
+def get_bars(asset="nifty", period="5d", interval="5m"):
+    df = yf.download(ASSETS[asset]["symbol"], period=period, interval=interval, progress=False, auto_adjust=True)
     if df is None or df.empty:
         return None
     if isinstance(df.columns, pd.MultiIndex):
@@ -131,11 +136,31 @@ def _stoch(df, k=14, d=3):
     return kk, kk.rolling(d).mean()
 
 
-def build_call(spot, bias, expiry):
-    """Spread-aware strike selection: prefer delta 0.40-0.80 with the tightest spread;
-    block the call entirely when the spread is > 3% of premium (target can't beat it)."""
+def build_call(asset, spot, bias, expiry):
+    """Build the actionable call for an asset.
+    Options assets (nifty/bnf): spread-aware strike selection from the Upstox
+    chain (delta 0.40-0.80, tightest spread, >3% blocks, theta guard,
+    target/stop net of spread).
+    Spot assets (sensex/btc): entry/target/stop directly on the price."""
+    cfg = ASSETS[asset]
+    if not cfg["options"]:
+        tp = cfg["spot_tp"]
+        if bias == "LONG":
+            target, stop = spot * (1 + tp), spot * (1 - tp)
+        else:
+            target, stop = spot * (1 - tp), spot * (1 + tp)
+        return {
+            "option": "{} {}".format("LONG" if bias == "LONG" else "SHORT", cfg["label"]),
+            "strike": round(spot, 2), "premium": round(spot, 2),
+            "expiry": "INTRAday",
+            "entry": round(spot, 2), "buy_ask": round(spot, 2),
+            "target": round(target, 2), "stop": round(stop, 2),
+            "lot_cost": 0, "spread": 0.0, "spread_pct": 0.0, "half_spread": 0.0,
+            "delta": None, "theta": None,
+            "target_pts": round(spot * tp, 0), "stop_pts": round(spot * tp, 0),
+        }
     try:
-        ch = chain_table.get_chain()
+        ch = chain_table.get_chain("banknifty" if asset == "bnf" else "nifty")
         rows = ch.get("rows") or []
         if not rows:
             return None
@@ -192,7 +217,7 @@ def build_call(spot, bias, expiry):
             "buy_ask": round(float(ask), 2) if ask else round(prem, 2),
             "target": round(target, 2),
             "stop": round(stop, 2),
-            "lot_cost": round(prem * LOT, 0),
+            "lot_cost": round(prem * ASSETS[asset]["lot"], 0),
             "spread": round(best["spread"], 2),
             "spread_pct": round(best["spread_pct"], 2),
             "half_spread": round(half_spread, 2),
@@ -206,11 +231,11 @@ def build_call(spot, bias, expiry):
     return None
 
 
-def main():
-    out = {"signal": "WAIT", "bias": "FLAT", "score": 0, "spot": None, "timestamp": _now()}
-    df = get_bars()
+def main(asset="nifty"):
+    out = {"signal": "WAIT", "bias": "FLAT", "score": 0, "spot": None, "timestamp": _now(), "asset": asset}
+    df = get_bars(asset)
     if df is None or len(df) < 40:
-        out["reason"] = "Not enough 5m bars yet (need 40, market opens 9:15 IST)"
+        out["reason"] = "Not enough 5m bars yet (need 40)"
         return out
 
     # Session split: indicators warm on 5 days of bars; VWAP/ORB/spot use today only
@@ -354,7 +379,7 @@ def main():
     # ── VIX regime gate (backtest: VIX 12-18 + ADX>25 → PF 1.96, WR 66%) ──
     vix_min = tun["vix_min"]
     vix_max = tun["vix_max"]
-    vix_val = _vix_level()
+    vix_val = _vix_level() if ASSETS[asset]["vix"] else None
     out["vix"] = round(vix_val, 2) if vix_val else None
     out["vix_gate"] = [vix_min, vix_max]
     vix_block = None
@@ -363,10 +388,12 @@ def main():
             vix_val, vix_min, vix_max)
         bias = "FLAT"
 
-    # ── Time-of-day window: avoid lunch chop ──
+    # ── Time-of-day window: avoid lunch chop (BTC = 24/7) ──
     now_dt = datetime.now(IST)
     hm = now_dt.hour * 60 + now_dt.minute
     window_open = (9 * 60 + 20) <= hm <= (11 * 60 + 45) or (13 * 60 + 30) <= hm <= (15 * 60 + 20)
+    if ASSETS[asset]["label"] == "BITCOIN":
+        window_open = True  # crypto trades 24/7
     if tun.get("window_open"):
         window_open = True  # today-only override via tuning file
     out["window"] = "ACTIVE" if window_open else "BLOCKED"
@@ -397,7 +424,7 @@ def main():
 
     out["signal"] = "SCALP_LONG" if bias == "LONG" else "SCALP_SHORT"
     out["confidence"] = min(100, abs(score) * 14)
-    call = build_call(spot, bias, out.get("expiry"))
+    call = build_call(asset, spot, bias, out.get("expiry"))
     out["call"] = call
     if call is None:
         out["reason"] = "{} scalp (score {:+d}) but no option premium available from Upstox chain".format(bias, score)

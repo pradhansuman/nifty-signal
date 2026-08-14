@@ -1632,7 +1632,65 @@ function renderWeekly(d) {
 // Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
 fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart(); fetchSensexChart();
 refreshStrategies(); refreshBtcStrategies(); refreshBnfStrategies(); refreshSensexStrategies();
+async function fetchAssetScalper(asset, p) {
+  const banner = document.getElementById(p + 'ScalperBanner');
+  if (!banner) return;
+  try {
+    const resp = await fetch('/api/scalper?asset=' + asset + '&_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
+    const upd = document.getElementById(p + 'ScalperUpd');
+    if (upd) upd.textContent = d.timestamp || '';
+    const levels = document.getElementById(p + 'ScalperLevels');
+    if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
+      banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
+      banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
+      document.getElementById(p + 'ScalperEntry').textContent = 'Entry ₹' + d.call.entry;
+      document.getElementById(p + 'ScalperTarget').textContent = '🎯 ₹' + d.call.target;
+      document.getElementById(p + 'ScalperStop').textContent = '🛑 ₹' + d.call.stop;
+      levels.style.display = 'flex';
+    } else if (d.signal === 'SCALP_SHORT' && d.call && !d.call.blocked) {
+      banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ₹' + d.call.entry + ' (score ' + (d.score >= 0 ? '+' : '') + d.score + ') ⏳ ' + (d.call.expires_at || '');
+      banner.style.background = '#280a0a'; banner.style.color = '#ff8080';
+      document.getElementById(p + 'ScalperEntry').textContent = 'Entry ₹' + d.call.entry;
+      document.getElementById(p + 'ScalperTarget').textContent = '🎯 ₹' + d.call.target;
+      document.getElementById(p + 'ScalperStop').textContent = '🛑 ₹' + d.call.stop;
+      levels.style.display = 'flex';
+    } else if (d.call && d.call.blocked) {
+      banner.textContent = '🚫 ' + (d.signal === 'SCALP_LONG' ? 'LONG' : 'SHORT') + ' blocked — ' + (d.call.block_reason || 'spread too wide');
+      banner.style.background = '#2a1a0a'; banner.style.color = '#ffab00';
+      levels.style.display = 'none';
+    } else {
+      const win = d.window === 'BLOCKED' ? ' ⏸ ' + (d.window_reason || '') : '';
+      banner.textContent = '⏳ No scalp — ' + (d.reason || 'waiting for 5m data') + win;
+      banner.style.background = '#141b22'; banner.style.color = '#ffab00';
+      levels.style.display = 'none';
+    }
+    // mini history
+    const hist = document.getElementById(p + 'ScalperHistory');
+    if (hist) {
+      const calls = d.calls || [];
+      if (!calls.length) {
+        hist.innerHTML = '<div style="color:var(--text-dim);padding:4px;text-align:center;font-size:11px">No calls fired today</div>';
+      } else {
+        hist.innerHTML = calls.map(c => {
+          const st = c.status || 'ACTIVE';
+          const border = st === 'TARGET_HIT' ? '#00c853' : st === 'STOP_HIT' ? '#ff1744' : st === 'EXPIRED' ? '#64748b' : '#ffab00';
+          const label = st === 'TARGET_HIT' ? '🎯 HIT' : st === 'STOP_HIT' ? '🛑 STOP' : st === 'EXPIRED' ? 'EXPIRED' : '● ACTIVE';
+          const chip = st === 'TARGET_HIT' ? 'strat-ok' : st === 'STOP_HIT' ? 'strat-bad' : st === 'EXPIRED' ? 'strat-off' : 'strat-wait';
+          return stratRowHTML(c.time + ' · exp ' + (c.expires_at || '--'), label, c.option + ' @ ₹' + c.entry + ' → 🎯 ₹' + c.target + ' / 🛑 ₹' + c.stop, chip === 'strat-ok' ? 'ok' : chip === 'strat-bad' ? 'bad' : chip === 'strat-off' ? 'off' : 'wait')
+            .replace('<div class="strat-row"', '<div class="strat-row" style="border-left-color:' + border + '"');
+        }).join('');
+      }
+    }
+  } catch (e) { /* best-effort */ }
+}
+
 fetchScalper();
+// multi-asset scalper cards
+fetchAssetScalper('bnf', 'bnf');
+fetchAssetScalper('sensex', 'sx');
+fetchAssetScalper('btc', 'btc');
 fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles(); initQuickNav();
 setTimeout(() => { fetchBtc(); fetchBnf(); fetchSensex(); fetchOi(); fetchOi('bnf'); }, 800);
 setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
@@ -1649,6 +1707,7 @@ fetchIntraday();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchScalper, 30000);
+setInterval(() => { fetchAssetScalper('bnf', 'bnf'); fetchAssetScalper('sensex', 'sx'); fetchAssetScalper('btc', 'btc'); }, 30000);
 setInterval(refreshStrategies, 120000);
 setInterval(refreshBtcStrategies, 60000);
 setInterval(refreshBnfStrategies, 60000);

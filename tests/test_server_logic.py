@@ -88,23 +88,28 @@ class ScalpCallLifecycleTest(unittest.TestCase):
         self.assertEqual(ev, [])
         self.assertEqual(ns._scalp_calls[0]["status"], "ACTIVE")
 
-    def test_append_call_caps_at_20(self):
-        for i in range(25):
-            ns._scalp_append_call({"signal": "SCALP_LONG"}, {"option": "O{}".format(i),
+    def test_append_call_caps_at_60(self):
+        for i in range(65):
+            ns._scalp_append_call("nifty", {"signal": "SCALP_LONG"}, {"option": "O{}".format(i),
                                                               "strike": 24000 + i, "entry": 100.0,
                                                               "target": 110.0, "stop": 90.0,
                                                               "expires_at": "10:30"})
-        self.assertEqual(len(ns._scalp_calls), 20)
+        self.assertEqual(len(ns._scalp_calls), 60)
         self.assertEqual(ns._scalp_calls[0]["option"], "O5")  # oldest dropped
+        self.assertTrue(all(c["asset"] == "nifty" for c in ns._scalp_calls))
 
 class ChainPremiumTest(unittest.TestCase):
     def test_chain_premium_resolves_by_strike(self):
         rows = [{"strike": 24350.0, "ce_ltp": 88.5, "pe_ltp": 44.0},
                 {"strike": 24400.0, "ce_ltp": 70.0, "pe_ltp": 30.0}]
         with mock.patch("chain_table.get_chain", return_value={"rows": rows}):
-            self.assertEqual(ns._chain_premium(24350, "CE"), 88.5)
-            self.assertEqual(ns._chain_premium(24400, "PE"), 30.0)
-            self.assertIsNone(ns._chain_premium(99999, "CE"))
+            self.assertEqual(ns._chain_premium("nifty", 24350, "CE"), 88.5)
+            self.assertEqual(ns._chain_premium("nifty", 24400, "PE"), 30.0)
+            self.assertIsNone(ns._chain_premium("nifty", 99999, "CE"))
+
+    def test_spot_asset_uses_scalper_spot(self):
+        ns._scalper_caches["btc"] = {"ts": 0, "data": {"spot": 64000.0}}
+        self.assertEqual(ns._chain_premium("btc", 0, "CE"), 64000.0)
 
 
 if __name__ == "__main__":

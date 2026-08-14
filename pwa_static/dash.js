@@ -1399,6 +1399,25 @@ async function fetchScalper() {
         if (!rows.length) rows.push('<div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">No resolved calls yet — calls resolve to target/stop/expiry</div>');
         pnlGrid.innerHTML = rows.join('');
       }
+      // 📅 Dry-run P&L by day — the over-time record (one immutable row per day)
+      try {
+        const hr = await fetch('/api/scalp/history?_=' + Date.now());
+        const hd = await hr.json();
+        const hEl = document.getElementById('scalperPnlHistory');
+        const hUpd = document.getElementById('scalperPnlHistUpd');
+        if (hUpd) hUpd.textContent = hd.history && hd.history.length ? hd.history.length + ' days' : '--';
+        if (hEl) {
+          const rowsH = (hd.history || []).map(r => {
+            const net = r.net_rs != null && r.net_rs !== 0 ? '₹' + Number(r.net_rs).toLocaleString('en-IN') : (r.net_pts != null ? r.net_pts + ' pts' : '--');
+            const btc = (r.by_asset || {}).btc;
+            const btcTxt = btc ? ' · ₿ ' + (btc.pts >= 0 ? '+' : '') + btc.pts + ' pts' : '';
+            const ok = (r.net_pts || 0) >= 0;
+            return stratRowHTML(r.date, r.resolved + ' calls · ' + r.wins + 'W/' + (r.resolved - r.wins) + 'L · WR ' + r.win_rate + '%', 'net ' + net + btcTxt, ok ? 'ok' : 'bad');
+          });
+          if (!rowsH.length) rowsH.push('<div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">First snapshot lands after the day resolves — auto at 00:10 IST</div>');
+          hEl.innerHTML = rowsH.join('');
+        }
+      } catch (e) { /* best-effort */ }
     } catch (e) { /* best-effort */ }
     // Gauges
     const g = document.getElementById('scalperGauges');

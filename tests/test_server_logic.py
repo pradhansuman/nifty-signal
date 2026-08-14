@@ -319,6 +319,59 @@ class ScalpMidnightExpiryTest(unittest.TestCase):
         self.assertTrue(ns._scalp_expired(c, now=now))
 
 
+class ScalpDailySnapshotTest(unittest.TestCase):
+    """Daily P&L snapshot history: one immutable row per day, day-filtered."""
+
+    def setUp(self):
+        self.sv = mock.patch.object(ns, "_scalp_save_history")
+        self.sv.start()
+        self.addCleanup(self.sv.stop)
+        self._orig = ns._scalp_pnl_history
+        ns._scalp_pnl_history = []
+        self.addCleanup(self._restore)
+
+    def _restore(self):
+        ns._scalp_pnl_history = self._orig
+
+    def _calls(self):
+        return [
+            {"date": "2026-08-15", "asset": "btc", "signal": "SCALP_SHORT",
+             "entry": 100.0, "target": 90.0, "stop": 110.0,
+             "status": "TARGET_HIT", "hit_premium": 90.0},
+            {"date": "2026-08-15", "asset": "btc", "signal": "SCALP_SHORT",
+             "entry": 100.0, "target": 90.0, "stop": 110.0,
+             "status": "EXPIRED", "hit_premium": 95.0},
+            {"date": "2026-08-14", "asset": "nifty", "signal": "SCALP_LONG",
+             "entry": 100.0, "target": 110.0, "stop": 90.0,
+             "status": "STOP_HIT", "hit_premium": 90.0},
+        ]
+
+    def test_snapshot_filters_by_day(self):
+        ns._scalp_calls = self._calls()
+        row = ns._scalp_snapshot_day("2026-08-15")
+        self.assertEqual(row["date"], "2026-08-15")
+        self.assertEqual(row["resolved"], 2)
+        self.assertEqual(row["wins"], 1)
+        self.assertEqual(len(ns._scalp_pnl_history), 1)
+
+    def test_snapshot_no_dupes(self):
+        ns._scalp_calls = self._calls()
+        ns._scalp_snapshot_day("2026-08-15")
+        row2 = ns._scalp_snapshot_day("2026-08-15")
+        self.assertIsNone(row2)
+        self.assertEqual(len(ns._scalp_pnl_history), 1)
+
+    def test_snapshot_defaults_to_latest_date(self):
+        ns._scalp_calls = self._calls()
+        row = ns._scalp_snapshot_day()
+        self.assertEqual(row["date"], "2026-08-15")
+
+    def test_summary_filtered_list(self):
+        calls = self._calls()
+        s = ns._scalp_summary([c for c in calls if c.get("date") == "2026-08-14"])
+        self.assertEqual(s["resolved"], 1)
+
+
 class ScalpSignalsOnlyAlertsTest(unittest.TestCase):
     """SCALP_ALERTS_MODE=signals (default): ONLY buy/sell entry alerts fire.
     WAIT/expired/trail/target/stop chatter is suppressed, but watch state and

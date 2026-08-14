@@ -587,11 +587,33 @@ _scalp_watches = {a: {"signal": None, "option": None, "entry": None, "ts": None,
 _scalp_calls = []  # today's scalp call log (ACTIVE until target/stop/expiry)
 _SCALP_CALLS_PATH = os.path.join(WORKSPACE, ".openclaw", "tmp", "scalp_calls.json")
 
+_scalp_pnl_history = []  # immutable daily snapshots: [{date, resolved, wins, win_rate, net_pts, net_rs, by_asset}]
+_SCALP_PNL_HISTORY_PATH = os.path.join(WORKSPACE, ".openclaw", "tmp", "scalp_pnl_history.json")
+
 try:
     with open(_SCALP_CALLS_PATH) as _f:
         _scalp_calls = json.load(_f)
+    _today = _ist_now().date().isoformat()
+    for _c in _scalp_calls:
+        if not _c.get("date"):
+            _c["date"] = _today  # backfill pre-snapshot records (all fired today)
 except Exception:
     _scalp_calls = []
+
+try:
+    with open(_SCALP_PNL_HISTORY_PATH) as _f:
+        _scalp_pnl_history = json.load(_f)
+except Exception:
+    _scalp_pnl_history = []
+
+
+def _scalp_save_history():
+    try:
+        os.makedirs(os.path.dirname(_SCALP_PNL_HISTORY_PATH), exist_ok=True)
+        with open(_SCALP_PNL_HISTORY_PATH, "w") as _f:
+            json.dump(_scalp_pnl_history[-120:], _f, default=str)
+    except Exception:
+        pass
 
 
 def _scalp_save_calls():
@@ -642,6 +664,7 @@ def _scalp_append_call(asset, sc, call):
         "perfect": bool(sc.get("perfect")),
         "funding": call.get("funding"),
         "expires_at": call.get("expires_at"), "expires_dt": call.get("expires_dt"), "status": "ACTIVE",
+        "date": _ist_now().date().isoformat(),
     })
     if len(_scalp_calls) > 60:
         del _scalp_calls[:-60]
@@ -669,9 +692,10 @@ def _scalp_pnl(c):
     return (round(per_unit, 2), 0.0, round(per_unit / entry * 100, 2) if entry else 0.0)
 
 
-def _scalp_summary():
-    """Today's dry-run summary across resolved calls."""
-    resolved = [c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
+def _scalp_summary(calls=None):
+    """Dry-run summary across resolved calls (optionally a filtered list)."""
+    calls = calls if calls is not None else _scalp_calls
+    resolved = [c for c in calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
     wins = [c for c in resolved if c.get("status") == "TARGET_HIT"]
     net_pts = net_rs = 0.0
     by_asset = {}
@@ -690,6 +714,31 @@ def _scalp_summary():
         "net_pts": round(net_pts, 2), "net_rs": round(net_rs, 2),
         "by_asset": by_asset,
     }
+
+
+def _scalp_snapshot_day(day=None):
+    """Append one immutable daily P&L row to the history (skips dupes for the
+    same date). day = ISO date; default = latest date found in the ledger
+    (call at 00:10 IST to capture the previous day). Returns the row or None."""
+    try:
+        if day is None:
+            dates = sorted({c.get("date") for c in _scalp_calls if c.get("date")})
+            day = dates[-1] if dates else _ist_now().date().isoformat()
+        day_calls = [c for c in _scalp_calls if c.get("date") == day]
+        s = _scalp_summary(day_calls)
+        if not s.get("resolved"):
+            return None
+        if any(r.get("date") == day for r in _scalp_pnl_history):
+            return None  # already snapshotted
+        row = {"date": day, "resolved": s["resolved"], "wins": s["wins"],
+               "win_rate": s["win_rate"], "net_pts": s["net_pts"], "net_rs": s["net_rs"],
+               "by_asset": s["by_asset"]}
+        _scalp_pnl_history.append(row)
+        _scalp_save_history()
+        return row
+    except Exception as e:
+        print("scalp snapshot failed:", e)
+        return None
 
 
 def _scalp_daily_report():
@@ -960,6 +1009,19 @@ def api_scalper():
     out["calls"] = list(reversed([x for x in _scalp_calls if x.get("asset") == asset]))
     out["pnl"] = _scalp_summary()
     return jsonify(_clean_nan(out))
+
+
+@app.route("/api/scalp/history")
+def api_scalp_history():
+    """Immutable daily P&L snapshots (one row per day) — the over-time record."""
+    return jsonify({"history": list(reversed(_scalp_pnl_history))})
+
+
+@app.route("/api/scalp/snapshot", methods=["POST"])
+def api_scalp_snapshot():
+    """Manually trigger today's P&L snapshot (idempotent — no dupes)."""
+    row = _scalp_snapshot_day()
+    return jsonify({"ok": row is not None, "row": row})
 
 
 # ── Algo Trading ──
@@ -1249,6 +1311,7 @@ def alert_scheduler():
     last_gap_check = None
     last_market_open_push = None
     last_scalp_report = None
+    last_scalp_snapshot = None
     
     while True:
         try:
@@ -1257,7 +1320,19 @@ def alert_scheduler():
             today = now.date()
             current_minute = now.strftime("%H:%M")
             
-            if now.weekday() >= 5:  # Weekend
+            if now.weekday() >= 5:  # Weekend — BTC scalper still runs 24/7; skip India-market work
+                if current_minute == "00:10" and last_scalp_snapshot != today:
+                    last_scalp_snapshot = today
+                    try:
+                        _scalp_snapshot_day()
+                    except Exception:
+                        pass
+                if current_minute[-2:] in _FIVE_MIN_MARKS and last_scalp_check != current_minute:
+                    last_scalp_check = current_minute
+                    try:
+                        _scalp_tick("btc")
+                    except Exception:
+                        pass
                 time.sleep(60)
                 continue
             
@@ -1473,6 +1548,14 @@ def alert_scheduler():
                 except Exception as e:
                     _add_alert("warning", "BTST Alert Failed", str(e)[:200])
             
+            # ── Daily scalp P&L snapshot at 00:10 IST (captures the previous day) ──
+            if current_minute == "00:10" and last_scalp_snapshot != today:
+                last_scalp_snapshot = today
+                try:
+                    _scalp_snapshot_day()
+                except Exception:
+                    pass
+
             # ── Daily Scalp Report at 3:40 PM (Odia, per-asset dry-run P&L) ──
             if current_minute == "15:40" and last_scalp_report != today:
                 last_scalp_report = today

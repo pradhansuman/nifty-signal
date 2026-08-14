@@ -317,3 +317,58 @@ class ScalpSignalsOnlyAlertsTest(unittest.TestCase):
         self.assertEqual(c["status"], "TARGET_HIT")  # resolution still runs
         self.assertEqual(len(events), 1)
         self.assertFalse(ns._SCALP_VERBOSE_ALERTS)  # but no alert would be pushed
+
+
+class OdiaTranslateTest(unittest.TestCase):
+    """Odia phrase translation: templates → ଓଡ଼ିଆ, data/HTML untouched."""
+
+    def test_entry_alert_translated(self):
+        from telegram_alert import odia_translate
+        msg = "🟢 NIFTY SCALP: Buy 24400 CE @ 73.1\nEntry ₹73.1 | Target ₹80.4 | Stop ₹65.8 | Expiry 18-Aug | Lot ₹4,751 | Spread 2.3% | ⏳ expires 14:40"
+        out = odia_translate(msg)
+        self.assertIn("ସ୍କାଲ୍ପ୍", out)
+        self.assertIn("କିଣ", out)
+        self.assertIn("ଏଣ୍ଟ୍ରି ₹73.1", out)
+        self.assertIn("ଟାର୍ଗେଟ୍ ₹80.4", out)
+        self.assertIn("ଷ୍ଟପ୍ ₹65.8", out)
+        self.assertIn("ଏକ୍ସପାୟରୀ 18-Aug", out)
+        self.assertIn("ସ୍ପ୍ରେଡ୍", out)
+        self.assertIn("24400 CE @ 73.1", out)  # ticker data preserved
+
+    def test_perfect_setup_title(self):
+        from telegram_alert import odia_translate
+        out = odia_translate("🔥 PERFECT SETUP — 🟢 NIFTY SCALP: Buy 24400 CE")
+        self.assertIn("ପରଫେକ୍ଟ ସେଟଅପ୍", out)
+        self.assertNotIn("PERFECT SETUP", out)
+
+    def test_html_and_numbers_preserved(self):
+        from telegram_alert import odia_translate
+        msg = "<b>NIFTY signal</b>: score +3, ADX 25, momentum +45.5, below VWAP 24300"
+        out = odia_translate(msg)
+        self.assertIn("<b>", out)
+        self.assertIn("+3", out)
+        self.assertIn("45.5", out)
+        self.assertIn("ସିଗନାଲ୍", out)
+        self.assertIn("ତଳେ", out)
+
+    def test_tg_lang_en_disables(self):
+        import os
+        old = os.environ.get("TG_LANG")
+        os.environ["TG_LANG"] = "en"
+        try:
+            from telegram_alert import send_telegram
+            import telegram_alert
+            with mock.patch.object(telegram_alert, "_load_config",
+                                   return_value={"token": "x", "chat_id": "1"}), \
+                 mock.patch.object(telegram_alert.requests, "post") as mp:
+                mp.return_value.status_code = 200
+                mp.return_value.json.return_value = {"ok": True}
+                send_telegram("🟢 NIFTY SCALP: Buy 24400 CE")
+                sent = mp.call_args.kwargs["json"]["text"]
+            self.assertIn("NIFTY SCALP", sent)  # untranslated
+            self.assertNotIn("ସ୍କାଲ୍ପ୍", sent)
+        finally:
+            if old is None:
+                os.environ.pop("TG_LANG", None)
+            else:
+                os.environ["TG_LANG"] = old

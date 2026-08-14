@@ -22,13 +22,14 @@ import yfinance as yf
 
 sys.path.insert(0, ".")
 import chain_table  # noqa: E402  (Upstox option chain for live premiums)
+import delta_exchange  # noqa: E402  (Delta Exchange BTC options chain)
 
 # ── Multi-asset config ──
 ASSETS = {
     "nifty":  {"symbol": "^NSEI",    "lot": 65, "options": True,  "vix": True,  "spot_tp": None,   "label": "NIFTY"},
     "bnf":    {"symbol": "^NSEBANK", "lot": 15, "options": True,  "vix": True,  "spot_tp": None,   "label": "BANK NIFTY"},
     "sensex": {"symbol": "^BSESN",   "lot": 20, "options": False, "vix": True,  "spot_tp": 0.0015, "label": "SENSEX"},
-    "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": False, "vix": False, "spot_tp": 0.005,  "label": "BITCOIN"},
+    "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": True,  "vix": False, "spot_tp": 0.005,  "label": "BITCOIN"},
 }
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -152,34 +153,45 @@ def _stoch(df, k=14, d=3):
     return kk, kk.rolling(d).mean()
 
 
+def _spot_call(asset, spot, bias):
+    """Spot-level call (used for sensex, and as BTC fallback when the options
+    chain is unavailable). Entry/target/stop directly on the price."""
+    cfg = ASSETS[asset]
+    tp = cfg["spot_tp"]
+    if bias == "LONG":
+        target, stop = spot * (1 + tp), spot * (1 - tp)
+    else:
+        target, stop = spot * (1 - tp), spot * (1 + tp)
+    return {
+        "option": "{} {}".format("LONG" if bias == "LONG" else "SHORT", cfg["label"]),
+        "strike": round(spot, 2), "premium": round(spot, 2),
+        "expiry": "INTRAday",
+        "entry": round(spot, 2), "buy_ask": round(spot, 2),
+        "target": round(target, 2), "stop": round(stop, 2),
+        "lot_cost": 0, "spread": 0.0, "spread_pct": 0.0, "half_spread": 0.0,
+        "delta": None, "theta": None,
+        "target_pts": round(spot * tp, 0), "stop_pts": round(spot * tp, 0),
+    }
+
+
 def build_call(asset, spot, bias, expiry):
     """Build the actionable call for an asset.
-    Options assets (nifty/bnf): spread-aware strike selection from the Upstox
+    Options assets (nifty/bnf/btc): spread-aware strike selection from the
     chain (delta 0.40-0.80, tightest spread, >3% blocks, theta guard,
-    target/stop net of spread).
-    Spot assets (sensex/btc): entry/target/stop directly on the price."""
+    target/stop net of spread). BTC chain comes from Delta Exchange.
+    Spot assets (sensex): entry/target/stop directly on the price.
+    BTC falls back to a spot call if the options chain is unavailable."""
     cfg = ASSETS[asset]
     if not cfg["options"]:
-        tp = cfg["spot_tp"]
-        if bias == "LONG":
-            target, stop = spot * (1 + tp), spot * (1 - tp)
-        else:
-            target, stop = spot * (1 - tp), spot * (1 + tp)
-        return {
-            "option": "{} {}".format("LONG" if bias == "LONG" else "SHORT", cfg["label"]),
-            "strike": round(spot, 2), "premium": round(spot, 2),
-            "expiry": "INTRAday",
-            "entry": round(spot, 2), "buy_ask": round(spot, 2),
-            "target": round(target, 2), "stop": round(stop, 2),
-            "lot_cost": 0, "spread": 0.0, "spread_pct": 0.0, "half_spread": 0.0,
-            "delta": None, "theta": None,
-            "target_pts": round(spot * tp, 0), "stop_pts": round(spot * tp, 0),
-        }
+        return _spot_call(asset, spot, bias)
     try:
-        ch = chain_table.get_chain(asset="banknifty" if asset == "bnf" else "nifty")
+        if asset == "btc":
+            ch = delta_exchange.get_btc_chain()
+        else:
+            ch = chain_table.get_chain(asset="banknifty" if asset == "bnf" else "nifty")
         rows = ch.get("rows") or []
         if not rows:
-            return None
+            return _spot_call(asset, spot, bias) if asset == "btc" else None
         cands = []
         for r in rows:
             strike = r.get("strike") or 0
@@ -248,6 +260,8 @@ def build_call(asset, spot, bias, expiry):
             "stop_pts": round(spot * 0.0009, 0),
         }
     except Exception:
+        if asset == "btc":
+            return _spot_call(asset, spot, bias)  # Delta chain failed → spot fallback
         return None
     return None
 
@@ -446,6 +460,10 @@ def main(asset="nifty"):
     out["signal"] = "SCALP_LONG" if bias == "LONG" else "SCALP_SHORT"
     out["confidence"] = min(100, abs(score) * 14)
     call = build_call(asset, spot, bias, out.get("expiry"))
+    # BTC options on Delta are often 5-7% spread → the honest filter blocks them.
+    # Fall back to a spot-level BTC call rather than showing nothing.
+    if asset == "btc" and (call is None or call.get("blocked")):
+        call = _spot_call(asset, spot, bias)
     out["call"] = call
     if call is None:
         out["reason"] = "{} scalp (score {:+d}) but no option premium available from Upstox chain".format(bias, score)

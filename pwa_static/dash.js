@@ -1276,6 +1276,30 @@ async function fetchScalper() {
       document.getElementById('scalperCall').textContent = '';
       document.getElementById('scalperLevels').style.display = 'none';
     }
+    // 📜 Today's call history — kept alive till target/stop/expiry
+    try {
+      const hist = document.getElementById('scalperHistory');
+      const cnt = document.getElementById('scalperCallsCount');
+      const calls = d.calls || [];
+      if (cnt) cnt.textContent = calls.length ? calls.length + ' call' + (calls.length > 1 ? 's' : '') : '--';
+      if (hist) {
+        if (!calls.length) {
+          hist.innerHTML = '<div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">No calls fired yet today</div>';
+        } else {
+          hist.innerHTML = calls.map(c => {
+            const st = c.status || 'ACTIVE';
+            const border = st === 'TARGET_HIT' ? '#00c853' : st === 'STOP_HIT' ? '#ff1744' : st === 'EXPIRED' ? '#64748b' : '#ffab00';
+            const chip = st === 'TARGET_HIT' ? 'strat-ok' : st === 'STOP_HIT' ? 'strat-bad' : st === 'EXPIRED' ? 'strat-off' : 'strat-wait';
+            const label = st === 'TARGET_HIT' ? '🎯 HIT' : st === 'STOP_HIT' ? '🛑 STOP' : st === 'EXPIRED' ? 'EXPIRED' : '● ACTIVE';
+            const when = c.time + ' · expires ' + (c.expires_at || '--') + (c.hit_time ? ' · resolved ' + c.hit_time : '');
+            const detail = c.option + ' @ ₹' + c.entry + ' → 🎯 ₹' + c.target + ' / 🛑 ₹' + c.stop +
+              (c.hit_premium ? ' · last ₹' + c.hit_premium : '');
+            return stratRowHTML(when, label, detail, chip === 'strat-ok' ? 'ok' : chip === 'strat-bad' ? 'bad' : chip === 'strat-off' ? 'off' : 'wait')
+              .replace('<div class="strat-row"', '<div class="strat-row" style="border-left-color:' + border + '"');
+          }).join('');
+        }
+      }
+    } catch (e) { /* history render is best-effort */ }
     // Gauges
     const g = document.getElementById('scalperGauges');
     if (g && d.ema9 != null) {

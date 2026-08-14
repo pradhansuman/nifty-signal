@@ -542,6 +542,79 @@ def api_intraday():
 _scalper_cache = {"ts": 0, "data": None}
 _scalp_watch = {"signal": None, "option": None, "entry": None, "ts": None, "highest": None,
                "breakeven": False, "trail": False}
+_scalp_calls = []  # today's scalp call log (ACTIVE until target/stop/expiry)
+_SCALP_CALLS_PATH = os.path.join(WORKSPACE, ".openclaw", "tmp", "scalp_calls.json")
+
+try:
+    with open(_SCALP_CALLS_PATH) as _f:
+        _scalp_calls = json.load(_f)
+except Exception:
+    _scalp_calls = []
+
+
+def _scalp_save_calls():
+    try:
+        os.makedirs(os.path.dirname(_SCALP_CALLS_PATH), exist_ok=True)
+        with open(_SCALP_CALLS_PATH, "w") as _f:
+            json.dump(_scalp_calls[-20:], _f, default=str)
+    except Exception:
+        pass
+
+
+def _chain_premium(strike, option_type):
+    """Current LTP for a strike+type from the (cached) Upstox chain."""
+    try:
+        from chain_table import get_chain
+        ch = get_chain()
+        for r in ch.get("rows") or []:
+            if abs((r.get("strike") or 0) - strike) < 0.01:
+                return r.get("ce_ltp") if option_type == "CE" else r.get("pe_ltp")
+    except Exception:
+        pass
+    return None
+
+
+def _scalp_append_call(sc, call):
+    """Log a newly fired scalp call."""
+    _scalp_calls.append({
+        "id": len(_scalp_calls) + 1,
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "signal": sc.get("signal"),
+        "option": call.get("option"),
+        "strike": call.get("strike"),
+        "option_type": "CE" if sc.get("signal") == "SCALP_LONG" else "PE",
+        "entry": call.get("entry"), "target": call.get("target"), "stop": call.get("stop"),
+        "expires_at": call.get("expires_at"), "status": "ACTIVE",
+    })
+    if len(_scalp_calls) > 20:
+        del _scalp_calls[:-20]
+    _scalp_save_calls()
+
+
+def _scalp_refresh_statuses():
+    """Check ACTIVE calls: TARGET_HIT / STOP_HIT / EXPIRED. Returns events to push."""
+    events = []
+    now_hm = datetime.now().strftime("%H:%M")
+    for c in _scalp_calls:
+        if c.get("status") != "ACTIVE":
+            continue
+        if c.get("expires_at") and now_hm > c.get("expires_at"):
+            c["status"] = "EXPIRED"
+            c["hit_time"] = now_hm
+            events.append((c, "expired"))
+            continue
+        prem = _chain_premium(c.get("strike"), c.get("option_type"))
+        if prem is None:
+            continue
+        if c.get("target") and prem >= c["target"]:
+            c["status"] = "TARGET_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
+            events.append((c, "target"))
+        elif c.get("stop") and prem <= c["stop"]:
+            c["status"] = "STOP_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
+            events.append((c, "stop"))
+    if events:
+        _scalp_save_calls()
+    return events
 
 
 @app.route("/api/scalper")
@@ -551,7 +624,9 @@ def api_scalper():
     if _scalper_cache["data"] is None or (_t.time() - _scalper_cache["ts"]) > 30:
         _scalper_cache["data"] = run_script("scalper.py")
         _scalper_cache["ts"] = _t.time()
-    return jsonify(_clean_nan(_scalper_cache["data"]))
+    out = dict(_scalper_cache["data"] or {})
+    out["calls"] = list(reversed(_scalp_calls))
+    return jsonify(_clean_nan(out))
 
 
 # ── Algo Trading ──
@@ -994,6 +1069,8 @@ def alert_scheduler():
                                 "signal": sc_sig, "option": call.get("option"), "entry": call.get("entry"),
                                 "ts": datetime.now(), "highest": call.get("entry"),
                                 "breakeven": False, "trail": False})
+                            # 📜 Log the call — stays ACTIVE until target/stop/expiry
+                            _scalp_append_call(sc, call)
                             emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
                             _add_alert("critical", "{} SCALP: {}".format(emoji, call.get("option")),
                                 "Entry ₹{} | Target ₹{} (+10%) | Stop ₹{} (-10%) | Expiry {} | Lot ₹{:,} | Spread {}% | ⏳ expires {}\n{}".format(
@@ -1031,9 +1108,24 @@ def alert_scheduler():
                     elif sc_sig == "WAIT" and _scalp_watch["signal"] in ("SCALP_LONG", "SCALP_SHORT"):
                         _add_alert("info", "⏳ Scalp closed — back to WAIT", sc.get("reason", ""))
                         _scalp_watch.update({"signal": None, "option": None})
+                    # 🎯 Refresh call statuses — TARGET_HIT / STOP_HIT / EXPIRED (kept alive till expiry)
+                    try:
+                        for c, ev in _scalp_refresh_statuses():
+                            if ev == "target":
+                                _add_alert("critical", "🎯 SCALP TARGET HIT (+10%)",
+                                    "{} hit ₹{} (target ₹{}). Book profit — call done.".format(
+                                        c.get("option"), c.get("hit_premium"), c.get("target")))
+                            elif ev == "stop":
+                                _add_alert("critical", "🛑 SCALP STOP HIT (−10%)",
+                                    "{} fell to ₹{} (stop ₹{}). EXIT — call done.".format(
+                                        c.get("option"), c.get("hit_premium"), c.get("stop")))
+                            elif ev == "expired":
+                                _add_alert("info", "⏳ SCALP CALL EXPIRED",
+                                    "{} expired at {} — no entry taken.".format(c.get("option"), c.get("expires_at")))
+                    except Exception:
+                        pass
                 except Exception:
                     pass
-
             # ── OI Buildup (smart money) — snapshot every 5 min + alert on bias flip ──
             if in_market and current_minute.endswith(("00", "05", "10", "15", "20", "25",
                                                       "30", "35", "40", "45", "50", "55")):

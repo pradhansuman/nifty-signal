@@ -492,6 +492,19 @@ def api_intraday():
     return jsonify(_clean_nan(_intraday_cache["data"]))
 
 
+_scalper_cache = {"ts": 0, "data": None}
+
+
+@app.route("/api/scalper")
+def api_scalper():
+    """Nifty scalper — 5m momentum bias + actionable Buy CE/PE call. 30s cache."""
+    import time as _t
+    if _scalper_cache["data"] is None or (_t.time() - _scalper_cache["ts"]) > 30:
+        _scalper_cache["data"] = run_script("scalper.py")
+        _scalper_cache["ts"] = _t.time()
+    return jsonify(_clean_nan(_scalper_cache["data"]))
+
+
 # ── Algo Trading ──
 
 @app.route("/api/algo/status")
@@ -769,6 +782,8 @@ def alert_scheduler():
     last_eod_summary = None
     last_orb_check = None
     last_intraday_check = None
+    last_scalp_check = None
+    last_scalp_signal = None
     last_oi_signal = None
     last_gap_check = None
     last_market_open_push = None
@@ -886,6 +901,26 @@ def alert_scheduler():
                             f"{ema.get('reason', '')} | Spot: {ema.get('spot')} | "
                             f"EMA9: {ema.get('ema9')} | EMA21: {ema.get('ema21')}")
                 except Exception as e:
+                    pass
+
+            # ── Scalper (5m momentum + live option call) every 5 min ──
+            if in_market and current_minute.endswith(("00", "05")) and last_scalp_check != current_minute:
+                last_scalp_check = current_minute
+                try:
+                    sc = run_script("scalper.py")
+                    sc_sig = sc.get("signal")
+                    if sc_sig in ("SCALP_LONG", "SCALP_SHORT") and sc_sig != last_scalp_signal:
+                        last_scalp_signal = sc_sig
+                        call = sc.get("call") or {}
+                        emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
+                        _add_alert("critical", "{} SCALP: {}".format(emoji, call.get("option") or sc_sig),
+                            "Entry ₹{} | Target ₹{} (+10%) | Stop ₹{} (-10%) | Expiry {} | Lot ₹{:,}\n{}".format(
+                                call.get("entry"), call.get("target"), call.get("stop"),
+                                call.get("expiry"), call.get("lot_cost") or 0, sc.get("reason", "")))
+                    elif sc_sig == "WAIT" and last_scalp_signal in ("SCALP_LONG", "SCALP_SHORT"):
+                        last_scalp_signal = "WAIT"
+                        _add_alert("info", "⏳ Scalp closed — back to WAIT", sc.get("reason", ""))
+                except Exception:
                     pass
 
             # ── OI Buildup (smart money) — snapshot every 5 min + alert on bias flip ──

@@ -1236,6 +1236,61 @@ window.addEventListener('resize', () => {
   }, 200);
 });
 
+// ── Nifty Scalper (5m momentum + live option call) ──
+async function fetchScalper() {
+  const banner = document.getElementById('scalperBanner');
+  if (!banner) return;
+  try {
+    const resp = await fetch('/api/scalper?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
+    const upd = document.getElementById('scalperUpdated');
+    if (upd) upd.textContent = d.timestamp || '';
+    const scoreEl = document.getElementById('scalperScore');
+    if (scoreEl) scoreEl.textContent = 'Score: ' + (d.score >= 0 ? '+' : '') + d.score + ' (' + (d.bias || 'FLAT') + ')';
+    if (d.signal === 'SCALP_LONG' && d.call) {
+      banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry;
+      banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
+      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot cost ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Target +10% / Stop −10% on premium';
+      document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
+      document.getElementById('scalperTarget').textContent = '🎯 ₹' + d.call.target;
+      document.getElementById('scalperStop').textContent = '🛑 ₹' + d.call.stop;
+      document.getElementById('scalperLevels').style.display = 'flex';
+    } else if (d.signal === 'SCALP_SHORT' && d.call) {
+      banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ₹' + d.call.entry;
+      banner.style.background = '#280a0a'; banner.style.color = '#ff8080';
+      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot cost ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Target +10% / Stop −10% on premium';
+      document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
+      document.getElementById('scalperTarget').textContent = '🎯 ₹' + d.call.target;
+      document.getElementById('scalperStop').textContent = '🛑 ₹' + d.call.stop;
+      document.getElementById('scalperLevels').style.display = 'flex';
+    } else {
+      banner.textContent = '⏳ No scalp setup — ' + (d.reason || 'waiting for 5m data');
+      banner.style.background = '#141b22'; banner.style.color = '#ffab00';
+      document.getElementById('scalperCall').textContent = '';
+      document.getElementById('scalperLevels').style.display = 'none';
+    }
+    // Gauges
+    const g = document.getElementById('scalperGauges');
+    if (g && d.ema9 != null) {
+      const rows = [];
+      const add = (n, st, r, c) => rows.push(stratRowHTML(n, st, r, c));
+      const emaUp = d.ema9 > d.ema21;
+      add('EMA 9/21', emaUp ? 'BULL' : 'BEAR', 'EMA9 ' + Number(d.ema9).toLocaleString('en-IN') + ' vs EMA21 ' + Number(d.ema21).toLocaleString('en-IN'), emaUp ? 'ok' : 'bad');
+      const vwDiff = d.vwap != null ? ((d.spot - d.vwap) / d.vwap * 100) : null;
+      add('VWAP', d.vwap != null ? (d.spot >= d.vwap ? 'ABOVE' : 'BELOW') : '--', vwDiff != null ? (vwDiff >= 0 ? '+' : '') + vwDiff.toFixed(2) + '% vs VWAP ' + Number(d.vwap).toLocaleString('en-IN') : 'no data', vwDiff != null ? (vwDiff >= 0 ? 'ok' : 'bad') : 'wait');
+      add('RSI (14)', d.rsi != null ? d.rsi.toFixed(0) : '--', d.rsi != null ? (d.rsi > 70 ? 'overbought' : d.rsi < 30 ? 'oversold' : 'neutral') : '', 'wait');
+      add('Stoch', d.stoch_k != null ? 'K ' + d.stoch_k.toFixed(0) + ' / D ' + (d.stoch_d != null ? d.stoch_d.toFixed(0) : '--') : '--', d.stoch_k != null ? (d.stoch_k > 80 ? 'overbought' : d.stoch_k < 20 ? 'oversold' : 'neutral') : '', 'wait');
+      add('Momentum (3 bar)', d.momentum != null ? (d.momentum >= 0 ? '+' : '') + d.momentum.toFixed(1) : '--', d.momentum != null ? (Math.abs(d.momentum) > 5 ? 'strong move' : 'quiet') : '', d.momentum != null && Math.abs(d.momentum) > 5 ? 'wait' : 'wait');
+      if (d.orb_high != null) {
+        const inOrb = d.spot >= d.orb_low && d.spot <= d.orb_high;
+        add('Opening Range', inOrb ? 'INSIDE' : (d.spot > d.orb_high ? 'ABOVE' : 'BELOW'), 'ORB ' + Number(d.orb_high).toLocaleString('en-IN') + ' / ' + Number(d.orb_low).toLocaleString('en-IN'), inOrb ? 'wait' : (d.spot > d.orb_high ? 'ok' : 'bad'));
+      }
+      g.innerHTML = rows.join('');
+    }
+  } catch (e) {}
+}
+
 // ── Shared strategy-status row renderer (used by Nifty + BTC + BNF + Sensex cards) ──
 function stratRowHTML(name, state, reason, cls) {
   const border = cls === 'ok' ? '#00c853' : cls === 'bad' ? '#ff1744' : cls === 'wait' ? '#ffab00' : '#64748b';
@@ -1538,6 +1593,7 @@ function renderWeekly(d) {
 // Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
 fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart(); fetchSensexChart();
 refreshStrategies(); refreshBtcStrategies(); refreshBnfStrategies(); refreshSensexStrategies();
+fetchScalper();
 fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggles(); initQuickNav();
 setTimeout(() => { fetchBtc(); fetchBnf(); fetchSensex(); fetchOi(); fetchOi('bnf'); }, 800);
 setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
@@ -1553,6 +1609,7 @@ fetchORB();
 fetchIntraday();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
+setInterval(fetchScalper, 30000);
 setInterval(refreshStrategies, 120000);
 setInterval(refreshBtcStrategies, 60000);
 setInterval(refreshBnfStrategies, 60000);

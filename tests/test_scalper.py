@@ -240,3 +240,66 @@ class ScalperBuildCallTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoadTuningStrictAfterTest(unittest.TestCase):
+    """Time-aware strict boundary: past SCALP_STRICT_AFTER, chatty file is ignored."""
+
+    _TUNING_PATH = None
+
+    def _tuning_path(self):
+        if LoadTuningStrictAfterTest._TUNING_PATH is None:
+            import os as _os
+            LoadTuningStrictAfterTest._TUNING_PATH = _os.path.join(
+                _os.path.dirname(_os.path.abspath(scalper.__file__)),
+                ".openclaw", "tmp", "scalper_tuning.json")
+        return LoadTuningStrictAfterTest._TUNING_PATH
+
+    def setUp(self):
+        import os as _os
+        p = self._tuning_path()
+        self._orig = None
+        if _os.path.exists(p):
+            with open(p) as f:
+                self._orig = f.read()
+
+    def _write_tuning(self, data):
+        import json as _json, os as _os
+        p = self._tuning_path()
+        _os.makedirs(_os.path.dirname(p), exist_ok=True)
+        with open(p, "w") as f:
+            _json.dump(data, f)
+        return p
+
+    def tearDown(self):
+        import os as _os
+        p = self._tuning_path()
+        if self._orig is not None:
+            with open(p, "w") as f:
+                f.write(self._orig)   # restore real runtime file
+        elif _os.path.exists(p):
+            _os.remove(p)
+
+    def test_chatty_file_applied_before_boundary(self):
+        p = self._write_tuning({"score_min": 2, "trend_min": 0.05, "adx_min": 10,
+                                "window_open": True, "regime_off": True})
+        self.assertEqual(scalper._load_tuning()["score_min"], 2.0)
+        self.assertTrue(scalper._load_tuning()["window_open"])
+
+    def test_strict_after_boundary_ignores_file(self):
+        import os as _os
+        self._write_tuning({"score_min": 2, "trend_min": 0.05, "adx_min": 10,
+                            "window_open": True, "regime_off": True})
+        old = _os.environ.get("SCALP_STRICT_AFTER")
+        _os.environ["SCALP_STRICT_AFTER"] = "00:00"  # always past → strict
+        try:
+            t = scalper._load_tuning()
+            self.assertEqual(t["score_min"], 3.0)   # strict default
+            self.assertEqual(t["trend_min"], 0.8)
+            self.assertFalse(t["window_open"])
+            self.assertFalse(t["regime_off"])
+        finally:
+            if old is None:
+                _os.environ.pop("SCALP_STRICT_AFTER", None)
+            else:
+                _os.environ["SCALP_STRICT_AFTER"] = old

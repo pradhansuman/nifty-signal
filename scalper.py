@@ -43,7 +43,12 @@ _vix_cache = {"ts": 0, "value": None}
 def _load_tuning():
     """Runtime tuning overrides (no restart needed). Keys: score_min, trend_min,
     adx_min, vix_min, vix_max, theta_max. Read from .openclaw/tmp/scalper_tuning.json
-    on every call; defaults come from env, then built-in defaults."""
+    on every call; defaults come from env, then built-in defaults.
+
+    Strict-after boundary: past SCALP_STRICT_AFTER (IST, default "15:35") the
+    tuning file/env overrides are IGNORED and strict defaults are returned — so
+    the 15:35 strict restore works on EVERY instance (Mac + Render), not just the
+    one running the cron delete."""
     t = {}
     try:
         import os as _os
@@ -63,6 +68,16 @@ def _load_tuning():
         "window_open": False,  # override: ignore lunch-chop window block
         "regime_off": False,    # override: allow counter-trend scalps (chatty mode)
     }
+    # Strict boundary (IST): after this time, force strict defaults everywhere.
+    try:
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo as _zi
+        strict_after = os.environ.get("SCALP_STRICT_AFTER", "15:35")
+        now_ist = _dt.now(_zi("Asia/Kolkata")).strftime("%H:%M")
+        if now_ist >= strict_after:
+            return defaults
+    except Exception:
+        pass
     for k, v in t.items():
         if k not in defaults:
             continue

@@ -590,6 +590,9 @@ def _chain_premium(asset, strike, option_type):
     return None
 
 
+SCALP_LOT = {"nifty": 65, "bnf": 15, "sensex": 20, "btc": 0}
+
+
 def _scalp_append_call(asset, sc, call):
     """Log a newly fired scalp call."""
     _scalp_calls.append({
@@ -601,11 +604,56 @@ def _scalp_append_call(asset, sc, call):
         "strike": call.get("strike"),
         "option_type": "CE" if sc.get("signal") == "SCALP_LONG" else "PE",
         "entry": call.get("entry"), "target": call.get("target"), "stop": call.get("stop"),
+        "half_spread": call.get("half_spread") or 0.0,
         "expires_at": call.get("expires_at"), "status": "ACTIVE",
     })
     if len(_scalp_calls) > 60:
         del _scalp_calls[:-60]
     _scalp_save_calls()
+
+
+def _scalp_pnl(c):
+    """Paper P&L for a resolved call (entry at ask, exit at bid for options;
+    direction-aware points for spot assets). Returns (pnl_pts, pnl_rs, pnl_pct)."""
+    entry = c.get("entry") or 0
+    hp = c.get("hit_premium")
+    if not entry or hp is None:
+        return (0.0, 0.0, 0.0)
+    asset = c.get("asset") or "nifty"
+    if asset in ("nifty", "bnf"):
+        # buy at ask (entry+hs), sell at bid (hit−hs) → net = hit − entry − spread
+        spread = 2 * (c.get("half_spread") or 0.0)
+        per_unit = hp - entry - spread
+        lot = SCALP_LOT.get(asset, 0)
+        return (round(per_unit, 2), round(per_unit * lot, 2),
+                round(per_unit / entry * 100, 2) if entry else 0.0)
+    # spot assets: LONG wins when price rises, SHORT when it falls
+    d = 1 if c.get("signal") == "SCALP_LONG" else -1
+    per_unit = d * (hp - entry)
+    return (round(per_unit, 2), 0.0, round(per_unit / entry * 100, 2) if entry else 0.0)
+
+
+def _scalp_summary():
+    """Today's dry-run summary across resolved calls."""
+    resolved = [c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
+    wins = [c for c in resolved if c.get("status") == "TARGET_HIT"]
+    net_pts = net_rs = 0.0
+    by_asset = {}
+    for c in resolved:
+        p_pts, p_rs, _ = _scalp_pnl(c)
+        net_pts += p_pts
+        net_rs += p_rs
+        b = by_asset.setdefault(c.get("asset", "?"), {"n": 0, "w": 0, "pts": 0.0, "rs": 0.0})
+        b["n"] += 1
+        b["w"] += 1 if c.get("status") == "TARGET_HIT" else 0
+        b["pts"] += p_pts
+        b["rs"] += p_rs
+    return {
+        "resolved": len(resolved), "wins": len(wins),
+        "win_rate": round(len(wins) / len(resolved) * 100, 1) if resolved else 0.0,
+        "net_pts": round(net_pts, 2), "net_rs": round(net_rs, 2),
+        "by_asset": by_asset,
+    }
 
 
 def _scalp_refresh_statuses():
@@ -618,6 +666,7 @@ def _scalp_refresh_statuses():
         if c.get("expires_at") and now_hm > c.get("expires_at") and c.get("expires_at") != "INTRAday":
             c["status"] = "EXPIRED"
             c["hit_time"] = now_hm
+            c["hit_premium"] = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type")) or c.get("entry")
             events.append((c, "expired"))
             continue
         prem = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type"))
@@ -625,9 +674,11 @@ def _scalp_refresh_statuses():
             continue
         if c.get("target") and prem >= c["target"]:
             c["status"] = "TARGET_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
+            c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
             events.append((c, "target"))
         elif c.get("stop") and prem <= c["stop"]:
             c["status"] = "STOP_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
+            c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
             events.append((c, "stop"))
     if events:
         _scalp_save_calls()
@@ -734,6 +785,7 @@ def api_scalper():
         c["ts"] = _t.time()
     out = dict(c["data"] or {})
     out["calls"] = list(reversed([x for x in _scalp_calls if x.get("asset") == asset]))
+    out["pnl"] = _scalp_summary()
     return jsonify(_clean_nan(out))
 
 

@@ -131,3 +131,51 @@ class FiveMinTickTest(unittest.TestCase):
         # the old .endswith(("00","05")) bug matched ONLY :00/:05 — guard against it
         self.assertTrue(ns._is_five_min_tick("12:10"))
         self.assertTrue(ns._is_five_min_tick("12:45"))
+
+
+class ScalpPnlTest(unittest.TestCase):
+    def test_nifty_long_target_pnl_net_of_spread(self):
+        # entry 100 mid, half_spread 1 (buy 101, sell at bid) — target hit at 110
+        c = {"asset": "nifty", "signal": "SCALP_LONG", "entry": 100.0, "half_spread": 1.0,
+             "hit_premium": 110.0}
+        pts, rs, pct = ns._scalp_pnl(c)
+        self.assertEqual(pts, 8.0)   # 110 − 100 − 2×1
+        self.assertEqual(rs, 8.0 * 65)  # × lot
+
+    def test_nifty_stop_pnl_negative(self):
+        c = {"asset": "nifty", "signal": "SCALP_LONG", "entry": 100.0, "half_spread": 1.0,
+             "hit_premium": 90.0}
+        pts, rs, _ = ns._scalp_pnl(c)
+        self.assertEqual(pts, -12.0)  # 90 − 100 − 2 → −12
+
+    def test_btc_long_pnl_direction(self):
+        c = {"asset": "btc", "signal": "SCALP_LONG", "entry": 63000.0, "half_spread": 0.0,
+             "hit_premium": 63300.0}
+        pts, rs, pct = ns._scalp_pnl(c)
+        self.assertEqual(pts, 300.0)
+        self.assertEqual(rs, 0.0)
+        self.assertAlmostEqual(pct, 0.48, places=2)
+
+    def test_btc_short_pnl_direction(self):
+        # short wins when price falls
+        c = {"asset": "btc", "signal": "SCALP_SHORT", "entry": 63000.0, "half_spread": 0.0,
+             "hit_premium": 62700.0}
+        pts, _, pct = ns._scalp_pnl(c)
+        self.assertEqual(pts, 300.0)
+        self.assertAlmostEqual(pct, 0.48, places=2)
+
+    def test_summary_counts(self):
+        ns._scalp_calls = [
+            {"asset": "btc", "signal": "SCALP_SHORT", "entry": 100.0, "half_spread": 0.0,
+             "hit_premium": 98.0, "status": "TARGET_HIT"},
+            {"asset": "btc", "signal": "SCALP_LONG", "entry": 100.0, "half_spread": 0.0,
+             "hit_premium": 95.0, "status": "STOP_HIT"},
+            {"asset": "nifty", "signal": "SCALP_LONG", "entry": 100.0, "half_spread": 0.5,
+             "hit_premium": 100.0, "status": "ACTIVE"},
+        ]
+        s = ns._scalp_summary()
+        self.assertEqual(s["resolved"], 2)
+        self.assertEqual(s["wins"], 1)
+        self.assertEqual(s["win_rate"], 50.0)
+        self.assertEqual(s["by_asset"]["btc"]["n"], 2)
+        self.assertNotIn("nifty", s["by_asset"])  # ACTIVE excluded

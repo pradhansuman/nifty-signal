@@ -1293,13 +1293,33 @@ async function fetchScalper() {
             const label = st === 'TARGET_HIT' ? '🎯 HIT' : st === 'STOP_HIT' ? '🛑 STOP' : st === 'EXPIRED' ? 'EXPIRED' : '● ACTIVE';
             const when = c.time + ' · expires ' + (c.expires_at || '--') + (c.hit_time ? ' · resolved ' + c.hit_time : '');
             const detail = c.option + ' @ ₹' + c.entry + ' → 🎯 ₹' + c.target + ' / 🛑 ₹' + c.stop +
-              (c.hit_premium ? ' · last ₹' + c.hit_premium : '');
+              (c.hit_premium ? ' · last ₹' + c.hit_premium : '') +
+              (c.pnl_pts != null ? ' · P&L ' + (c.pnl_pts >= 0 ? '+' : '') + c.pnl_pts + ' pts' + (c.pnl_rs ? ' · ₹' + Number(c.pnl_rs).toLocaleString('en-IN') : '') : '');
             return stratRowHTML(when, label, detail, chip === 'strat-ok' ? 'ok' : chip === 'strat-bad' ? 'bad' : chip === 'strat-off' ? 'off' : 'wait')
               .replace('<div class="strat-row"', '<div class="strat-row" style="border-left-color:' + border + '"');
           }).join('');
         }
       }
     } catch (e) { /* history render is best-effort */ }
+    // 💰 Dry-run P&L summary
+    try {
+      const pnl = d.pnl || {};
+      const pnlEl = document.getElementById('scalperPnl');
+      const pnlGrid = document.getElementById('scalperPnlGrid');
+      if (pnlEl && pnlGrid) {
+        const net = pnl.net_rs != null && pnl.net_rs !== 0 ? '₹' + Number(pnl.net_rs).toLocaleString('en-IN') : (pnl.net_pts != null ? pnl.net_pts + ' pts' : '--');
+        pnlEl.textContent = pnl.resolved ? (pnl.resolved + ' trades · ' + pnl.wins + 'W/' + (pnl.resolved - pnl.wins) + 'L · WR ' + pnl.win_rate + '%') : 'no resolved calls yet';
+        const rows = [];
+        rows.push(stratRowHTML('Net P&L', net, 'paper, spread included', (pnl.net_pts || 0) >= 0 ? 'ok' : 'bad'));
+        const byA = pnl.by_asset || {};
+        for (const a of ['nifty', 'bnf', 'sensex', 'btc']) {
+          const b = byA[a];
+          if (b) rows.push(stratRowHTML(a.toUpperCase(), b.w + 'W/' + (b.n - b.w) + 'L', b.n + ' calls · ' + (b.pts >= 0 ? '+' : '') + b.pts + ' pts' + (b.rs ? ' · ₹' + Number(b.rs).toLocaleString('en-IN') : ''), b.pts >= 0 ? 'ok' : 'bad'));
+        }
+        if (!rows.length) rows.push('<div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">No resolved calls yet — calls resolve to target/stop/expiry</div>');
+        pnlGrid.innerHTML = rows.join('');
+      }
+    } catch (e) { /* best-effort */ }
     // Gauges
     const g = document.getElementById('scalperGauges');
     if (g && d.ema9 != null) {

@@ -15,6 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 #       UPSTOX_ANALYTICS_TOKEN (the code falls back to env vars automatically).
 COPY *.py ./
 COPY pwa_static/ ./pwa_static/
+# Runtime tuning knobs (chatty/strict overrides) — committed so cloud matches local.
+COPY .openclaw/tmp/scalper_tuning.json ./.openclaw/tmp/scalper_tuning.json
 
 # Render sets PORT automatically; fallback for NAS/docker-compose
 ENV PORT=5099

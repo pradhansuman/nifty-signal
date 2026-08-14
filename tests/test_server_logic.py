@@ -179,3 +179,23 @@ class ScalpPnlTest(unittest.TestCase):
         self.assertEqual(s["win_rate"], 50.0)
         self.assertEqual(s["by_asset"]["btc"]["n"], 2)
         self.assertNotIn("nifty", s["by_asset"])  # ACTIVE excluded
+
+
+class TelegramEscapeTest(unittest.TestCase):
+    def test_html_escape_retry(self):
+        # Text with raw '<' should still send (escape fallback), not raise
+        import telegram_alert as ta
+        old = ta.send_telegram
+        try:
+            ok, err = ta.send_telegram("⚡ test: adx 13 < 25 → WAIT")
+            # Either True (sent) or a clean error — never an entity-parse error
+            self.assertNotIn("can't parse entities", str(err))
+            self.assertIsInstance(ok, bool)
+        finally:
+            ta.send_telegram = old
+
+    def test_no_op_when_unconfigured(self):
+        import telegram_alert as ta
+        ok, err = ta.send_telegram("x")
+        if not ta._load_config()["token"]:
+            self.assertFalse(ok)

@@ -39,17 +39,25 @@ def is_configured():
 
 
 def send_telegram(text, parse_mode="HTML"):
-    """Send a message. Returns (ok, error). No-op if not configured."""
+    """Send a message. Returns (ok, error). No-op if not configured.
+    Keeps intentional <b> formatting, but if raw '<'/'>' in the payload (e.g.
+    gate reasons like 'adx 13 < 25') breaks Telegram's entity parser, retries
+    once with the text HTML-escaped."""
     c = _load_config()
     if not c["token"] or not c["chat_id"]:
         return False, "Telegram not configured (need bot token + chat id)"
     try:
-        r = requests.post(
-            API.format(token=c["token"]),
-            json={"chat_id": c["chat_id"], "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True},
-            timeout=10)
+        import html as _html
+        payload = {"chat_id": c["chat_id"], "text": text, "parse_mode": parse_mode, "disable_web_page_preview": True}
+        r = requests.post(API.format(token=c["token"]), json=payload, timeout=10)
         if r.status_code == 200 and r.json().get("ok"):
             return True, None
+        if "can't parse entities" in r.text:
+            # raw < / > broke HTML mode → resend escaped (tags become literal text)
+            payload = dict(payload, text=_html.escape(text))
+            r = requests.post(API.format(token=c["token"]), json=payload, timeout=10)
+            if r.status_code == 200 and r.json().get("ok"):
+                return True, None
         return False, r.text[:200]
     except Exception as e:
         return False, str(e)[:200]

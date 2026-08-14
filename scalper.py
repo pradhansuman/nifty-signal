@@ -32,6 +32,43 @@ def _now():
     return datetime.now(IST).strftime("%H:%M:%S")
 
 
+_vix_cache = {"ts": 0, "value": None}
+
+
+def _vix_level():
+    """Current Nifty VIX close (cached 30 min; fail-open returns None)."""
+    import time as _t
+    if _t.time() - _vix_cache["ts"] < 1800:
+        return _vix_cache["value"]
+    try:
+        import yfinance as yf
+        v = yf.download("^INDIAVIX", period="5d", interval="1d", progress=False, auto_adjust=True)
+        if isinstance(v.columns, pd.MultiIndex):
+            v.columns = v.columns.get_level_values(0)
+        val = float(v["Close"].iloc[-1])
+        _vix_cache.update({"ts": _t.time(), "value": val})
+        return val
+    except Exception:
+        return _vix_cache["value"] or None
+
+
+def _adx(df, n=14):
+    """Wilder ADX on 5m bars (index-preserving)."""
+    h = df["High"].astype(float)
+    l = df["Low"].astype(float)
+    c = df["Close"].astype(float)
+    up = h.diff()
+    dn = -l.diff()
+    plus_dm = np.where((up > dn) & (up > 0), up, 0.0)
+    minus_dm = np.where((dn > up) & (dn > 0), dn, 0.0)
+    tr = np.maximum(h - l, np.maximum((h - c.shift()).abs(), (l - c.shift()).abs()))
+    atr = pd.Series(tr, index=df.index).ewm(alpha=1 / n, adjust=False).mean()
+    pdi = 100 * pd.Series(plus_dm, index=df.index).ewm(alpha=1 / n, adjust=False).mean() / atr
+    mdi = 100 * pd.Series(minus_dm, index=df.index).ewm(alpha=1 / n, adjust=False).mean() / atr
+    dx = 100 * (pdi - mdi).abs() / (pdi + mdi).replace(0, np.nan)
+    return dx.ewm(alpha=1 / n, adjust=False).mean()
+
+
 def get_bars(period="5d", interval="5m"):
     df = yf.download(SYMBOL, period=period, interval=interval, progress=False, auto_adjust=True)
     if df is None or df.empty:
@@ -75,8 +112,10 @@ def build_call(spot, bias, expiry):
             strike = r.get("strike") or 0
             if bias == "LONG":
                 ltp, bid, ask, delta = r.get("ce_ltp"), r.get("ce_bid"), r.get("ce_ask"), r.get("ce_delta")
+                theta = r.get("ce_theta")
             else:
                 ltp, bid, ask, delta = r.get("pe_ltp"), r.get("pe_bid"), r.get("pe_ask"), r.get("pe_delta")
+                theta = r.get("pe_theta")
             if not ltp or ltp <= 0:
                 continue
             if delta is not None and not (0.40 <= abs(delta) <= 0.80):
@@ -89,6 +128,7 @@ def build_call(spot, bias, expiry):
                 "strike": strike, "ltp": float(ltp), "spread": spread,
                 "spread_pct": spread / float(ltp) * 100,
                 "delta": float(delta) if delta is not None else None,
+                "theta": float(theta) if theta is not None else None,
             })
         if not cands:
             return None
@@ -97,19 +137,34 @@ def build_call(spot, bias, expiry):
         if best["spread_pct"] > 3.0:
             return {"blocked": True, "block_reason":
                     "spread {:.1f}% of premium — target +10% can't beat it".format(best["spread_pct"])}
+        # ── Theta guard: block when decay is a material % of premium per day ──
+        theta_max = float(os.environ.get("SCALP_THETA_MAX", "0.02"))
+        if best["theta"] is not None and abs(best["theta"]) / best["ltp"] > theta_max:
+            return {"blocked": True, "block_reason":
+                    "theta {:.2f} = {:.1f}%/day of premium — decay too fast to scalp".format(
+                        best["theta"], abs(best["theta"]) / best["ltp"] * 100)}
         prem = best["ltp"]
+        # ── Spread-aware target/stop: you BUY at ask, SELL at bid. To net ±10%
+        #    (exit at bid), the tracked mid premium must move ±10% PLUS half the
+        #    spread. Target/stop below are in tracked-mid terms. ──
+        half_spread = best["spread"] / 2
+        target = prem * 1.10 + half_spread
+        stop = prem * 0.90 - half_spread
         return {
             "option": "Buy {:,} {}".format(best["strike"], "CE" if bias == "LONG" else "PE"),
             "strike": best["strike"],
             "premium": round(prem, 2),
             "expiry": ch.get("expiry") or expiry,
             "entry": round(prem, 2),
-            "target": round(prem * 1.10, 2),
-            "stop": round(prem * 0.90, 2),
+            "buy_ask": round(float(ask), 2) if ask else round(prem, 2),
+            "target": round(target, 2),
+            "stop": round(stop, 2),
             "lot_cost": round(prem * LOT, 0),
             "spread": round(best["spread"], 2),
             "spread_pct": round(best["spread_pct"], 2),
+            "half_spread": round(half_spread, 2),
             "delta": best["delta"],
+            "theta": best["theta"],
             "target_pts": round(spot * 0.0015, 0),
             "stop_pts": round(spot * 0.0009, 0),
         }
@@ -249,6 +304,29 @@ def main():
             trend_dist, trend_min)
         bias = "FLAT"
 
+    # ── ADX trend-strength gate (backtest 2026-08-14: ADX>25 → PF 1.82) ──
+    adx_min = float(os.environ.get("SCALP_ADX_MIN", "25"))
+    adx_series = _adx(df)
+    adx_val = float(adx_series.iloc[-1]) if not pd.isna(adx_series.iloc[-1]) else 0.0
+    out["adx"] = round(adx_val, 1)
+    out["adx_gate"] = adx_min
+    adx_block = None
+    if bias != "FLAT" and adx_val < adx_min:
+        adx_block = "ADX {:.0f} < {} — no sustained trend".format(adx_val, adx_min)
+        bias = "FLAT"
+
+    # ── VIX regime gate (backtest: VIX 12-18 + ADX>25 → PF 1.96, WR 66%) ──
+    vix_min = float(os.environ.get("SCALP_VIX_MIN", "12"))
+    vix_max = float(os.environ.get("SCALP_VIX_MAX", "18"))
+    vix_val = _vix_level()
+    out["vix"] = round(vix_val, 2) if vix_val else None
+    out["vix_gate"] = [vix_min, vix_max]
+    vix_block = None
+    if bias != "FLAT" and vix_val is not None and not (vix_min <= vix_val <= vix_max):
+        vix_block = "VIX {:.1f} outside {:.0f}-{:.0f} — premium too cheap/expensive for scalps".format(
+            vix_val, vix_min, vix_max)
+        bias = "FLAT"
+
     # ── Time-of-day window: avoid lunch chop ──
     now_dt = datetime.now(IST)
     hm = now_dt.hour * 60 + now_dt.minute
@@ -274,7 +352,7 @@ def main():
 
     if bias == "FLAT":
         out["signal"] = "WAIT"
-        block_txt = regime_block or trend_block or window_block
+        block_txt = regime_block or trend_block or adx_block or vix_block or window_block
         out["reason"] = "No scalp edge — score {:+d} (need ±3). {}{}".format(
             score, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
         return out

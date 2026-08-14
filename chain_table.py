@@ -109,10 +109,10 @@ def get_chain(force=False, strike_range=8, asset="nifty"):
             "ce_key": item.get("call_options", {}).get("instrument_key"),
             "pe_key": item.get("put_options", {}).get("instrument_key"),
             "ce_ltp": ce.get("ltp"), "ce_oi": ce.get("oi"), "ce_vol": ce.get("volume"),
-            "ce_iv": cg.get("iv"), "ce_delta": cg.get("delta"),
+            "ce_iv": cg.get("iv"), "ce_delta": cg.get("delta"), "ce_theta": cg.get("theta"),
             "ce_bid": ce.get("bid_price"), "ce_ask": ce.get("ask_price"),
             "pe_ltp": pe.get("ltp"), "pe_oi": pe.get("oi"), "pe_vol": pe.get("volume"),
-            "pe_iv": pg.get("iv"), "pe_delta": pg.get("delta"),
+            "pe_iv": pg.get("iv"), "pe_delta": pg.get("delta"), "pe_theta": pg.get("theta"),
             "pe_bid": pe.get("bid_price"), "pe_ask": pe.get("ask_price"),
         }
         rows.append(row)

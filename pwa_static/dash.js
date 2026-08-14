@@ -1251,7 +1251,7 @@ async function fetchScalper() {
     if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
       banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
-      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--');
+      document.getElementById('scalperCall').textContent = 'Buy at ask ₹' + (d.call.buy_ask != null ? d.call.buy_ask : d.call.entry) + ' · Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--') + ' (target/stop net of spread)';
       document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
       document.getElementById('scalperTarget').textContent = '🎯 ₹' + d.call.target;
       document.getElementById('scalperStop').textContent = '🛑 ₹' + d.call.stop;
@@ -1259,7 +1259,7 @@ async function fetchScalper() {
     } else if (d.signal === 'SCALP_SHORT' && d.call && !d.call.blocked) {
       banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#280a0a'; banner.style.color = '#ff8080';
-      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--');
+      document.getElementById('scalperCall').textContent = 'Buy at ask ₹' + (d.call.buy_ask != null ? d.call.buy_ask : d.call.entry) + ' · Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--') + ' (target/stop net of spread)';
       document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
       document.getElementById('scalperTarget').textContent = '🎯 ₹' + d.call.target;
       document.getElementById('scalperStop').textContent = '🛑 ₹' + d.call.stop;
@@ -1315,6 +1315,12 @@ async function fetchScalper() {
       const gate = d.trend_gate != null ? d.trend_gate : 0.8;
       const strong = d.trend_dist != null && d.trend_dist >= gate;
       add('Trend (200E)', d.trend_dist != null ? (strong ? 'STRONG' : 'WEAK') : '--', d.trend_dist != null ? '|spot−200E| ' + d.trend_dist.toFixed(2) + '% vs gate ' + gate + '%' : '', strong ? 'ok' : 'bad');
+      const adxG = d.adx_gate != null ? d.adx_gate : 25;
+      const adxOk = d.adx != null && d.adx >= adxG;
+      add('ADX (14)', d.adx != null ? d.adx.toFixed(0) : '--', d.adx != null ? 'ADX ' + d.adx.toFixed(0) + ' vs gate ' + adxG + ' (trend strength)' : '', adxOk ? 'ok' : 'bad');
+      const vg = d.vix_gate || [12, 18];
+      const vixOk = d.vix != null && d.vix >= vg[0] && d.vix <= vg[1];
+      add('Nifty VIX', d.vix != null ? d.vix.toFixed(1) : '--', d.vix != null ? 'VIX ' + d.vix.toFixed(1) + ' vs ' + vg[0] + '–' + vg[1] + ' (premium regime)' : '', vixOk ? 'ok' : 'bad');
       if (d.orb_high != null) {
         const inOrb = d.spot >= d.orb_low && d.spot <= d.orb_high;
         add('Opening Range', inOrb ? 'INSIDE' : (d.spot > d.orb_high ? 'ABOVE' : 'BELOW'), 'ORB ' + Number(d.orb_high).toLocaleString('en-IN') + ' / ' + Number(d.orb_low).toLocaleString('en-IN'), inOrb ? 'wait' : (d.spot > d.orb_high ? 'ok' : 'bad'));

@@ -17,7 +17,13 @@ def _week_key(dt):
 
 
 def build_weekly_report():
-    trades = get_all() or []
+    data = get_all() or {}
+    if isinstance(data, dict):
+        trades = data.get("trades") or []
+    elif isinstance(data, list):
+        trades = data
+    else:
+        trades = []
     now = datetime.now()
     wk = _week_key(now)
 
@@ -72,9 +78,19 @@ def build_weekly_report():
 
 
 def get_weekly_report():
+    """Cache is a convenience, not a contract — refresh when older than 30 min
+    so a mid-week journal entry shows up without waiting for Friday's build."""
     try:
         with open(CACHE_FILE) as f:
-            return json.load(f)
+            rep = json.load(f)
+        gen = rep.get("generated", "")
+        try:
+            gdt = datetime.fromisoformat(str(gen)[:19])
+            if (datetime.now() - gdt).total_seconds() < 1800:
+                return rep
+        except Exception:
+            pass
+        return build_weekly_report()
     except Exception:
         return build_weekly_report()
 

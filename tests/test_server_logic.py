@@ -199,3 +199,41 @@ class TelegramEscapeTest(unittest.TestCase):
         ok, err = ta.send_telegram("x")
         if not ta._load_config()["token"]:
             self.assertFalse(ok)
+
+
+class WeeklyReviewTest(unittest.TestCase):
+    def test_build_from_dict_shaped_journal(self):
+        import weekly_review as wr
+        import unittest.mock as mock
+        trades = [{"date": "2026-08-12", "pnl": 7327.5, "lots": 3, "strike": "24450",
+                   "status": "closed", "direction": "long"}]
+        with mock.patch.object(wr, "CACHE_FILE", "/tmp/wr_test_cache.json"):
+            with mock.patch.object(wr, "get_all", return_value={"trades": trades, "stats": {}}):
+                r = wr.build_weekly_report()
+            self.assertEqual(r["trades"], 1)
+            self.assertEqual(r["pnl"], 7327.5)
+            self.assertEqual(r["win_rate"], 100.0)
+
+    def test_build_from_list_shaped_journal(self):
+        import weekly_review as wr
+        import unittest.mock as mock
+        trades = [{"date": "2026-08-12", "pnl": -500.0, "lots": 1, "strike": "24400",
+                   "status": "closed", "direction": "short"}]
+        with mock.patch.object(wr, "CACHE_FILE", "/tmp/wr_test_cache.json"):
+            with mock.patch.object(wr, "get_all", return_value=trades):
+                r = wr.build_weekly_report()
+                self.assertEqual(r["trades"], 1)
+                self.assertEqual(r["pnl"], -500.0)
+                self.assertEqual(r["worst"], -500.0)
+
+    def test_get_weekly_report_refreshes_stale_cache(self):
+        import weekly_review as wr
+        import unittest.mock as mock
+        stale = {"generated": "2026-08-01 00:00", "trades": 0}
+        fresh = {"generated": "2026-08-14 14:00", "trades": 1}
+        with mock.patch("builtins.open", mock.mock_open(read_data='{"generated": "2026-08-01 00:00", "trades": 0}')):
+            with mock.patch.object(wr, "build_weekly_report", return_value=fresh):
+                with mock.patch.object(wr, "json") as j:
+                    j.load.return_value = stale
+                    r = wr.get_weekly_report()
+        self.assertEqual(r["trades"], 1)  # stale → rebuilt

@@ -15,11 +15,11 @@ WORKSPACE = os.path.dirname(os.path.abspath(__file__))
 _cache = {"nifty": {"ts": 0, "data": None}, "banknifty": {"ts": 0, "data": None}}
 
 
-def _bnf_atm_iv():
-    """Bank Nifty ATM IV from its option chain (no BNF-specific VIX exists)."""
+def _atm_iv(asset):
+    """ATM IV from the asset's option chain (Nifty has no ATM-IV endpoint either)."""
     try:
         from chain_table import get_chain
-        d = get_chain(force=False, asset="banknifty")
+        d = get_chain(force=False, asset=asset)
         atm = d.get("atm")
         for r in d.get("rows", []):
             if r.get("strike") == atm:
@@ -62,8 +62,10 @@ def get_iv_rank(force=False, asset="nifty"):
 
         if asset == "banknifty":
             # BNF has no own VIX — use market VIX rank as context + BNF ATM IV
-            out["atm_iv"] = _bnf_atm_iv()
+            out["atm_iv"] = _atm_iv("banknifty")
             out["note"] = "BNF uses India VIX as market-wide proxy (no BNF-specific VIX)."
+        else:
+            out["atm_iv"] = _atm_iv("nifty")
         # IV Rank
         rank = round((current - low) / (high - low) * 100, 1) if high > low else None
         # IV Percentile

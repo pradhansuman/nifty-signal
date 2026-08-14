@@ -62,45 +62,56 @@ def _stoch(df, k=14, d=3):
 
 
 def build_call(spot, bias, expiry):
-    """Pick the ATM strike and live premium from the Upstox chain; return a concrete call."""
+    """Spread-aware strike selection: prefer delta 0.40-0.80 with the tightest spread;
+    block the call entirely when the spread is > 3% of premium (target can't beat it)."""
     try:
         ch = chain_table.get_chain()
         rows = ch.get("rows") or []
         if not rows:
             return None
-        best = min(rows, key=lambda r: abs((r["strike"] or 0) - spot))
-        if bias == "LONG" and best.get("ce_ltp"):
-            prem = float(best["ce_ltp"])
-            if prem <= 0:
-                return None
-            return {
-                "option": "Buy {:,} CE".format(best["strike"]),
-                "strike": best["strike"],
-                "premium": round(prem, 2),
-                "expiry": ch.get("expiry") or expiry,
-                "entry": round(prem, 2),
-                "target": round(prem * 1.10, 2),
-                "stop": round(prem * 0.90, 2),
-                "lot_cost": round(prem * LOT, 0),
-                "target_pts": round(spot * 0.0015, 0),   # ~15 pts index move
-                "stop_pts": round(spot * 0.0009, 0),     # ~9 pts index move
-            }
-        if bias == "SHORT" and best.get("pe_ltp"):
-            prem = float(best["pe_ltp"])
-            if prem <= 0:
-                return None
-            return {
-                "option": "Buy {:,} PE".format(best["strike"]),
-                "strike": best["strike"],
-                "premium": round(prem, 2),
-                "expiry": ch.get("expiry") or expiry,
-                "entry": round(prem, 2),
-                "target": round(prem * 1.10, 2),
-                "stop": round(prem * 0.90, 2),
-                "lot_cost": round(prem * LOT, 0),
-                "target_pts": round(spot * 0.0015, 0),
-                "stop_pts": round(spot * 0.0009, 0),
-            }
+        cands = []
+        for r in rows:
+            strike = r.get("strike") or 0
+            if bias == "LONG":
+                ltp, bid, ask, delta = r.get("ce_ltp"), r.get("ce_bid"), r.get("ce_ask"), r.get("ce_delta")
+            else:
+                ltp, bid, ask, delta = r.get("pe_ltp"), r.get("pe_bid"), r.get("pe_ask"), r.get("pe_delta")
+            if not ltp or ltp <= 0:
+                continue
+            if delta is not None and not (0.40 <= abs(delta) <= 0.80):
+                continue
+            if bid and ask and ask > bid:
+                spread = float(ask) - float(bid)
+            else:
+                spread = float(ltp) * 0.02  # estimate when no quote
+            cands.append({
+                "strike": strike, "ltp": float(ltp), "spread": spread,
+                "spread_pct": spread / float(ltp) * 100,
+                "delta": float(delta) if delta is not None else None,
+            })
+        if not cands:
+            return None
+        cands.sort(key=lambda c: c["spread_pct"])
+        best = cands[0]
+        if best["spread_pct"] > 3.0:
+            return {"blocked": True, "block_reason":
+                    "spread {:.1f}% of premium — target +10% can't beat it".format(best["spread_pct"])}
+        prem = best["ltp"]
+        return {
+            "option": "Buy {:,} {}".format(best["strike"], "CE" if bias == "LONG" else "PE"),
+            "strike": best["strike"],
+            "premium": round(prem, 2),
+            "expiry": ch.get("expiry") or expiry,
+            "entry": round(prem, 2),
+            "target": round(prem * 1.10, 2),
+            "stop": round(prem * 0.90, 2),
+            "lot_cost": round(prem * LOT, 0),
+            "spread": round(best["spread"], 2),
+            "spread_pct": round(best["spread_pct"], 2),
+            "delta": best["delta"],
+            "target_pts": round(spot * 0.0015, 0),
+            "stop_pts": round(spot * 0.0009, 0),
+        }
     except Exception:
         return None
     return None
@@ -212,6 +223,31 @@ def main():
         reasons.append("below ORB low {:.0f}".format(orb_low))
 
     bias = "LONG" if score >= 3 else "SHORT" if score <= -3 else "FLAT"
+
+    # ── 200 EMA regime filter: never scalp against the trend ──
+    ema200 = float(closes.ewm(span=200, adjust=False).mean().iloc[-1])
+    out["ema200"] = round(ema200, 2)
+    regime_block = None
+    if bias == "LONG" and spot < ema200:
+        regime_block = "counter-trend LONG blocked (spot below 200 EMA {:.0f})".format(ema200)
+        bias = "FLAT"
+    elif bias == "SHORT" and spot > ema200:
+        regime_block = "counter-trend SHORT blocked (spot above 200 EMA {:.0f})".format(ema200)
+        bias = "FLAT"
+
+    # ── Time-of-day window: avoid lunch chop ──
+    now_dt = datetime.now(IST)
+    hm = now_dt.hour * 60 + now_dt.minute
+    window_open = (9 * 60 + 20) <= hm <= (11 * 60 + 45) or (13 * 60 + 30) <= hm <= (15 * 60 + 20)
+    out["window"] = "ACTIVE" if window_open else "BLOCKED"
+    out["window_reason"] = (
+        "Scalp window ACTIVE (9:20-11:45, 13:30-15:20)" if window_open
+        else "Scalp window BLOCKED — lunch chop 11:45-13:30 / pre-9:20")
+    window_block = None
+    if not window_open and bias != "FLAT":
+        window_block = out["window_reason"]
+        bias = "FLAT"
+
     out.update({
         "bias": bias, "score": score,
         "ema9": round(e9, 2), "ema21": round(e21, 2),
@@ -224,16 +260,23 @@ def main():
 
     if bias == "FLAT":
         out["signal"] = "WAIT"
-        out["reason"] = "No scalp edge — score {:+d} (need ±3). {}".format(score, "; ".join(reasons))
+        block_txt = regime_block or window_block
+        out["reason"] = "No scalp edge — score {:+d} (need ±3). {}{}".format(
+            score, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
         return out
 
     out["signal"] = "SCALP_LONG" if bias == "LONG" else "SCALP_SHORT"
     out["confidence"] = min(100, abs(score) * 14)
     call = build_call(spot, bias, out.get("expiry"))
     out["call"] = call
-    if not call:
-        out["reason"] = "{} bias (score {:+d}) but no option premium available from Upstox chain".format(bias, score)
+    if call is None:
+        out["reason"] = "{} scalp (score {:+d}) but no option premium available from Upstox chain".format(bias, score)
+    elif call.get("blocked"):
+        out["reason"] = "{} scalp (score {:+d}) but NO TRADE — {}".format(bias, score, call.get("block_reason", ""))
     else:
+        # 10-minute signal freshness window
+        from datetime import timedelta
+        call["expires_at"] = (now_dt + timedelta(minutes=10)).strftime("%H:%M")
         out["reason"] = "{} scalp — score {:+d}. {}".format(bias, score, "; ".join(reasons))
     return out
 

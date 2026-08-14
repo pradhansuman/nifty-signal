@@ -493,6 +493,8 @@ def api_intraday():
 
 
 _scalper_cache = {"ts": 0, "data": None}
+_scalp_watch = {"signal": None, "option": None, "entry": None, "ts": None, "highest": None,
+               "breakeven": False, "trail": False}
 
 
 @app.route("/api/scalper")
@@ -909,17 +911,53 @@ def alert_scheduler():
                 try:
                     sc = run_script("scalper.py")
                     sc_sig = sc.get("signal")
-                    if sc_sig in ("SCALP_LONG", "SCALP_SHORT") and sc_sig != last_scalp_signal:
-                        last_scalp_signal = sc_sig
-                        call = sc.get("call") or {}
-                        emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
-                        _add_alert("critical", "{} SCALP: {}".format(emoji, call.get("option") or sc_sig),
-                            "Entry ₹{} | Target ₹{} (+10%) | Stop ₹{} (-10%) | Expiry {} | Lot ₹{:,}\n{}".format(
-                                call.get("entry"), call.get("target"), call.get("stop"),
-                                call.get("expiry"), call.get("lot_cost") or 0, sc.get("reason", "")))
-                    elif sc_sig == "WAIT" and last_scalp_signal in ("SCALP_LONG", "SCALP_SHORT"):
-                        last_scalp_signal = "WAIT"
+                    call = sc.get("call") or {}
+                    now_hm = now.strftime("%H:%M")
+                    # New call fired → entry push + start watch
+                    if sc_sig in ("SCALP_LONG", "SCALP_SHORT") and not call.get("blocked") and call.get("entry"):
+                        new_call = _scalp_watch["signal"] != sc_sig or _scalp_watch["option"] != call.get("option")
+                        if new_call:
+                            _scalp_watch.update({
+                                "signal": sc_sig, "option": call.get("option"), "entry": call.get("entry"),
+                                "ts": datetime.now(), "highest": call.get("entry"),
+                                "breakeven": False, "trail": False})
+                            emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
+                            _add_alert("critical", "{} SCALP: {}".format(emoji, call.get("option")),
+                                "Entry ₹{} | Target ₹{} (+10%) | Stop ₹{} (-10%) | Expiry {} | Lot ₹{:,} | Spread {}% | ⏳ expires {}\n{}".format(
+                                    call.get("entry"), call.get("target"), call.get("stop"),
+                                    call.get("expiry"), call.get("lot_cost") or 0,
+                                    call.get("spread_pct"), call.get("expires_at"), sc.get("reason", "")))
+                        else:
+                            # Same call still active → trailing watch
+                            prem = call.get("premium")
+                            entry = _scalp_watch["entry"]
+                            if prem and entry:
+                                _scalp_watch["highest"] = max(_scalp_watch["highest"] or entry, prem)
+                                pct = (prem - entry) / entry * 100
+                                if pct >= 5 and not _scalp_watch["breakeven"]:
+                                    _scalp_watch["breakeven"] = True
+                                    _add_alert("warning", "🛡️ SCALP +5% — move stop to breakeven",
+                                        "{} now ₹{} (entry ₹{}). Free trade — stop at entry.".format(
+                                            call.get("option"), prem, entry))
+                                if pct >= 7 and not _scalp_watch["trail"]:
+                                    _scalp_watch["trail"] = True
+                                    _add_alert("warning", "🪢 SCALP +7% — trail stop at 50% profit",
+                                        "{} now ₹{} (entry ₹{}). Trail from here.".format(call.get("option"), prem, entry))
+                                if pct <= -10:
+                                    _add_alert("critical", "🛑 SCALP STOP HIT (−10%)",
+                                        "{} at ₹{} (entry ₹{}). EXIT NOW — scalp over.".format(
+                                            call.get("option"), prem, entry))
+                                    _scalp_watch.update({"signal": None, "option": None})
+                        # Expiry check: call older than its 10-min freshness
+                        if _scalp_watch["ts"] and call.get("expires_at"):
+                            if now_hm > call.get("expires_at") and _scalp_watch["signal"]:
+                                _add_alert("info", "⏳ Scalp call expired — no entry taken",
+                                    "{} expired at {} (10-min freshness). Next call when setup re-fires.".format(
+                                        _scalp_watch["option"], call.get("expires_at")))
+                                _scalp_watch.update({"signal": None, "option": None})
+                    elif sc_sig == "WAIT" and _scalp_watch["signal"] in ("SCALP_LONG", "SCALP_SHORT"):
                         _add_alert("info", "⏳ Scalp closed — back to WAIT", sc.get("reason", ""))
+                        _scalp_watch.update({"signal": None, "option": None})
                 except Exception:
                     pass
 

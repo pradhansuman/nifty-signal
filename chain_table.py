@@ -108,8 +108,10 @@ def get_chain(force=False, strike_range=8, asset="nifty"):
             "strike": strike,
             "ce_ltp": ce.get("ltp"), "ce_oi": ce.get("oi"), "ce_vol": ce.get("volume"),
             "ce_iv": cg.get("iv"), "ce_delta": cg.get("delta"),
+            "ce_bid": ce.get("bid_price"), "ce_ask": ce.get("ask_price"),
             "pe_ltp": pe.get("ltp"), "pe_oi": pe.get("oi"), "pe_vol": pe.get("volume"),
             "pe_iv": pg.get("iv"), "pe_delta": pg.get("delta"),
+            "pe_bid": pe.get("bid_price"), "pe_ask": pe.get("ask_price"),
         }
         rows.append(row)
         if (row["ce_oi"] or 0) > cw_oi:

@@ -1248,24 +1248,30 @@ async function fetchScalper() {
     if (upd) upd.textContent = d.timestamp || '';
     const scoreEl = document.getElementById('scalperScore');
     if (scoreEl) scoreEl.textContent = 'Score: ' + (d.score >= 0 ? '+' : '') + d.score + ' (' + (d.bias || 'FLAT') + ')';
-    if (d.signal === 'SCALP_LONG' && d.call) {
+    if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
       banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
-      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot cost ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Target +10% / Stop −10% on premium';
+      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--');
       document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
       document.getElementById('scalperTarget').textContent = '🎯 ₹' + d.call.target;
       document.getElementById('scalperStop').textContent = '🛑 ₹' + d.call.stop;
       document.getElementById('scalperLevels').style.display = 'flex';
-    } else if (d.signal === 'SCALP_SHORT' && d.call) {
+    } else if (d.signal === 'SCALP_SHORT' && d.call && !d.call.blocked) {
       banner.textContent = '🔴 SHORT — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#280a0a'; banner.style.color = '#ff8080';
-      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot cost ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Target +10% / Stop −10% on premium';
+      document.getElementById('scalperCall').textContent = 'Expiry ' + d.call.expiry + ' · Lot ₹' + Number(d.call.lot_cost).toLocaleString('en-IN') + ' · Spread ' + d.call.spread_pct + '% · ⏳ expires ' + (d.call.expires_at || '--');
       document.getElementById('scalperEntry').textContent = 'Entry ₹' + d.call.entry;
       document.getElementById('scalperTarget').textContent = '🎯 ₹' + d.call.target;
       document.getElementById('scalperStop').textContent = '🛑 ₹' + d.call.stop;
       document.getElementById('scalperLevels').style.display = 'flex';
+    } else if (d.call && d.call.blocked) {
+      banner.textContent = '🚫 ' + (d.signal === 'SCALP_LONG' ? 'LONG' : 'SHORT') + ' blocked — ' + (d.call.block_reason || 'spread too wide');
+      banner.style.background = '#2a1a0a'; banner.style.color = '#ffab00';
+      document.getElementById('scalperCall').textContent = '';
+      document.getElementById('scalperLevels').style.display = 'none';
     } else {
-      banner.textContent = '⏳ No scalp setup — ' + (d.reason || 'waiting for 5m data');
+      const win = d.window === 'BLOCKED' ? ' ⏸ ' + (d.window_reason || '') : '';
+      banner.textContent = '⏳ No scalp setup — ' + (d.reason || 'waiting for 5m data') + win;
       banner.style.background = '#141b22'; banner.style.color = '#ffab00';
       document.getElementById('scalperCall').textContent = '';
       document.getElementById('scalperLevels').style.display = 'none';

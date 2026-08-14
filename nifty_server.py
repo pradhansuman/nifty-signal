@@ -741,6 +741,36 @@ def _is_five_min_tick(minute):
     return minute[-2:] in _FIVE_MIN_MARKS
 
 
+def _scalp_option_line(asset, sc_sig, call):
+    """Rich option entry line (dashboard-style, the format the user prefers for
+    option buying): 'Buy 24,300 CE @ ₹164.75 → 🎯 ₹181.38 / 🛑 ₹148.12 · last ₹164.75'"""
+    def f2(v):
+        """2-decimal price (option premiums keep decimals), trailing zeros stripped."""
+        if v is None:
+            return "?"
+        s = "{:,.2f}".format(v)
+        return s.rstrip("0").rstrip(".") if "." in s else s
+    side = "Buy" if sc_sig == "SCALP_LONG" else "Sell"
+    strike = call.get("strike")
+    otype = "CE" if sc_sig == "SCALP_LONG" else "PE"
+    e, t, s = call.get("entry"), call.get("target"), call.get("stop")
+    line = "{} {:,} {} @ ₹{} → 🎯 ₹{} / 🛑 ₹{}".format(
+        side, int(strike) if strike is not None else 0, otype,
+        f2(e), f2(t), f2(s))
+    prem = call.get("premium") or e
+    if prem:
+        line += " · last ₹{}".format(f2(prem))
+    return line
+
+
+def _scalp_alert_line(asset, sc_sig, call):
+    """Entry alert line per asset: rich option format for nifty/bnf (strike +
+    premium + last), compact price format for spot/futures (btc/sensex)."""
+    if asset in ("nifty", "bnf"):
+        return _scalp_option_line(asset, sc_sig, call)
+    return _scalp_compact_line(asset, sc_sig, call)
+
+
 def _scalp_tick(asset):
     """Run one scalper sweep for an asset: fire new calls, trail the active one,
     resolve call log statuses (target/stop/expiry), push alerts."""
@@ -761,7 +791,7 @@ def _scalp_tick(asset):
                 "breakeven": False, "trail": False})
             _scalp_append_call(asset, sc, call)
             d_emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
-            line = _scalp_compact_line(asset, sc_sig, call)
+            line = _scalp_alert_line(asset, sc_sig, call)
             # 🔥 PERFECT SETUP — every gate aligned: dedicated alert first
             if sc.get("perfect"):
                 fund = call.get("funding")

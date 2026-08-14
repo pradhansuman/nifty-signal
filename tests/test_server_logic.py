@@ -409,3 +409,37 @@ class ScalpCompactLineTest(unittest.TestCase):
         self.assertIn("ଟାର୍ଗେଟ୍ $62,277", out)
         self.assertIn("ରିସ୍କ୍ $331/BTC", out)
         self.assertIn("R:R 1.66", out)     # untouched
+
+
+class ScalpOptionLineTest(unittest.TestCase):
+    """Option assets (nifty/bnf) get the rich dashboard-style entry line."""
+
+    def test_nifty_ce_line(self):
+        call = {"strike": 24300.0, "entry": 164.75, "target": 181.38, "stop": 148.12, "premium": 164.75}
+        line = ns._scalp_option_line("nifty", "SCALP_LONG", call)
+        self.assertEqual(line, "Buy 24,300 CE @ ₹164.75 → 🎯 ₹181.38 / 🛑 ₹148.12 · last ₹164.75")
+
+    def test_bnf_pe_line(self):
+        call = {"strike": 57500.0, "entry": 438.0, "target": 481.8, "stop": 394.2, "premium": 437.5}
+        line = ns._scalp_option_line("bnf", "SCALP_SHORT", call)
+        self.assertEqual(line, "Sell 57,500 PE @ ₹438 → 🎯 ₹481.8 / 🛑 ₹394.2 · last ₹437.5")
+
+    def test_alert_line_routing(self):
+        opt = {"strike": 24300.0, "entry": 164.75, "target": 181.38, "stop": 148.12, "premium": 164.75}
+        bnf = dict(opt, strike=57500.0, entry=438.0)
+        spot = {"entry": 62828.0, "stop": 63159.0, "target": 62277.0}
+        self.assertTrue(ns._scalp_alert_line("nifty", "SCALP_LONG", opt).startswith("Buy 24,300 CE"))
+        self.assertTrue(ns._scalp_alert_line("bnf", "SCALP_SHORT", bnf).startswith("Sell 57,500 PE"))
+        self.assertTrue(ns._scalp_alert_line("btc", "SCALP_SHORT", spot).startswith("SELL BTC at ~$"))
+        self.assertTrue(ns._scalp_alert_line("sensex", "SCALP_LONG", spot).startswith("BUY SENSEX at ~₹"))
+
+    def test_odia_translates_option_line(self):
+        from telegram_alert import odia_translate
+        line = ns._scalp_option_line("nifty", "SCALP_LONG",
+                                     {"strike": 24300.0, "entry": 164.75, "target": 181.38,
+                                      "stop": 148.12, "premium": 164.75})
+        out = odia_translate(line)
+        self.assertIn("କିଣ", out)          # Buy
+        self.assertIn("24,300 CE @ ₹164.75", out)
+        self.assertIn("🎯 ₹181.38", out)    # emoji target survives
+        self.assertIn("🛑 ₹148.12", out)    # emoji stop survives

@@ -276,8 +276,8 @@
 
 <div class="cards">
   <!-- Nifty Strategy Status (positional + intraday breakdown — always visible) -->
-    <!-- Scalper (top priority) -->
-<div class="card" id="scalperCard" style="border-color:#ffab0055">
+  <!-- Scalper (top priority) -->
+  <div class="card" id="scalperCard" style="border-color:#ffab0055">
   <div class="card-header">
     <span class="label">⚡ Active Scalp Call</span>
     <span class="value" id="scalperUpdated">--</span>
@@ -299,3 +299,835 @@
 </div>
 
   <div class="card" id="strategiesCard">
+    <div class="card-header"><span class="label">🧭 Nifty Strategy Status</span><span class="value" id="stratUpdated">--</span></div>
+    <div id="strategiesList" class="strat-grid">
+      <div style="color:var(--text-dim);padding:8px;text-align:center">Loading strategy statuses...</div>
+    </div>
+  </div>
+
+  <!-- Price -->
+  <div class="card" id="niftyCard">
+    <div class="card-header">
+      <span class="label">Nifty 50</span>
+      <span class="value" id="spotChange">--</span>
+    </div>
+    <div class="price-row">
+      <span class="big" id="spotPrice">--</span>
+    </div>
+  </div>
+
+  <!-- Gauges -->
+  <div class="card">
+    <div class="card-header"><span class="label">Technicals</span></div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="adxVal">--</div>
+        <div class="g-label">ADX</div>
+        <div class="g-sub" id="adxSub"></div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="rsiVal">--</div>
+        <div class="g-label">RSI-14</div>
+        <div class="g-sub" id="rsiSub"></div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="diPlusVal">--</div>
+        <div class="g-label">DI+</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="diMinusVal">--</div>
+        <div class="g-label">DI-</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Expiry & Trade (Positional) -->
+  <div class="card" id="tradeCard">
+    <div class="card-header">
+      <span class="label">📅 Positional Trade</span>
+      <span class="value" id="tradeDTE">--</span>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim)" id="tradeExpiry">--</div>
+    <div style="font-size:14px;font-weight:700;margin-top:6px" id="tradeType">--</div>
+    <div class="level-row">
+      <div class="level-pill target" id="entryLevel">--</div>
+      <div class="level-pill target" id="targetLevelPill">--</div>
+      <div class="level-pill stop" id="stopLevelPill">--</div>
+    </div>
+  </div>
+
+  <!-- BTST -->
+  <div class="card" id="btstCard" style="border-color: #7c3aed44">
+    <div class="card-header">
+      <span class="label">⚡ BTST (Buy Today Sell Tomorrow)</span>
+      <span class="value" id="btstDTE">--</span>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim)" id="btstExpiry">--</div>
+    <div style="font-size:14px;font-weight:700;margin-top:6px;color:#c4b5fd" id="btstTrade">--</div>
+    <div class="level-row">
+      <div class="level-pill target" id="btstEntry">--</div>
+      <div class="level-pill target" id="btstTarget">--</div>
+      <div class="level-pill stop" id="btstStop">--</div>
+    </div>
+  </div>
+
+  <!-- EMA Bounce -->
+  <div class="card">
+    <div class="card-header">
+      <span class="label">200 EMA Bounce</span>
+      <span class="value" id="emaDistance">--</span>
+    </div>
+    <div class="ema-bar">
+      <div class="ema-labels"><span id="emaLow">--</span><span id="ema200Label">200 EMA</span><span id="emaHigh">--</span></div>
+      <div class="ema-track">
+        <div class="ema-fill bull" id="emaFill" style="width:50%"></div>
+        <div class="ema-marker" id="emaMarker" style="left:50%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Options OI (from Upstox) -->
+  <div class="card" id="optionsCard">
+    <div class="card-header">
+      <span class="label">📊 Options Chain</span>
+      <span class="value" id="optionsSource">--</span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="pcrOIVAL">--</div>
+        <div class="g-label">PCR (OI)</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="atmIVVal">--</div>
+        <div class="g-label">ATM IV</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="maxPainVal">--</div>
+        <div class="g-label">Max Pain</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="ivMeanVal">--</div>
+        <div class="g-label">Mean IV</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;margin-top:8px;font-size:12px">
+      <div style="flex:1"><span style="color:var(--text-dim)">Call OI: </span><span id="callOIVal">--</span></div>
+      <div style="flex:1"><span style="color:var(--text-dim)">Put OI: </span><span id="putOIVal">--</span></div>
+    </div>
+    <div style="display:flex;gap:12px;font-size:12px;margin-top:2px">
+      <div style="flex:1"><span style="color:var(--text-dim)">Call Δ: </span><span id="callChgVal">--</span></div>
+      <div style="flex:1"><span style="color:var(--text-dim)">Put Δ: </span><span id="putChgVal">--</span></div>
+    </div>
+  </div>
+
+  <!-- Nifty Chart -->
+  <div class="card" id="chartCard">
+    <div class="card-header">
+      <span class="label">📈 Nifty + 200 EMA</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="niftyTfLabel">daily bars</span>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap" id="tfNifty">
+      <button data-tf="1d" class="tf-btn active">D</button>
+      <button data-tf="1h" class="tf-btn">1H</button>
+      <button data-tf="15m" class="tf-btn">15M</button>
+      <button data-tf="5m" class="tf-btn">5M</button>
+      <button data-tf="2m" class="tf-btn">2M</button>
+      <button data-tf="1m" class="tf-btn">1M</button>
+    </div>
+    <canvas id="niftyChart" style="width:100%;height:200px;display:block"></canvas>
+    <div style="display:flex;gap:16px;margin-top:6px;font-size:10px;color:var(--text-dim)">
+      <span><span style="display:inline-block;width:14px;height:3px;background:var(--blue);vertical-align:middle;margin-right:4px"></span>Nifty</span>
+      <span><span style="display:inline-block;width:14px;height:3px;background:var(--accent);vertical-align:middle;margin-right:4px"></span>200 EMA</span>
+      <span><span style="display:inline-block;width:14px;height:3px;background:#f59e0b;vertical-align:middle;margin-right:4px"></span>20 EMA</span>
+      <span id="chartSpotTag" style="margin-left:auto"></span>
+    </div>
+  </div>
+
+  <!-- OI Buildup / Smart Money (Nifty section) -->
+  <div class="card" id="oiCard">
+    <div class="card-header"><span class="label">🧠 OI Buildup (Smart Money)</span><span style="font-size:10px;color:var(--text-dim)" id="oiBias" class="pill">--</span></div>
+    <div style="font-size:11px;color:var(--text-dim)" id="oiReason">Collecting OI snapshots…</div>
+    <div style="display:flex;gap:12px;margin-top:6px;font-size:10px">
+      <div style="flex:1" id="oiCe"></div>
+      <div style="flex:1" id="oiPe"></div>
+    </div>
+  </div>
+
+  <!-- Gap & Go / Gap Fade (Nifty section) -->
+  <div class="card" id="gapCard">
+    <div class="card-header"><span class="label">⚡ Gap & Go / Fade</span><span style="font-size:10px;color:var(--text-dim)" id="gapSignal" class="pill">--</span></div>
+    <div style="font-size:11px;color:var(--text-dim)" id="gapDetail">9:15–9:45 window only</div>
+    <div style="font-size:10px;margin-top:4px;color:var(--text-dim)" id="gapReason"></div>
+  </div>
+
+  <!-- Expiry Countdown (Nifty section) -->
+  <div class="card" id="expiryCard">
+    <div class="card-header"><span class="label">⏳ Expiry Countdown</span><span style="font-size:10px;color:var(--text-dim)" id="expiryGamma" class="pill">--</span></div>
+    <div style="font-size:12px;line-height:1.7" id="expiryRead">Loading...</div>
+  </div>
+
+  <!-- Option Chain Table -->
+  <div class="card" id="chainTableCard">
+    <div class="card-header">
+      <span class="label">📋 Option Chain</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="chainMeta">--</span>
+    </div>
+    <div style="text-align:center;margin:2px 0 8px">
+      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">NIFTY SPOT</div>
+      <div id="chainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
+    </div>
+    <div style="font-size:11px;margin-bottom:6px" id="chainWalls"></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:var(--text-dim);text-align:right">
+            <th style="text-align:left;padding:3px 4px">Strike</th>
+            <th style="padding:3px 4px">CE ₹</th>
+            <th style="padding:3px 4px">CE OI</th>
+            <th style="padding:3px 4px">CE Vol</th>
+            <th style="padding:3px 4px">IV</th>
+            <th style="padding:3px 4px">PE ₹</th>
+            <th style="padding:3px 4px">PE OI</th>
+            <th style="padding:3px 4px">PE Vol</th>
+          </tr>
+        </thead>
+        <tbody id="chainRows">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- IV Rank -->
+  <div class="card" id="ivRankCard">
+    <div class="card-header">
+      <span class="label">🧊 IV Rank (premium gauge)</span>
+      <span style="font-size:10px;color:var(--text-dim)">52w: <span id="ivRange">--</span></span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="ivRankVal">--</div>
+        <div class="g-label">IV Rank</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="ivPctVal">--</div>
+        <div class="g-label">IV Percentile</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="ivCurrentVal">--</div>
+        <div class="g-label">VIX now</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:12px" id="ivRead">Loading IV history...</div>
+  </div>
+
+  <!-- Smart Money (FII/DII) -->
+  <div class="card" id="fiiDiiCard">
+    <div class="card-header">
+      <span class="label">🏦 Smart Money (FII/DII)</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="fiiDate">--</span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="fiiNetVal" style="color:var(--text-dim)">--</div>
+        <div class="g-label">FII Net ₹ Cr</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="diiNetVal" style="color:var(--text-dim)">--</div>
+        <div class="g-label">DII Net ₹ Cr</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="smartMoneyScore">--</div>
+        <div class="g-label">Sentiment</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:12px" id="smartMoneyRead">Loading institutional flows...</div>
+  </div>
+
+  <!-- Tomorrow Outlook -->
+  <div class="card" id="outlookCard">
+    <div class="card-header">
+      <span class="label">🌅 Tomorrow Outlook</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="outlookTime">--</span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="giftNiftyVal">--</div>
+        <div class="g-label">GIFT Nifty (now)</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="gapVal">--</div>
+        <div class="g-label">Expected Gap</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="usReadVal" style="font-size:13px">--</div>
+        <div class="g-label">US Overnight</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:12px" id="outlookRead">Loading overnight futures...</div>
+  </div>
+
+  <!-- Regime -->
+  <div class="card">
+    <div class="card-header">
+      <span class="label">Market Regime</span>
+      <span class="regime-badge sell_premium" id="regimeBadge">--</span>
+    </div>
+    <div style="font-size:13px;color:var(--text-dim);margin-top:4px" id="regimeDesc"></div>
+    <div style="font-size:12px;margin-top:6px" id="regimeTransition"></div>
+  </div>
+
+  <!-- Action -->
+  <div class="action-card" id="actionCard">
+    <div class="action-title">🎯 Recommended Action</div>
+    <div class="action-text" id="actionText">Loading...</div>
+  </div>
+
+  <!-- Contrarian PCR Signal -->
+  <div class="action-card" id="contrarianCard" style="background:#1a1030;border-color:#7c3aed55">
+    <div class="action-title">🔄 Contrarian (PCR Reversal)</div>
+    <div class="action-text" id="contrarianText">Loading...</div>
+  </div>
+
+  <!-- ORB Scalp -->
+  <div class="action-card" id="orbCard" style="background:#0a1628;border-color:#448aff55">
+    <div class="action-title">⚡ Opening Range Breakout <span style="font-size:11px;color:var(--text-dim)">9:15-10:15 AM</span></div>
+    <div class="action-text" id="orbText" style="color:#80b4ff">Outside market hours</div>
+    <div id="orbDetails" style="font-size:11px;color:var(--text-dim);margin-top:4px"></div>
+  </div>
+
+  <!-- Intraday (VWAP + EMA) -->
+  <div class="card" id="intradayCard">
+    <div class="card-header"><span class="label">📊 Intraday Signals</span><span style="font-size:11px;color:var(--text-dim)">5-min bars</span></div>
+    <div style="display:flex;gap:8px">
+      <div style="flex:1;padding:8px;border-radius:8px;background:var(--bg)" id="vwapBox">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">VWAP Reversion</div>
+        <div style="font-size:13px;font-weight:700" id="vwapSignal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="vwapDetail"></div>
+      </div>
+      <div style="flex:1;padding:8px;border-radius:8px;background:var(--bg)" id="emaBox">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">9/21 EMA Crossover</div>
+        <div style="font-size:13px;font-weight:700" id="emaSignal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="emaDetail"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Position Sizing -->
+  <div class="card" id="sizingCard">
+    <div class="card-header"><span class="label">💰 Position Sizing</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Capital (₹)</label>
+        <input type="number" id="capitalInput" value="100000" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
+      </div>
+      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Risk %</label>
+        <input type="number" id="riskInput" value="2" step="0.5" min="0.5" max="10" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
+      </div>
+    </div>
+    <button onclick="calcPositionSize()" style="width:100%;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;margin-bottom:8px">Calculate</button>
+    <div id="sizingResult" style="font-size:13px;line-height:1.6;display:none"></div>
+  </div>
+
+  <!-- Trailing Stop -->
+  <div class="card" id="trailCard">
+    <div class="card-header"><span class="label">📉 Stop Loss</span></div>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--red)" id="fixedStop">--</div><div style="font-size:11px;color:var(--text-dim)">Fixed Stop</div></div>
+      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--yellow)" id="trailStop">--</div><div style="font-size:11px;color:var(--text-dim)">Trail Stop (0.5%)</div></div>
+      <div style="flex:1"><div style="font-size:18px;font-weight:700" id="stopGap">--</div><div style="font-size:11px;color:var(--text-dim)">Gap</div></div>
+    </div>
+  </div>
+
+  <!-- Trade Journal -->
+  <div class="card" id="journalCard">
+    <div class="card-header">
+      <span class="label">📒 Trade Journal</span>
+      <button onclick="toggleJournal()" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:11px;cursor:pointer">+ Log Trade</button>
+    </div>
+    <!-- Stats -->
+    <div class="gauge-row" id="journalStats">
+      <div class="gauge"><div class="g-value" id="jTotalTrades">--</div><div class="g-label">Trades</div></div>
+      <div class="gauge"><div class="g-value" id="jWinRate">--</div><div class="g-label">Win Rate</div></div>
+      <div class="gauge"><div class="g-value" id="jTotalPnl">--</div><div class="g-label">Total P&L</div></div>
+      <div class="gauge"><div class="g-value" id="jRR">--</div><div class="g-label">R:R</div></div>
+    </div>
+    <!-- Log Form -->
+    <div id="journalForm" style="display:none;margin-top:8px">
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <select id="jDirection" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px">
+          <option value="long">Long (CE)</option><option value="short">Short (PE)</option>
+        </select>
+        <input type="number" id="jLots" placeholder="Lots" style="width:60px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px">
+        <input type="number" id="jEntryPx" placeholder="Entry ₹" style="width:80px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px" step="0.05">
+        <input type="number" id="jExitPx" placeholder="Exit ₹" style="width:80px;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px" step="0.05">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <input type="text" id="jStrike" placeholder="Strike (e.g. 24450)" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px">
+        <input type="text" id="jExpiry" placeholder="Expiry" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:12px">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button onclick="logTrade()" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--green);color:#000;font-weight:700;font-size:13px">Save Trade</button>
+        <button onclick="toggleJournal()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px">Cancel</button>
+      </div>
+    </div>
+    <!-- Recent Trades -->
+    <div id="recentTrades" style="margin-top:8px;max-height:200px;overflow-y:auto"></div>
+  </div>
+
+  <!-- Algo Trading -->
+  <div class="card" id="algoCard">
+    <div class="card-header">
+      <span class="label">🤖 Algo Trading</span>
+      <span class="value" id="algoMode">DRY RUN</span>
+    </div>
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px" id="algoLimits"></div>
+    <div id="algoStrategies" style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px"></div>
+    <div id="algoOrders" style="max-height:150px;overflow-y:auto;font-size:11px"></div>
+    <div style="margin-top:6px;font-size:10px;color:var(--red);display:none" id="algoWarning">
+      ⚠️ To enable LIVE trading: POST /api/algo/toggle with confirm="CONFIRM_LIVE"
+    </div>
+  </div>
+
+  <!-- Levels (BUY only) -->
+  <div class="card hidden" id="levelsCard">
+    <div class="card-header"><span class="label">Entry / Exit Levels</span></div>
+    <div class="level-row">
+      <div class="level-pill target" id="targetLevel">--</div>
+      <div class="level-pill stop" id="stopLevel">--</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── BITCOIN SECTION ── -->
+<!-- ── NIFTY SCALPER SECTION ── -->
+<div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:#ffab00;text-align:center;letter-spacing:1px">⚡ ─── NIFTY SCALPER ─── ⚡</div>
+
+<div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">₿ ─── BITCOIN (24/7) ─── ₿</div>
+
+<div class="card" id="btcCard">
+  <div class="card-header"><span class="label">🪙 BTC Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="btcSpot">--</div>
+      <div class="g-label">BTC Price</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btcSignal" style="font-size:16px">--</div>
+      <div class="g-label">1h Signal</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btcSignal15" style="font-size:16px">--</div>
+      <div class="g-label">15m Signal</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btc24h">--</div>
+      <div class="g-label">24h Change</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:var(--text-dim)" id="btcReason">Loading...</div>
+  <div id="btcRec" style="margin-top:8px;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:700;display:none"></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="label">📊 BTC Technicals</span></div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="btcEma">--</div>
+      <div class="g-label">200 EMA</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btcAdx">--</div>
+      <div class="g-label">ADX</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btcRsi">--</div>
+      <div class="g-label">RSI</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btcDi" style="font-size:12px">--</div>
+      <div class="g-label">DI+/DI−</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px" id="btcLevels"></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="label">📈 BTC + 200 EMA</span><span style="font-size:10px;color:var(--text-dim)" id="btcTfLabel">1h bars</span></div>
+  <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap" id="tfBtc">
+    <button data-tf="4h" class="tf-btn">4H</button>
+    <button data-tf="1h" class="tf-btn active">1H</button>
+    <button data-tf="15m" class="tf-btn">15M</button>
+    <button data-tf="5m" class="tf-btn">5M</button>
+    <button data-tf="2m" class="tf-btn">2M</button>
+    <button data-tf="1m" class="tf-btn">1M</button>
+  </div>
+  <canvas id="btcChart" style="width:100%;height:180px;display:block"></canvas>
+  <div style="display:flex;gap:16px;margin-top:6px;font-size:10px;color:var(--text-dim)">
+    <span><span style="display:inline-block;width:14px;height:3px;background:#f7931a;vertical-align:middle;margin-right:4px"></span>BTC</span>
+    <span><span style="display:inline-block;width:14px;height:3px;background:var(--accent);vertical-align:middle;margin-right:4px"></span>200 EMA</span>
+      <span><span style="display:inline-block;width:14px;height:3px;background:#f59e0b;vertical-align:middle;margin-right:4px"></span>20 EMA</span>
+    <span id="btcSpotTag" style="margin-left:auto"></span>
+  </div>
+</div>
+
+<div class="card" id="btcAlertsCard">
+  <div class="card-header"><span class="label">🔔 BTC Alerts</span></div>
+  <div id="btcAlertsList" style="max-height:180px;overflow-y:auto;font-size:11px;line-height:1.6">
+    <div style="color:var(--text-dim);padding:8px;text-align:center">Watching for signal changes...</div>
+  </div>
+</div>
+
+  <!-- BTC Strategy Status -->
+  <div class="card" id="btcStrategiesCard">
+    <div class="card-header"><span class="label">🧭 BTC Strategy Status</span><span class="value" id="btcStratUpdated">--</span></div>
+    <div id="btcStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
+  </div>
+
+<!-- ── BANK NIFTY SECTION ── -->
+<div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">🏦 ─── BANK NIFTY ─── 🏦</div>
+
+<div class="card" id="bnfCard">
+  <div class="card-header"><span class="label">🏦 BNF Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="bnfSpot">--</div>
+      <div class="g-label">BNF Price</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="bnfSignal" style="font-size:16px">--</div>
+      <div class="g-label">Signal</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="bnfAdx">--</div>
+      <div class="g-label">ADX</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="bnfRsi">--</div>
+      <div class="g-label">RSI</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:var(--text-dim)" id="bnfReason">Loading...</div>
+  <div id="bnfRec" style="margin-top:8px;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:700;display:none"></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="label">📊 BNF Technicals</span></div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="bnfEma">--</div>
+      <div class="g-label">200 EMA</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="bnfDi" style="font-size:12px">--</div>
+      <div class="g-label">DI+/DI−</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="bnfDist">--</div>
+      <div class="g-label">Dist 200EMA</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px" id="bnfLevels"></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="label">📈 BNF + 200 EMA</span><span style="font-size:10px;color:var(--text-dim)" id="bnfTfLabel">1h bars</span></div>
+  <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap" id="tfBnf">
+    <button data-tf="1h" class="tf-btn active">1H</button>
+    <button data-tf="15m" class="tf-btn">15M</button>
+    <button data-tf="5m" class="tf-btn">5M</button>
+    <button data-tf="2m" class="tf-btn">2M</button>
+    <button data-tf="1m" class="tf-btn">1M</button>
+  </div>
+  <canvas id="bnfChart" style="width:100%;height:180px;display:block"></canvas>
+  <div style="display:flex;gap:16px;margin-top:6px;font-size:10px;color:var(--text-dim)">
+    <span><span style="display:inline-block;width:14px;height:3px;background:#00bcd4;vertical-align:middle;margin-right:4px"></span>BNF</span>
+    <span><span style="display:inline-block;width:14px;height:3px;background:var(--accent);vertical-align:middle;margin-right:4px"></span>200 EMA</span>
+      <span><span style="display:inline-block;width:14px;height:3px;background:#f59e0b;vertical-align:middle;margin-right:4px"></span>20 EMA</span>
+    <span id="bnfSpotTag" style="margin-left:auto"></span>
+  </div>
+</div>
+
+<!-- BNF Expiry Countdown -->
+  <div class="card" id="bnfExpiryCard">
+    <div class="card-header"><span class="label">⏳ BNF Expiry Countdown</span><span style="font-size:10px;color:var(--text-dim)" id="bnfExpiryGamma" class="pill">--</span></div>
+    <div style="font-size:12px;line-height:1.7" id="bnfExpiryRead">Loading...</div>
+  </div>
+
+  <!-- BNF Option Chain Table -->
+  <div class="card" id="bnfChainCard">
+    <div class="card-header">
+      <span class="label">📋 BNF Option Chain</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="bnfChainMeta">--</span>
+    </div>
+    <div style="text-align:center;margin:2px 0 8px">
+      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">BANK NIFTY SPOT</div>
+      <div id="bnfChainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
+    </div>
+    <div style="font-size:11px;margin-bottom:6px" id="bnfChainWalls"></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:var(--text-dim);text-align:right">
+            <th style="text-align:left;padding:3px 4px">Strike</th>
+            <th style="padding:3px 4px">CE ₹</th>
+            <th style="padding:3px 4px">CE OI</th>
+            <th style="padding:3px 4px">CE Vol</th>
+            <th style="padding:3px 4px">IV</th>
+            <th style="padding:3px 4px">PE ₹</th>
+            <th style="padding:3px 4px">PE OI</th>
+            <th style="padding:3px 4px">PE Vol</th>
+          </tr>
+        </thead>
+        <tbody id="bnfChainRows">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- BNF IV Rank -->
+  <div class="card" id="bnfIvRankCard">
+    <div class="card-header">
+      <span class="label">🧊 BNF IV Rank</span>
+      <span style="font-size:10px;color:var(--text-dim)">52w: <span id="bnfIvRange">--</span></span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="bnfIvRankVal">--</div>
+        <div class="g-label">IV Rank</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="bnfIvPctVal">--</div>
+        <div class="g-label">IV Percentile</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="bnfAtmIvVal">--</div>
+        <div class="g-label">ATM IV</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:12px" id="bnfIvRead">Loading IV history...</div>
+  </div>
+
+  <!-- BNF OI Buildup -->
+  <div class="card" id="bnfOiCard">
+    <div class="card-header"><span class="label">🧠 BNF OI Buildup</span><span style="font-size:10px;color:var(--text-dim)" id="bnfOiBias" class="pill">--</span></div>
+    <div style="font-size:11px;color:var(--text-dim)" id="bnfOiReason">Collecting OI snapshots…</div>
+    <div style="display:flex;gap:12px;margin-top:6px;font-size:10px">
+      <div style="flex:1" id="bnfOiCe"></div>
+      <div style="flex:1" id="bnfOiPe"></div>
+    </div>
+  </div>
+
+  <!-- BNF Backtest -->
+  <div class="card" id="bnfBacktestCard" style="border-color:#00bcd444">
+    <div class="card-header">
+      <span class="label">🧪 BNF Backtest (200 EMA)</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="bnfBtPeriod">--</span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="bnfBtTrades">--</div>
+        <div class="g-label">Trades</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="bnfBtWinRate">--</div>
+        <div class="g-label">Win Rate</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="bnfBtExpectancy">--</div>
+        <div class="g-label">%/Trade</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="bnfBtPF">--</div>
+        <div class="g-label">Profit Factor</div>
+      </div>
+    </div>
+    <div style="margin-top:6px;font-size:11px;line-height:1.5" id="bnfBtRead">Loading…</div>
+    <div style="margin-top:4px;font-size:10px;color:var(--text-dim)" id="bnfBtDetails"></div>
+  </div>
+
+<div class="card" id="bnfAlertsCard">
+  <div class="card-header"><span class="label">🔔 BNF Alerts</span></div>
+  <div id="bnfAlertsList" style="max-height:180px;overflow-y:auto;font-size:11px;line-height:1.6">
+    <div style="color:var(--text-dim);padding:8px;text-align:center">Watching for signal changes...</div>
+  </div>
+</div>
+
+  <!-- BNF Strategy Status -->
+  <div class="card" id="bnfStrategiesCard">
+    <div class="card-header"><span class="label">🧭 Bank Nifty Strategy Status</span><span class="value" id="bnfStratUpdated">--</span></div>
+    <div id="bnfStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
+  </div>
+
+<!-- ── SENSEX SECTION ── -->
+<div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">🇮🇳 ─── SENSEX ─── 🇮🇳</div>
+
+<div class="card" id="sensexCard">
+  <div class="card-header"><span class="label">🇮🇳 Sensex Signal</span><span style="font-size:10px;color:var(--text-dim)">200 EMA bounce · 1h bars</span></div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="sensexSpot">--</div>
+      <div class="g-label">Sensex</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="sensexSignal" style="font-size:16px">--</div>
+      <div class="g-label">1h Signal</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="sensexChg">--</div>
+      <div class="g-label">Day Change</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="sensexDist">--</div>
+      <div class="g-label">200 EMA Δ</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:var(--text-dim)" id="sensexReason">Loading...</div>
+  <div id="sensexLevels" style="margin-top:8px;font-size:12px"></div>
+  <div id="sensexRec" style="margin-top:8px;padding:8px 10px;border-radius:8px;font-size:12px;font-weight:700;display:none"></div>
+</div>
+
+<div class="card">
+  <div class="card-header"><span class="label">📊 Sensex Technicals</span></div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="sensexEma">--</div>
+      <div class="g-label">200 EMA</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="sensexAdx">--</div>
+      <div class="g-label">ADX</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="sensexRsi">--</div>
+      <div class="g-label">RSI</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="sensexDi">--</div>
+      <div class="g-label">DI+ / DI−</div>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="sensexChartCard">
+  <div class="card-header"><span class="label">📈 SENSEX + 200 EMA</span><span style="font-size:10px;color:var(--text-dim)" id="sensexTfLabel">1h bars</span></div>
+  <div style="display:flex;gap:4px;margin:6px 0;flex-wrap:wrap" id="tfSensex">
+    <button class="tf-btn active" data-tf="1h">1H</button>
+    <button class="tf-btn" data-tf="15m">15M</button>
+    <button class="tf-btn" data-tf="5m">5M</button>
+    <button class="tf-btn" data-tf="2m">2M</button>
+    <button class="tf-btn" data-tf="1m">1M</button>
+  </div>
+  <canvas id="sensexChart" height="210" style="width:100%;height:210px;touch-action:pan-y"></canvas>
+  <div style="display:flex;gap:16px;margin-top:6px;font-size:10px;color:var(--text-dim)">
+    <span><span style="display:inline-block;width:14px;height:3px;background:#f59e0b;vertical-align:middle;margin-right:4px"></span>SENSEX</span>
+    <span><span style="display:inline-block;width:14px;height:3px;background:var(--accent);vertical-align:middle;margin-right:4px"></span>200 EMA</span>
+    <span><span style="display:inline-block;width:14px;height:3px;background:#f59e0b;vertical-align:middle;margin-right:4px"></span>20 EMA</span>
+    <span id="sensexSpotTag" style="margin-left:auto"></span>
+  </div>
+</div>
+
+<div class="card" id="sensexAlertsCard">
+  <div class="card-header"><span class="label">🔔 Sensex Alerts</span></div>
+  <div id="sensexAlertsList" style="max-height:180px;overflow-y:auto;font-size:11px;line-height:1.6">
+    <div style="color:var(--text-dim);padding:8px;text-align:center">Watching for signal changes...</div>
+  </div>
+</div>
+
+  <!-- Sensex Strategy Status -->
+  <div class="card" id="sensexStrategiesCard">
+    <div class="card-header"><span class="label">🧭 Sensex Strategy Status</span><span class="value" id="sensexStratUpdated">--</span></div>
+    <div id="sensexStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
+  </div>
+
+<!-- Weekly Review -->
+<div class="card" id="weeklyCard">
+  <div class="card-header"><span class="label">📊 Weekly Review</span><span style="font-size:10px;color:var(--text-dim)" id="weeklyWeek">--</span></div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="weeklyPnl">--</div>
+      <div class="g-label">Weekly P&L</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="weeklyTrades">--</div>
+      <div class="g-label">Trades</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="weeklyWR">--</div>
+      <div class="g-label">Win Rate</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px;color:var(--text-dim)" id="weeklyRead">No report yet — builds every Friday 3:35 PM</div>
+</div>
+
+<!-- Backtest Report -->
+<div class="card" id="backtestCard" style="border-color:#448aff44">
+  <div class="card-header">
+    <span class="label">🧪 Strategy Backtest</span>
+    <span style="font-size:10px;color:var(--text-dim)" id="btPeriod">--</span>
+  </div>
+  <div class="gauge-row">
+    <div class="gauge">
+      <div class="g-value" id="btTrades">--</div>
+      <div class="g-label">Trades</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btWinRate">--</div>
+      <div class="g-label">Win Rate</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btExpectancy">--</div>
+      <div class="g-label">%/Trade</div>
+    </div>
+    <div class="gauge">
+      <div class="g-value" id="btPF">--</div>
+      <div class="g-label">Profit Factor</div>
+    </div>
+  </div>
+  <div style="margin-top:8px;font-size:12px" id="btRead">Loading backtest...</div>
+  <details style="margin-top:6px">
+    <summary style="font-size:11px;color:var(--blue);cursor:pointer">Details</summary>
+    <div style="font-size:11px;line-height:1.7;margin-top:6px;color:var(--text-dim)" id="btDetails"></div>
+  </details>
+</div>
+
+<!-- Trading Playbook -->
+<div class="card" style="border-color:#7c3aed44">
+  <details>
+    <summary style="font-size:14px;font-weight:700;cursor:pointer;padding:4px 0;color:var(--accent)">📖 Trading Playbook <span style="font-size:11px;color:var(--text-dim);font-weight:400">— tap to expand</span></summary>
+    <div style="margin-top:10px;font-size:12px;line-height:1.7">
+      <div style="font-weight:700;margin-top:8px">⏰ Daily Routine</div>
+      <div>9:00 AM pre-market brief · 9:15–9:30 NO trading (opening chaos) · 9:30–10:15 ORB window · 10:15–11:00 watch 200 EMA bounce · 1:00–2:30 avoid new entries (tug-of-war) · 3:25 PM BTST alert · 3:30 close</div>
+      <div style="font-weight:700;margin-top:8px">🎯 The Main Trade</div>
+      <div><span style="color:var(--green);font-weight:700">BUY_CALLS:</span> Nifty touches 200 EMA from above + ADX≥18 + RSI<70 → buy the ATM CE shown</div>
+      <div><span style="color:var(--red);font-weight:700">BUY_PUTS:</span> Nifty breaks 200 EMA by 0.8% + ADX≥18 → buy the ATM PE shown</div>
+      <div><span style="color:var(--yellow);font-weight:700">WAIT:</span> no trade. Doing nothing is a position.</div>
+      <div style="font-weight:700;margin-top:8px">🛑 Stop Loss (non-negotiable)</div>
+      <div>1. Index stop from dashboard → exit if hit · 2. Option drops 40% of premium → exit · 3. No move in 2 hours → exit (theta kills) · 4. Warnings fire at 0.6% / 0.3% from stop</div>
+      <div style="font-weight:700;margin-top:8px">📐 Sizing</div>
+      <div>VIX<12: 2 lots max · VIX 12–22: 1–2 lots · VIX>22: 1 lot or skip. Risk ≤1–2% of capital per trade.</div>
+      <div style="font-weight:700;margin-top:8px">✅ Exit Rules</div>
+      <div>+50% → trail to breakeven · +100% → take half, trail rest · signal flips to EXIT → exit now · expiry day: exit by 3:15 PM</div>
+      <div style="font-weight:700;margin-top:8px">🚫 Never</div>
+      <div>Average down · hold through expiry hoping · trade first 15 min · risk >2% · revenge trade after a loss (−5% day = done)</div>
+      <div style="font-weight:700;margin-top:8px">🏦 Smart Money Read</div>
+      <div>FII🟢+DII🟢 → trust longs · FII🔴+DII🟢 → tug-of-war, tight stops (like today) · FII🔴+DII🔴 → trust shorts · PCR<0.7 → crowd euphoric, contrarian buy PE · PCR>1.4 → panic, contrarian buy CE</div>
+      <div style="font-weight:700;margin-top:8px">🧮 The Math</div>
+      <div>~60% of signals win. Winners avg +60–100%, losers capped at −40%. 3 winners pay for 2 losers — if you follow the stops every time.</div>
+    </div>
+  </details>
+</div>
+
+<div class="footer" id="footerText">Refreshing...</div>
+
+<div style="text-align:center;font-size:12px;color:var(--text-dim);padding:4px 12px 14px;line-height:1.6">
+  ✨ Prepared by <span style="color:var(--accent);font-weight:700">Suman Pradhan</span> — <span style="font-weight:600">The Legend of Options</span> 🏆<br>
+  <span style="font-size:10px">Trade with discipline. Stops are your friend.</span>
+</div>
+
+<!-- Debug: remove after fix -->
+<div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
+
+<script src="/dash.js?v=20260814b"></script>
+</body>
+</html>

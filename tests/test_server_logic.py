@@ -474,3 +474,28 @@ class OdiaReasonTranslateTest(unittest.TestCase):
         out = odia_translate("funding +0.080% — longs pay carry, skip LONG")
         self.assertIn("କ୍ୟାରି ଦିଏ", out)
         self.assertIn("ଛାଡ଼", out)
+
+
+class ScalpDailyReportTest(unittest.TestCase):
+    """Daily report builds Odia per-asset lines + totals from the summary."""
+
+    def test_report_with_calls(self):
+        calls = [
+            {"id": 1, "asset": "nifty", "signal": "SCALP_LONG", "status": "TARGET_HIT",
+             "entry": 73.0, "hit_premium": 80.0, "half_spread": 1.0},
+            {"id": 2, "asset": "btc", "signal": "SCALP_SHORT", "status": "EXPIRED",
+             "entry": 62828.0, "hit_premium": 62800.0},
+        ]
+        with mock.patch.object(ns, "_scalp_calls", calls), \
+             mock.patch.object(ns, "SCALP_LOT", {"nifty": 65, "bnf": 15, "sensex": 20, "btc": 0}):
+            rep = ns._scalp_daily_report()
+        self.assertIn("ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ", rep)
+        self.assertIn("ନିଫ୍ଟି", rep)
+        self.assertIn("ବିଟକଏନ୍", rep)
+        self.assertIn("ମୋଟ", rep)
+        self.assertIn("WR", rep)
+
+    def test_report_empty(self):
+        with mock.patch.object(ns, "_scalp_calls", []):
+            rep = ns._scalp_daily_report()
+        self.assertIn("କୌଣସି ସ୍କାଲ୍ପ୍ କଲ୍ ନାହିଁ", rep)

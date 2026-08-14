@@ -687,6 +687,33 @@ def _scalp_summary():
     }
 
 
+def _scalp_daily_report():
+    """Daily scalp dry-run report — Odia labels, per-asset + totals."""
+    def _rs(v):
+        i = int(round(v))
+        return ("+" if i > 0 else "−") + "₹{:,}".format(abs(i))
+    def _pts(v):
+        return ("+" if v > 0 else "−") + "{:.1f} pts".format(abs(v))
+    s = _scalp_summary()
+    by = s.get("by_asset") or {}
+    emoji = {"nifty": "📈", "bnf": "🏦", "sensex": "🇮🇳", "btc": "₿"}
+    name = {"nifty": "ନିଫ୍ଟି", "bnf": "ବ୍ୟାଙ୍କ୍ ନିଫ୍ଟି", "sensex": "ସେନସେକ୍ସ", "btc": "ବିଟକଏନ୍"}
+    lines = []
+    for a in ("nifty", "bnf", "sensex", "btc"):
+        b = by.get(a)
+        if not b:
+            continue
+        pnl = _rs(b["rs"]) if b["rs"] else _pts(b["pts"])
+        lines.append("{} {}: {} କଲ୍ · {}W/{}L · {}".format(
+            emoji[a], name[a], b["n"], b["w"], b["n"] - b["w"], pnl))
+    if not lines:
+        return "📊 ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ (paper)\nଆଜି କୌଣସି ସ୍କାଲ୍ପ୍ କଲ୍ ନାହିଁ।"
+    net = _rs(s["net_rs"]) if s["net_rs"] else _pts(s["net_pts"])
+    total = "ମୋଟ: {} କଲ୍ · {}W/{}L · WR {}% · {}".format(
+        s["resolved"], s["wins"], s["resolved"] - s["wins"], s["win_rate"], net)
+    return "\n".join(["📊 ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ (paper)"] + ["─" * 18] + lines + ["─" * 18, total])
+
+
 def _scalp_expired(c, now=None):
     """True when a call's hold has elapsed (robust across midnight via expires_dt)."""
     now = now or _ist_now()
@@ -1198,6 +1225,7 @@ def alert_scheduler():
     last_oi_signal = None
     last_gap_check = None
     last_market_open_push = None
+    last_scalp_report = None
     
     while True:
         try:
@@ -1421,6 +1449,14 @@ def alert_scheduler():
                 except Exception as e:
                     _add_alert("warning", "BTST Alert Failed", str(e)[:200])
             
+            # ── Daily Scalp Report at 3:40 PM (Odia, per-asset dry-run P&L) ──
+            if current_minute == "15:40" and last_scalp_report != today:
+                last_scalp_report = today
+                try:
+                    _add_alert("info", "📊 ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ", _scalp_daily_report())
+                except Exception as e:
+                    print("scalp report failed:", e)
+
             # ── Daily P&L Summary at 3:30 PM ──
             if current_minute == "15:30" and last_eod_summary != today:
                 last_eod_summary = today

@@ -293,6 +293,32 @@ class ScalpSpotShortResolutionTest(unittest.TestCase):
         self.assertEqual(c["status"], "TARGET_HIT")
 
 
+class ScalpMidnightExpiryTest(unittest.TestCase):
+    """expires_dt parses as AWARE (+05:30) while _ist_now() is NAIVE. The
+    comparison must NOT raise TypeError and silently fall through to the
+    '%H:%M' string compare — that false-EXPIRES overnight calls
+    (20:00 > 02:00)."""
+
+    def test_future_overnight_not_expired(self):
+        from datetime import datetime
+        c = {"expires_dt": "2026-08-15T02:00:00+05:30", "expires_at": "02:00"}
+        now = datetime(2026, 8, 14, 20, 0, 0)  # naive IST
+        self.assertFalse(ns._scalp_expired(c, now=now))
+
+    def test_past_expiry_is_expired(self):
+        from datetime import datetime
+        c = {"expires_dt": "2026-08-14T15:30:00+05:30", "expires_at": "15:30"}
+        now = datetime(2026, 8, 14, 20, 0, 0)
+        self.assertTrue(ns._scalp_expired(c, now=now))
+
+    def test_same_day_string_fallback(self):
+        # no expires_dt → '%H:%M' fallback (same-day only): 20:00 > 15:30
+        from datetime import datetime
+        c = {"expires_at": "15:30"}
+        now = datetime(2026, 8, 14, 20, 0, 0)
+        self.assertTrue(ns._scalp_expired(c, now=now))
+
+
 class ScalpSignalsOnlyAlertsTest(unittest.TestCase):
     """SCALP_ALERTS_MODE=signals (default): ONLY buy/sell entry alerts fire.
     WAIT/expired/trail/target/stop chatter is suppressed, but watch state and

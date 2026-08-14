@@ -720,12 +720,22 @@ def _scalp_daily_report():
 
 
 def _scalp_expired(c, now=None):
-    """True when a call's hold has elapsed (robust across midnight via expires_dt)."""
+    """True when a call's hold has elapsed (robust across midnight via expires_dt).
+    _ist_now() is NAIVE-IST, while expires_dt parses as AWARE — comparing them
+    directly raises TypeError, which must NOT silently fall through to the
+    naive '%H:%M' string compare (that breaks across midnight: '20:00' > '02:00')."""
     now = now or _ist_now()
     edt = c.get("expires_dt")
     if edt:
         try:
-            return now > datetime.fromisoformat(edt)
+            dt = datetime.fromisoformat(edt)
+            if dt.tzinfo is not None:
+                try:
+                    from zoneinfo import ZoneInfo
+                    dt = dt.astimezone(ZoneInfo("Asia/Kolkata")).replace(tzinfo=None)
+                except Exception:
+                    dt = dt.replace(tzinfo=None)
+            return now > dt
         except Exception:
             pass
     ea = c.get("expires_at")

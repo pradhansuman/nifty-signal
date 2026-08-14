@@ -35,6 +35,31 @@ def _now():
 _vix_cache = {"ts": 0, "value": None}
 
 
+def _load_tuning():
+    """Runtime tuning overrides (no restart needed). Keys: score_min, trend_min,
+    adx_min, vix_min, vix_max, theta_max. Read from .openclaw/tmp/scalper_tuning.json
+    on every call; defaults come from env, then built-in defaults."""
+    t = {}
+    try:
+        import os as _os
+        p = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), ".openclaw", "tmp", "scalper_tuning.json")
+        if _os.path.exists(p):
+            with open(p) as _f:
+                t = json.load(_f)
+    except Exception:
+        t = {}
+    defaults = {
+        "score_min": float(os.environ.get("SCALP_SCORE_MIN", "3")),
+        "trend_min": float(os.environ.get("SCALP_TREND_MIN", "0.8")),
+        "adx_min": float(os.environ.get("SCALP_ADX_MIN", "25")),
+        "vix_min": float(os.environ.get("SCALP_VIX_MIN", "12")),
+        "vix_max": float(os.environ.get("SCALP_VIX_MAX", "18")),
+        "theta_max": float(os.environ.get("SCALP_THETA_MAX", "0.02")),
+    }
+    defaults.update({k: float(v) for k, v in t.items() if k in defaults})
+    return defaults
+
+
 def _vix_level():
     """Current Nifty VIX close (cached 30 min; fail-open returns None)."""
     import time as _t
@@ -138,7 +163,8 @@ def build_call(spot, bias, expiry):
             return {"blocked": True, "block_reason":
                     "spread {:.1f}% of premium — target +10% can't beat it".format(best["spread_pct"])}
         # ── Theta guard: block when decay is a material % of premium per day ──
-        theta_max = float(os.environ.get("SCALP_THETA_MAX", "0.02"))
+        tun_bc = _load_tuning()
+        theta_max = tun_bc["theta_max"]
         if best["theta"] is not None and abs(best["theta"]) / best["ltp"] > theta_max:
             return {"blocked": True, "block_reason":
                     "theta {:.2f} = {:.1f}%/day of premium — decay too fast to scalp".format(
@@ -278,7 +304,10 @@ def main():
         score -= 1
         reasons.append("below ORB low {:.0f}".format(orb_low))
 
-    bias = "LONG" if score >= 3 else "SHORT" if score <= -3 else "FLAT"
+    tun = _load_tuning()
+    score_min = tun["score_min"]
+    out["score_min"] = score_min
+    bias = "LONG" if score >= score_min else "SHORT" if score <= -score_min else "FLAT"
 
     # ── 200 EMA regime filter: never scalp against the trend ──
     ema200 = float(closes.ewm(span=200, adjust=False).mean().iloc[-1])
@@ -294,7 +323,7 @@ def main():
     # ── Trend-strength gate: momentum edge exists ONLY on strong-trend days ──
     # Backtest 2026-08-14 (58 sessions, 4295 bars): |spot-200E| >= 0.8% of spot →
     # 134 trades, 60% WR, PF 1.53, +429 pts. Below 0.5% → PF ~0.93 (loser).
-    trend_min = float(os.environ.get("SCALP_TREND_MIN", "0.8"))
+    trend_min = tun["trend_min"]
     trend_dist = abs(spot - ema200) / ema200 * 100.0
     out["trend_dist"] = round(trend_dist, 2)
     out["trend_gate"] = trend_min
@@ -305,7 +334,7 @@ def main():
         bias = "FLAT"
 
     # ── ADX trend-strength gate (backtest 2026-08-14: ADX>25 → PF 1.82) ──
-    adx_min = float(os.environ.get("SCALP_ADX_MIN", "25"))
+    adx_min = tun["adx_min"]
     adx_series = _adx(df)
     adx_val = float(adx_series.iloc[-1]) if not pd.isna(adx_series.iloc[-1]) else 0.0
     out["adx"] = round(adx_val, 1)
@@ -316,8 +345,8 @@ def main():
         bias = "FLAT"
 
     # ── VIX regime gate (backtest: VIX 12-18 + ADX>25 → PF 1.96, WR 66%) ──
-    vix_min = float(os.environ.get("SCALP_VIX_MIN", "12"))
-    vix_max = float(os.environ.get("SCALP_VIX_MAX", "18"))
+    vix_min = tun["vix_min"]
+    vix_max = tun["vix_max"]
     vix_val = _vix_level()
     out["vix"] = round(vix_val, 2) if vix_val else None
     out["vix_gate"] = [vix_min, vix_max]
@@ -353,8 +382,8 @@ def main():
     if bias == "FLAT":
         out["signal"] = "WAIT"
         block_txt = regime_block or trend_block or adx_block or vix_block or window_block
-        out["reason"] = "No scalp edge — score {:+d} (need ±3). {}{}".format(
-            score, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
+        out["reason"] = "No scalp edge — score {:+d} (need ±{:.0f}). {}{}".format(
+            score, score_min, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
         return out
 
     out["signal"] = "SCALP_LONG" if bias == "LONG" else "SCALP_SHORT"

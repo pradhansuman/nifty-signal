@@ -47,6 +47,12 @@ class ScalperScoringTest(unittest.TestCase):
                                            return_value=pd.Series([40.0] * 500))
         self.adx_patch.start()
         self.addCleanup(self.adx_patch.stop)
+        # isolate from the runtime tuning file — tests control gates explicitly
+        self.tun = mock.patch.object(scalper, "_load_tuning", return_value={
+            "score_min": 3.0, "trend_min": 0.8, "adx_min": 25.0,
+            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.02})
+        self.tun.start()
+        self.addCleanup(self.tun.stop)
         self.bars = mock.patch.object(scalper, "get_bars")
         self.bars.start()
         self.addCleanup(self.bars.stop)
@@ -78,10 +84,29 @@ class ScalperScoringTest(unittest.TestCase):
 
     def test_weak_trend_gate_blocks(self):
         scalper.get_bars.return_value = make_bars(up=True)
-        with patch_environment(SCALP_TREND_MIN="99"):
-            out = scalper.main()
+        self.tun.stop()
+        t = mock.patch.object(scalper, "_load_tuning", return_value={
+            "score_min": 3.0, "trend_min": 99.0, "adx_min": 25.0,
+            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.02})
+        t.start()
+        self.addCleanup(t.stop)
+        out = scalper.main()
         self.assertEqual(out["signal"], "WAIT")
         self.assertIn("trend too weak", out.get("reason", ""))
+
+    def test_lower_score_min_allows_weaker_setup(self):
+        # loosened threshold (chatty mode) accepts score 2
+        scalper.get_bars.return_value = make_bars(up=True)
+        self.tun.stop()
+        t = mock.patch.object(scalper, "_load_tuning", return_value={
+            "score_min": 2.0, "trend_min": 0.4, "adx_min": 18.0,
+            "vix_min": 10.0, "vix_max": 18.0, "theta_max": 0.03})
+        t.start()
+        self.addCleanup(t.stop)
+        out = scalper.main()
+        self.assertGreaterEqual(out["score_min"], 2.0)
+        # gates still may block, but threshold must be respected in output
+        self.assertEqual(out["score_min"], 2.0)
 
     def test_adx_gate_blocks(self):
         scalper.get_bars.return_value = make_bars(up=True)
@@ -129,6 +154,11 @@ class ScalperBuildCallTest(unittest.TestCase):
         self.chain = mock.patch.object(scalper.chain_table, "get_chain")
         self.chain.start()
         self.addCleanup(self.chain.stop)
+        self.tun = mock.patch.object(scalper, "_load_tuning", return_value={
+            "score_min": 3.0, "trend_min": 0.8, "adx_min": 25.0,
+            "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.02})
+        self.tun.start()
+        self.addCleanup(self.tun.stop)
 
     def test_spread_guard_blocks_wide_spread(self):
         # spread 10 on 85 ltp ≈ 11.8% > 3% → blocked

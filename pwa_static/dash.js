@@ -1247,7 +1247,7 @@ async function fetchScalper() {
     const upd = document.getElementById('scalperUpdated');
     if (upd) upd.textContent = d.timestamp || '';
     const scoreEl = document.getElementById('scalperScore');
-    if (scoreEl) scoreEl.textContent = 'Score: ' + (d.score >= 0 ? '+' : '') + d.score + ' (' + (d.bias || 'FLAT') + ')';
+    if (scoreEl) scoreEl.textContent = 'Score: ' + (d.score >= 0 ? '+' : '') + d.score + ' (need ±' + (d.score_min != null ? d.score_min : 3) + ') · ' + (d.bias || 'FLAT');
     if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
       banner.textContent = '🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';

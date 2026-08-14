@@ -155,14 +155,16 @@ def _stoch(df, k=14, d=3):
 
 def _spot_call(asset, spot, bias):
     """Spot-level call (used for sensex, and as BTC fallback when the options
-    chain is unavailable). Entry/target/stop directly on the price."""
+    chain is unavailable). Entry/target/stop directly on the price. For BTC the
+    tradable quote is the Delta BTCUSDT perpetual futures mark (funding
+    attached) → the call is labelled BTC PERP."""
     cfg = ASSETS[asset]
     tp = cfg["spot_tp"]
     if bias == "LONG":
         target, stop = spot * (1 + tp), spot * (1 - tp)
     else:
         target, stop = spot * (1 - tp), spot * (1 + tp)
-    return {
+    call = {
         "option": "{} {}".format("LONG" if bias == "LONG" else "SHORT", cfg["label"]),
         "strike": round(spot, 2), "premium": round(spot, 2),
         "expiry": "INTRAday",
@@ -172,6 +174,16 @@ def _spot_call(asset, spot, bias):
         "delta": None, "theta": None,
         "target_pts": round(spot * tp, 0), "stop_pts": round(spot * tp, 0),
     }
+    if asset == "btc":
+        call["futures"] = True
+        call["option"] = "{} BTC PERP".format("LONG" if bias == "LONG" else "SHORT")
+        try:
+            fut = delta_exchange.get_btc_futures()
+            call["funding"] = fut.get("funding")
+            call["feed"] = fut.get("source") if fut.get("price") else "yf-spot"
+        except Exception:
+            call["feed"] = "yf-spot"
+    return call
 
 
 def build_call(asset, spot, bias, expiry):
@@ -287,6 +299,19 @@ def main(asset="nifty"):
     s_high = sess["High"]
     s_low = sess["Low"]
     spot = float(s_close.iloc[-1])
+    # BTC tradable quote = Delta BTCUSDT perpetual futures mark (live), funding
+    # attached. Falls back to the yfinance close if Delta is unreachable.
+    if asset == "btc":
+        try:
+            fut = delta_exchange.get_btc_futures()
+            if fut.get("price"):
+                spot = float(fut["price"])
+                out["feed"] = fut.get("source")
+            else:
+                out["feed"] = "yf-spot"
+            out["funding"] = fut.get("funding")
+        except Exception:
+            out["feed"] = "yf-spot"
     out["spot"] = round(spot, 2)
 
     ema9 = closes.ewm(span=9, adjust=False).mean()
@@ -439,6 +464,16 @@ def main(asset="nifty"):
     if not window_open and bias != "FLAT":
         window_block = out["window_reason"]
         bias = "FLAT"
+
+    # ── PERFECT SETUP: every gate passes AND momentum/VWAP/RSI all align ──
+    perfect = False
+    if bias != "FLAT":
+        mom_ok = mom >= 30 if bias == "LONG" else mom <= -30
+        vwap_ok = spot >= vwap_now if bias == "LONG" else spot <= vwap_now
+        rsi_ok = r >= 50 if bias == "LONG" else r <= 50
+        perfect = (score >= score_min and trend_dist >= trend_min
+                   and adx_val >= adx_min and mom_ok and vwap_ok and rsi_ok)
+    out["perfect"] = perfect
 
     out.update({
         "bias": bias, "score": score,

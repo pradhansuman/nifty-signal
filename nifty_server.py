@@ -617,6 +617,8 @@ def _scalp_append_call(asset, sc, call):
         "option_type": "CE" if sc.get("signal") == "SCALP_LONG" else "PE",
         "entry": call.get("entry"), "target": call.get("target"), "stop": call.get("stop"),
         "half_spread": call.get("half_spread") or 0.0,
+        "perfect": bool(sc.get("perfect")),
+        "funding": call.get("funding"),
         "expires_at": call.get("expires_at"), "status": "ACTIVE",
     })
     if len(_scalp_calls) > 60:
@@ -733,6 +735,17 @@ def _scalp_tick(asset):
                 "breakeven": False, "trail": False})
             _scalp_append_call(asset, sc, call)
             d_emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
+            # 🔥 PERFECT SETUP — every gate aligned: dedicated alert first
+            if sc.get("perfect"):
+                fund = call.get("funding")
+                fund_txt = " | funding {:.4f}%".format(fund * 100) if fund is not None else ""
+                _add_alert("critical", "🔥 PERFECT SETUP — {} {} {}".format(d_emoji, tag, call.get("option")),
+                    "ALL GATES ALIGNED — score {:+d} | trend {:.2f}% | ADX {:.0f} | RSI {:.0f} | momentum {}{}\nEntry {} | Target {} | Stop {} | ⏳ expires {}".format(
+                        sc.get("score") or 0, sc.get("trend_dist") or 0,
+                        sc.get("adx") or 0, sc.get("rsi") or 0,
+                        "{:+}".format(sc.get("momentum") or 0), fund_txt,
+                        call.get("entry"), call.get("target"), call.get("stop"),
+                        call.get("expires_at")))
             _add_alert("critical", "{} {} SCALP: {}".format(d_emoji, tag, call.get("option")),
                 "Entry ₹{} | Target ₹{} (+10%) | Stop ₹{} (-10%) | Expiry {} | Lot ₹{:,} | Spread {}% | ⏳ expires {}\n{}".format(
                     call.get("entry"), call.get("target"), call.get("stop"),

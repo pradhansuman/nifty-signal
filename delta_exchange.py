@@ -23,6 +23,7 @@ from datetime import datetime
 BASE = "https://api.delta.exchange"
 CACHE_TTL = 30  # seconds
 _cache = {"ts": 0, "data": None}
+_fut_cache = {"ts": 0.0, "data": None}
 
 
 def _fetch(url, timeout=15):
@@ -46,6 +47,57 @@ def _expiry_from_symbol(sym):
         return dt.strftime("%d-%b-%Y")
     except Exception:
         return ""
+
+
+def get_btc_futures(force=False):
+    """Live BTCUSDT perpetual futures snapshot (public REST, no auth).
+
+    Returns {price (mark), funding (8h rate), symbol, source}. Delta hides
+    bid/ask/last on the public REST endpoints (websocket-only), but mark price
+    + funding rate are enough for signal-level calls."""
+    now = time.time()
+    if not force and _fut_cache["ts"] and now - _fut_cache["ts"] < CACHE_TTL:
+        return _fut_cache["data"]
+    try:
+        d = _fetch("{}/v2/tickers/BTCUSDT".format(BASE))
+        t = d.get("result") or {}
+        mark = _f(t.get("mark_price"))
+        funding = _f(t.get("funding_rate"))
+        data = {"price": mark, "funding": funding, "symbol": "BTCUSDT",
+                "source": "delta_futures", "ts": now}
+        if not mark:
+            data["error"] = "no mark_price in ticker"
+        _fut_cache.update({"ts": now, "data": data})
+        return data
+    except Exception as e:
+        return {"error": str(e), "price": None, "funding": None, "source": "delta_futures"}
+
+
+def get_btc_futures_candles(resolution="5m", hours=6):
+    """Public BTCUSDT perpetual futures OHLCV candles → DataFrame with IST
+    index, same shape as the scalper's yfinance bars (Open/High/Low/Close/
+    Volume). Delta's candles API takes epoch SECONDS (ms values are rejected).
+
+    ⚠️ DELAYED DATA: the free-tier public candles endpoint lags ~90 minutes
+    (verified 2026-08-14) — NOT usable for 5m scalping indicators. Kept for
+    reference/backfills only; the scalper scores on yfinance bars and uses
+    get_btc_futures() (live mark) for the tradable quote."""
+    import pandas as pd
+    now = int(time.time())
+    start = now - hours * 3600
+    url = ("{}/v2/history/candles?resolution={}&symbol=BTCUSDT&start={}&end={}"
+           .format(BASE, resolution, start, now))
+    d = _fetch(url)
+    res = d.get("result") or []
+    if not res:
+        return None
+    rows = [{"Open": float(c["open"]), "High": float(c["high"]),
+             "Low": float(c["low"]), "Close": float(c["close"]),
+             "Volume": float(c.get("volume") or 0)} for c in res]
+    df = pd.DataFrame(rows)
+    df.index = pd.to_datetime([c["time"] for c in res], unit="s", utc=True)\
+        .tz_convert("Asia/Kolkata")
+    return df
 
 
 def get_btc_chain(force=False):

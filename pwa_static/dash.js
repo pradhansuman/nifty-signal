@@ -588,8 +588,9 @@ async function fetchAlgoStatus() {
           const st = c.status || 'ACTIVE';
           const chip = st === 'TARGET_HIT' ? 'var(--green)' : st === 'STOP_HIT' || st === 'EXPIRED' ? 'var(--red)' : 'var(--accent)';
           const pnl = c.pnl_pts != null ? ((c.pnl_pts >= 0 ? '+' : '') + c.pnl_pts + ' pts' + (c.pnl_rs ? ' · ₹' + Number(c.pnl_rs).toLocaleString('en-IN') : '')) : '';
+          const hot = c.perfect ? ' 🔥' : '';
           return `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
-            <span style="color:${chip}">${st}</span> ${c.time} ${String(c.asset).toUpperCase()} ${c.option || 'SPOT'} @ ${c.entry}${pnl ? ' → <b>' + pnl + '</b>' : ''}
+            <span style="color:${chip}">${st}</span>${hot} ${c.time} ${String(c.asset).toUpperCase()} ${c.option || 'SPOT'} @ ${c.entry}${pnl ? ' → <b>' + pnl + '</b>' : ''}
           </div>`;
         }).join('') || '<div style="font-size:10px;color:var(--text-dim)">No scalp calls yet</div>';
       }

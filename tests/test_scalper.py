@@ -367,5 +367,30 @@ class DeltaBtcTest(unittest.TestCase):
                                return_value={"error": "down", "rows": []}):
             c = scalper.build_call("btc", 63000.0, "SHORT", None)
         self.assertIsNotNone(c)
-        self.assertIn("SHORT BITCOIN", c["option"])  # spot fallback
+        self.assertIn("SHORT BTC PERP", c["option"])  # futures fallback call
         self.assertLess(c["target"], c["entry"])     # short target below entry
+
+
+class DeltaBtcFuturesCallTest(unittest.TestCase):
+    """BTC fallback calls are labelled BTC PERP with funding from Delta."""
+
+    def test_spot_call_btc_futures_label(self):
+        with mock.patch.object(scalper.delta_exchange, "get_btc_futures",
+                               return_value={"price": 64000.0, "funding": 0.0007,
+                                             "source": "delta_futures"}):
+            call = scalper._spot_call("btc", 64000.0, "SHORT")
+        self.assertTrue(call["futures"])
+        self.assertEqual(call["option"], "SHORT BTC PERP")
+        self.assertEqual(call["funding"], 0.0007)
+        self.assertEqual(call["feed"], "delta_futures")
+        # target BELOW entry for a SHORT (0.5% tp), stop above
+        self.assertLess(call["target"], call["entry"])
+        self.assertGreater(call["stop"], call["entry"])
+
+    def test_spot_call_btc_futures_fallback_feed(self):
+        with mock.patch.object(scalper.delta_exchange, "get_btc_futures",
+                               side_effect=Exception("down")):
+            call = scalper._spot_call("btc", 64000.0, "LONG")
+        self.assertTrue(call["futures"])
+        self.assertEqual(call["feed"], "yf-spot")
+        self.assertEqual(call["option"], "LONG BTC PERP")

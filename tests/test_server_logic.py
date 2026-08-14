@@ -114,3 +114,20 @@ class ChainPremiumTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FiveMinTickTest(unittest.TestCase):
+    def test_all_5min_boundaries_match(self):
+        for m in ("00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"):
+            self.assertTrue(ns._is_five_min_tick("12:" + m), m)
+        self.assertTrue(ns._is_five_min_tick("09:15"))   # market open
+        self.assertTrue(ns._is_five_min_tick("15:25"))   # near close
+
+    def test_off_boundary_does_not_match(self):
+        for m in ("01", "02", "07", "13", "44", "59"):
+            self.assertFalse(ns._is_five_min_tick("12:" + m), m)
+
+    def test_legacy_endswith_bug_guarded(self):
+        # the old .endswith(("00","05")) bug matched ONLY :00/:05 — guard against it
+        self.assertTrue(ns._is_five_min_tick("12:10"))
+        self.assertTrue(ns._is_five_min_tick("12:45"))

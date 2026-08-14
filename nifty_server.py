@@ -630,6 +630,12 @@ def _scalp_refresh_statuses():
 
 SCALP_ASSETS = ("nifty", "bnf", "sensex", "btc")
 SCALP_EMOJI = {"nifty": "📈", "bnf": "🏦", "sensex": "🇮🇳", "btc": "₿"}
+_FIVE_MIN_MARKS = ("00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55")
+
+
+def _is_five_min_tick(minute):
+    """True when HH:MM lands on a 5-minute boundary."""
+    return minute[-2:] in _FIVE_MIN_MARKS
 
 
 def _scalp_tick(asset):
@@ -1123,7 +1129,7 @@ def alert_scheduler():
                     pass
             
             # ── Intraday (VWAP + EMA) every 5 min ──
-            if in_market and current_minute.endswith(("00", "05")) and last_intraday_check != current_minute:
+            if in_market and current_minute[-2:] in _FIVE_MIN_MARKS and last_intraday_check != current_minute:
                 last_intraday_check = current_minute
                 try:
                     intra = run_script("intraday_signals.py")
@@ -1151,7 +1157,7 @@ def alert_scheduler():
                     pass
 
             # ── Scalper (5m momentum + live option call) every 5 min ──
-            if in_market and current_minute.endswith(("00", "05")) and last_scalp_check != current_minute:
+            if in_market and current_minute[-2:] in _FIVE_MIN_MARKS and last_scalp_check != current_minute:
                 last_scalp_check = current_minute
                 # ⚡ Scalper sweep — all assets (nifty/bnf/sensex spot/btc spot)
                 for _a in SCALP_ASSETS:

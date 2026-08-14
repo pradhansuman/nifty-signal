@@ -220,15 +220,16 @@ function render(s) {
   // ── ORB Scalp (fetched separately, only meaningful 9:30-10:15 AM) ──
   fetchORB();
 
-  // Levels card (only for BUY)
+  // Levels card (only for BUY) — green pill = TARGET, red pill = STOP
   if (sig === 'BUY_CALLS' || sig === 'BUY_PUTS') {
     document.getElementById('levelsCard').classList.remove('hidden');
-    document.getElementById('targetLevel').textContent = s.stop_level
-      ? '🛑 Stop Loss: ' + s.stop_level.toLocaleString('en-IN')
+    const tgt = s.expected_move_1sd
+      ? '🎯 1σ Target: ±' + s.expected_move_1sd.toLocaleString('en-IN') + ' pts'
+      : '🎯 Target: --';
+    document.getElementById('targetLevel').textContent = tgt;
+    document.getElementById('stopLevel').textContent = s.stop_level
+      ? '🛑 Stop: ' + s.stop_level.toLocaleString('en-IN')
       : '🛑 Stop: --';
-    document.getElementById('stopLevel').textContent = s.expected_move_pct
-      ? '📐 Expected 1σ Move: ±' + s.expected_move_pct + '%'
-      : '';
   } else {
     document.getElementById('levelsCard').classList.add('hidden');
   }
@@ -247,8 +248,10 @@ function render(s) {
         tradeInfo = 'Premium: ₹' + s.entry_premium + ' (₹' + Math.round(s.entry_premium * 65).toLocaleString('en-IN') + '/lot)';
       }
       document.getElementById('entryLevel').textContent = tradeInfo || ('Entry: ' + (s.entry_strike || '--'));
-      document.getElementById('targetLevelPill').textContent = s.stop_level ? '🛑 Index Stop: ' + s.stop_level : '';
-      document.getElementById('stopLevelPill').textContent = '';
+      document.getElementById('targetLevelPill').textContent = s.expected_move_1sd
+        ? '🎯 1σ: +' + s.expected_move_1sd.toLocaleString('en-IN') + ' pts'
+        : '🎯 Target: --';
+      document.getElementById('stopLevelPill').textContent = s.stop_level ? '🛑 Index Stop: ' + s.stop_level : '';
     } else if (s.signal === 'BUY_PUTS' && s.recommended_trade) {
       document.getElementById('tradeType').textContent = '📉 Buy ' + s.entry_strike + ' PE';
       let tradeInfo = '';
@@ -256,8 +259,10 @@ function render(s) {
         tradeInfo = 'Premium: ₹' + s.entry_premium + ' (₹' + Math.round(s.entry_premium * 65).toLocaleString('en-IN') + '/lot)';
       }
       document.getElementById('entryLevel').textContent = tradeInfo || ('Entry: ' + (s.entry_strike || '--'));
-      document.getElementById('targetLevelPill').textContent = s.stop_level ? '🛑 Index Stop: ' + s.stop_level : '';
-      document.getElementById('stopLevelPill').textContent = '';
+      document.getElementById('targetLevelPill').textContent = s.expected_move_1sd
+        ? '🎯 1σ: −' + s.expected_move_1sd.toLocaleString('en-IN') + ' pts'
+        : '🎯 Target: --';
+      document.getElementById('stopLevelPill').textContent = s.stop_level ? '🛑 Index Stop: ' + s.stop_level : '';
     } else {
       document.getElementById('tradeType').textContent = s.recommended_trade || 'No active trade';
       document.getElementById('entryLevel').textContent = '';

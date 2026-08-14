@@ -793,7 +793,11 @@ def api_scalper():
 
 @app.route("/api/algo/status")
 def api_algo_status():
-    return jsonify(get_algo_status())
+    out = get_algo_status()
+    # ⚡ Scalp dry-run calls merged in — everything paper in one place
+    out["scalp_calls"] = list(reversed(_scalp_calls))
+    out["scalp_pnl"] = _scalp_summary()
+    return jsonify(out)
 
 @app.route("/api/algo/toggle", methods=["POST"])
 def api_algo_toggle():

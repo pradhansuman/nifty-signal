@@ -573,6 +573,27 @@ async function fetchAlgoStatus() {
     }
     
     document.getElementById('algoOrders').innerHTML = html || '<div style="font-size:10px;color:var(--text-dim)">No positions</div>';
+    // ⚡ Scalp dry-run calls merged into the Algo card
+    try {
+      const sc = (d.scalp_calls || []).slice(0, 15);
+      const scEl = document.getElementById('algoScalpCalls');
+      const pnlEl = document.getElementById('algoScalpPnl');
+      if (scEl) {
+        if (pnlEl && d.scalp_pnl && d.scalp_pnl.resolved) {
+          const p = d.scalp_pnl;
+          pnlEl.textContent = p.resolved + ' trades · ' + p.wins + 'W/' + (p.resolved - p.wins) + 'L · ' +
+            (p.net_rs ? '₹' + Number(p.net_rs).toLocaleString('en-IN') : p.net_pts + ' pts');
+        }
+        scEl.innerHTML = sc.map(c => {
+          const st = c.status || 'ACTIVE';
+          const chip = st === 'TARGET_HIT' ? 'var(--green)' : st === 'STOP_HIT' || st === 'EXPIRED' ? 'var(--red)' : 'var(--accent)';
+          const pnl = c.pnl_pts != null ? ((c.pnl_pts >= 0 ? '+' : '') + c.pnl_pts + ' pts' + (c.pnl_rs ? ' · ₹' + Number(c.pnl_rs).toLocaleString('en-IN') : '')) : '';
+          return `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
+            <span style="color:${chip}">${st}</span> ${c.time} ${String(c.asset).toUpperCase()} ${c.option || 'SPOT'} @ ${c.entry}${pnl ? ' → <b>' + pnl + '</b>' : ''}
+          </div>`;
+        }).join('') || '<div style="font-size:10px;color:var(--text-dim)">No scalp calls yet</div>';
+      }
+    } catch (e) {}
   } catch(e) {}
 }
 

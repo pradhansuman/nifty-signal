@@ -376,20 +376,7 @@
     </div>
   </div>
 
-  <!-- Expiry & Trade (Positional) -->
-  <div class="card" id="tradeCard">
-    <div class="card-header">
-      <span class="label">📅 Positional Trade</span>
-      <span class="value" id="tradeDTE">--</span>
-    </div>
-    <div style="font-size:12px;color:var(--text-dim)" id="tradeExpiry">--</div>
-    <div style="font-size:14px;font-weight:700;margin-top:6px" id="tradeType">--</div>
-    <div class="level-row">
-      <div class="level-pill target" id="entryLevel">--</div>
-      <div class="level-pill target" id="targetLevelPill">--</div>
-      <div class="level-pill stop" id="stopLevelPill">--</div>
-    </div>
-  </div>
+  
 
   <!-- BTST -->
   <div class="card" id="btstCard" style="border-color: #7c3aed44">
@@ -501,37 +488,7 @@
     <div style="font-size:12px;line-height:1.7" id="expiryRead">Loading...</div>
   </div>
 
-  <!-- Option Chain Table -->
-  <div class="card" id="chainTableCard">
-    <div class="card-header">
-      <span class="label">📋 Option Chain</span>
-      <span style="font-size:10px;color:var(--text-dim)" id="chainMeta">--</span>
-    </div>
-    <div style="text-align:center;margin:2px 0 8px">
-      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">NIFTY SPOT</div>
-      <div id="chainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
-    </div>
-    <div style="font-size:11px;margin-bottom:6px" id="chainWalls"></div>
-    <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead>
-          <tr style="color:var(--text-dim);text-align:right">
-            <th style="text-align:left;padding:3px 4px">Strike</th>
-            <th style="padding:3px 4px">CE ₹</th>
-            <th style="padding:3px 4px">CE OI</th>
-            <th style="padding:3px 4px">CE Vol</th>
-            <th style="padding:3px 4px">IV</th>
-            <th style="padding:3px 4px">PE ₹</th>
-            <th style="padding:3px 4px">PE OI</th>
-            <th style="padding:3px 4px">PE Vol</th>
-          </tr>
-        </thead>
-        <tbody id="chainRows">
-          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
+  
 
   <!-- IV Rank -->
   <div class="card" id="ivRankCard">
@@ -579,38 +536,9 @@
     <div style="margin-top:8px;font-size:12px" id="smartMoneyRead">Loading institutional flows...</div>
   </div>
 
-  <!-- Tomorrow Outlook -->
-  <div class="card" id="outlookCard">
-    <div class="card-header">
-      <span class="label">🌅 Tomorrow Outlook</span>
-      <span style="font-size:10px;color:var(--text-dim)" id="outlookTime">--</span>
-    </div>
-    <div class="gauge-row">
-      <div class="gauge">
-        <div class="g-value" id="giftNiftyVal">--</div>
-        <div class="g-label">GIFT Nifty (now)</div>
-      </div>
-      <div class="gauge">
-        <div class="g-value" id="gapVal">--</div>
-        <div class="g-label">Expected Gap</div>
-      </div>
-      <div class="gauge">
-        <div class="g-value" id="usReadVal" style="font-size:13px">--</div>
-        <div class="g-label">US Overnight</div>
-      </div>
-    </div>
-    <div style="margin-top:8px;font-size:12px" id="outlookRead">Loading overnight futures...</div>
-  </div>
+  
 
-  <!-- Regime -->
-  <div class="card">
-    <div class="card-header">
-      <span class="label">Market Regime</span>
-      <span class="regime-badge sell_premium" id="regimeBadge">--</span>
-    </div>
-    <div style="font-size:13px;color:var(--text-dim);margin-top:4px" id="regimeDesc"></div>
-    <div style="font-size:12px;margin-top:6px" id="regimeTransition"></div>
-  </div>
+  
 
   <!-- Action -->
   <div class="action-card" id="actionCard">
@@ -648,30 +576,9 @@
     </div>
   </div>
 
-  <!-- Position Sizing -->
-  <div class="card" id="sizingCard">
-    <div class="card-header"><span class="label">💰 Position Sizing</span></div>
-    <div style="display:flex;gap:8px;margin-bottom:8px">
-      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Capital (₹)</label>
-        <input type="number" id="capitalInput" value="100000" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
-      </div>
-      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Risk %</label>
-        <input type="number" id="riskInput" value="2" step="0.5" min="0.5" max="10" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
-      </div>
-    </div>
-    <button onclick="calcPositionSize()" style="width:100%;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;margin-bottom:8px">Calculate</button>
-    <div id="sizingResult" style="font-size:13px;line-height:1.6;display:none"></div>
-  </div>
+  
 
-  <!-- Trailing Stop -->
-  <div class="card" id="trailCard">
-    <div class="card-header"><span class="label">📉 Stop Loss</span></div>
-    <div style="display:flex;gap:12px">
-      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--red)" id="fixedStop">--</div><div style="font-size:11px;color:var(--text-dim)">Fixed Stop</div></div>
-      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--yellow)" id="trailStop">--</div><div style="font-size:11px;color:var(--text-dim)">Trail Stop (0.5%)</div></div>
-      <div style="flex:1"><div style="font-size:18px;font-weight:700" id="stopGap">--</div><div style="font-size:11px;color:var(--text-dim)">Gap</div></div>
-    </div>
-  </div>
+  
 
   <!-- Trade Journal -->
   <div class="card" id="journalCard">
@@ -725,14 +632,7 @@
     </div>
   </div>
 
-  <!-- Levels (BUY only) -->
-  <div class="card hidden" id="levelsCard">
-    <div class="card-header"><span class="label">Entry / Exit Levels</span></div>
-    <div class="level-row">
-      <div class="level-pill target" id="targetLevel">--</div>
-      <div class="level-pill stop" id="stopLevel">--</div>
-    </div>
-  </div>
+  
 </div>
 
 <!-- ── BITCOIN SECTION ── -->
@@ -1158,6 +1058,120 @@
   </details>
 </div>
 
+
+<!-- Advanced (rarely-used cards) -->
+<details id="advancedCard" style="border:1px solid var(--border);border-radius:14px;padding:10px 12px;background:var(--card)">
+  <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--text-dim);user-select:none">⚙️ Advanced — rarely-used cards (click to expand)</summary>
+  <div style="margin-top:8px">
+<!-- Expiry & Trade (Positional) -->
+  <div class="card" id="tradeCard">
+    <div class="card-header">
+      <span class="label">📅 Positional Trade</span>
+      <span class="value" id="tradeDTE">--</span>
+    </div>
+    <div style="font-size:12px;color:var(--text-dim)" id="tradeExpiry">--</div>
+    <div style="font-size:14px;font-weight:700;margin-top:6px" id="tradeType">--</div>
+    <div class="level-row">
+      <div class="level-pill target" id="entryLevel">--</div>
+      <div class="level-pill target" id="targetLevelPill">--</div>
+      <div class="level-pill stop" id="stopLevelPill">--</div>
+    </div>
+  </div>
+<!-- Option Chain Table -->
+  <div class="card" id="chainTableCard">
+    <div class="card-header">
+      <span class="label">📋 Option Chain</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="chainMeta">--</span>
+    </div>
+    <div style="text-align:center;margin:2px 0 8px">
+      <div style="font-size:10px;color:var(--text-dim);letter-spacing:1px">NIFTY SPOT</div>
+      <div id="chainSpotBig" style="font-size:28px;font-weight:800;letter-spacing:-0.5px;color:var(--text)">--</div>
+    </div>
+    <div style="font-size:11px;margin-bottom:6px" id="chainWalls"></div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead>
+          <tr style="color:var(--text-dim);text-align:right">
+            <th style="text-align:left;padding:3px 4px">Strike</th>
+            <th style="padding:3px 4px">CE ₹</th>
+            <th style="padding:3px 4px">CE OI</th>
+            <th style="padding:3px 4px">CE Vol</th>
+            <th style="padding:3px 4px">IV</th>
+            <th style="padding:3px 4px">PE ₹</th>
+            <th style="padding:3px 4px">PE OI</th>
+            <th style="padding:3px 4px">PE Vol</th>
+          </tr>
+        </thead>
+        <tbody id="chainRows">
+          <tr><td colspan="8" style="text-align:center;color:var(--text-dim);padding:10px">Loading chain...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+<!-- Tomorrow Outlook -->
+  <div class="card" id="outlookCard">
+    <div class="card-header">
+      <span class="label">🌅 Tomorrow Outlook</span>
+      <span style="font-size:10px;color:var(--text-dim)" id="outlookTime">--</span>
+    </div>
+    <div class="gauge-row">
+      <div class="gauge">
+        <div class="g-value" id="giftNiftyVal">--</div>
+        <div class="g-label">GIFT Nifty (now)</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="gapVal">--</div>
+        <div class="g-label">Expected Gap</div>
+      </div>
+      <div class="gauge">
+        <div class="g-value" id="usReadVal" style="font-size:13px">--</div>
+        <div class="g-label">US Overnight</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;font-size:12px" id="outlookRead">Loading overnight futures...</div>
+  </div>
+<!-- Regime -->
+  <div class="card">
+    <div class="card-header">
+      <span class="label">Market Regime</span>
+      <span class="regime-badge sell_premium" id="regimeBadge">--</span>
+    </div>
+    <div style="font-size:13px;color:var(--text-dim);margin-top:4px" id="regimeDesc"></div>
+    <div style="font-size:12px;margin-top:6px" id="regimeTransition"></div>
+  </div>
+<!-- Position Sizing -->
+  <div class="card" id="sizingCard">
+    <div class="card-header"><span class="label">💰 Position Sizing</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Capital (₹)</label>
+        <input type="number" id="capitalInput" value="100000" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
+      </div>
+      <div style="flex:1"><label style="font-size:11px;color:var(--text-dim)">Risk %</label>
+        <input type="number" id="riskInput" value="2" step="0.5" min="0.5" max="10" style="width:100%;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px">
+      </div>
+    </div>
+    <button onclick="calcPositionSize()" style="width:100%;padding:10px;border-radius:10px;border:none;background:var(--accent);color:#fff;font-size:14px;font-weight:700;margin-bottom:8px">Calculate</button>
+    <div id="sizingResult" style="font-size:13px;line-height:1.6;display:none"></div>
+  </div>
+<!-- Trailing Stop -->
+  <div class="card" id="trailCard">
+    <div class="card-header"><span class="label">📉 Stop Loss</span></div>
+    <div style="display:flex;gap:12px">
+      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--red)" id="fixedStop">--</div><div style="font-size:11px;color:var(--text-dim)">Fixed Stop</div></div>
+      <div style="flex:1"><div style="font-size:18px;font-weight:700;color:var(--yellow)" id="trailStop">--</div><div style="font-size:11px;color:var(--text-dim)">Trail Stop (0.5%)</div></div>
+      <div style="flex:1"><div style="font-size:18px;font-weight:700" id="stopGap">--</div><div style="font-size:11px;color:var(--text-dim)">Gap</div></div>
+    </div>
+  </div>
+<!-- Levels (BUY only) -->
+  <div class="card hidden" id="levelsCard">
+    <div class="card-header"><span class="label">Entry / Exit Levels</span></div>
+    <div class="level-row">
+      <div class="level-pill target" id="targetLevel">--</div>
+      <div class="level-pill stop" id="stopLevel">--</div>
+    </div>
+  </div>
+  </div>
+</details>
 <div class="footer" id="footerText">Refreshing...</div>
 
 <div style="text-align:center;font-size:12px;color:var(--text-dim);padding:4px 12px 14px;line-height:1.6">

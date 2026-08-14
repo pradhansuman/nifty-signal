@@ -55,8 +55,15 @@ def _load_tuning():
         "vix_min": float(os.environ.get("SCALP_VIX_MIN", "12")),
         "vix_max": float(os.environ.get("SCALP_VIX_MAX", "18")),
         "theta_max": float(os.environ.get("SCALP_THETA_MAX", "0.02")),
+        "window_open": False,  # override: ignore lunch-chop window block
     }
-    defaults.update({k: float(v) for k, v in t.items() if k in defaults})
+    for k, v in t.items():
+        if k not in defaults:
+            continue
+        if k == "window_open":
+            defaults[k] = bool(v)
+        else:
+            defaults[k] = float(v)
     return defaults
 
 
@@ -360,6 +367,8 @@ def main():
     now_dt = datetime.now(IST)
     hm = now_dt.hour * 60 + now_dt.minute
     window_open = (9 * 60 + 20) <= hm <= (11 * 60 + 45) or (13 * 60 + 30) <= hm <= (15 * 60 + 20)
+    if tun.get("window_open"):
+        window_open = True  # today-only override via tuning file
     out["window"] = "ACTIVE" if window_open else "BLOCKED"
     out["window_reason"] = (
         "Scalp window ACTIVE (9:20-11:45, 13:30-15:20)" if window_open

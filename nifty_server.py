@@ -636,7 +636,7 @@ def _scalp_append_call(asset, sc, call):
         "half_spread": call.get("half_spread") or 0.0,
         "perfect": bool(sc.get("perfect")),
         "funding": call.get("funding"),
-        "expires_at": call.get("expires_at"), "status": "ACTIVE",
+        "expires_at": call.get("expires_at"), "expires_dt": call.get("expires_dt"), "status": "ACTIVE",
     })
     if len(_scalp_calls) > 60:
         del _scalp_calls[:-60]
@@ -687,6 +687,19 @@ def _scalp_summary():
     }
 
 
+def _scalp_expired(c, now=None):
+    """True when a call's hold has elapsed (robust across midnight via expires_dt)."""
+    now = now or _ist_now()
+    edt = c.get("expires_dt")
+    if edt:
+        try:
+            return now > datetime.fromisoformat(edt)
+        except Exception:
+            pass
+    ea = c.get("expires_at")
+    return bool(ea and ea != "INTRAday" and now.strftime("%H:%M") > ea)
+
+
 def _scalp_refresh_statuses():
     """Check ACTIVE calls: TARGET_HIT / STOP_HIT / EXPIRED. Returns events to push."""
     events = []
@@ -694,7 +707,7 @@ def _scalp_refresh_statuses():
     for c in _scalp_calls:
         if c.get("status") != "ACTIVE":
             continue
-        if c.get("expires_at") and now_hm > c.get("expires_at") and c.get("expires_at") != "INTRAday":
+        if _scalp_expired(c):
             c["status"] = "EXPIRED"
             c["hit_time"] = now_hm
             c["hit_premium"] = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type")) or c.get("entry")
@@ -819,9 +832,10 @@ def _scalp_tick(asset):
                         sc.get("adx") or 0, sc.get("rsi") or 0,
                         "{:+}".format(sc.get("momentum") or 0), fund_txt,
                         line, call.get("expires_at")))
+            hold_lbl = "6h hold" if asset == "btc" else "10-min freshness"
             _add_alert("critical", "{} {} SCALP: {}".format(d_emoji, tag, call.get("option")),
-                "{}\n⏳ expires {} (10-min freshness) | Lot ₹{:,} | Spread {}%".format(
-                    line, call.get("expires_at"), call.get("lot_cost") or 0,
+                "{}\n⏳ expires {} ({}) | Lot ₹{:,} | Spread {}%".format(
+                    line, call.get("expires_at"), hold_lbl, call.get("lot_cost") or 0,
                     call.get("spread_pct") or 0))
         else:
             # Same call still active → trailing watch
@@ -843,13 +857,12 @@ def _scalp_tick(asset):
                         _add_alert("critical", "🛑 {} SCALP STOP HIT (−10%)".format(tag),
                             "{} at ₹{} (entry ₹{}). EXIT NOW — scalp over.".format(call.get("option"), prem, entry))
                     watch.update({"signal": None, "option": None})
-        # Expiry check: call older than its 10-min freshness
+        # Expiry check: call older than its hold window (6h BTC / 10-min others)
         if watch["ts"] and call.get("expires_at"):
-            now_hm = _ist_now().strftime("%H:%M")
-            if now_hm > call.get("expires_at") and watch["signal"]:
+            if _scalp_expired(call) and watch["signal"]:
                 if _SCALP_VERBOSE_ALERTS:
                     _add_alert("info", "⏳ {} Scalp call expired — no entry taken".format(tag),
-                        "{} expired at {} (10-min freshness). Next call when setup re-fires.".format(
+                        "{} expired at {} (hold elapsed). Next call when setup re-fires.".format(
                             watch["option"], call.get("expires_at")))
                 watch.update({"signal": None, "option": None})
     elif sc_sig == "WAIT" and watch["signal"] in ("SCALP_LONG", "SCALP_SHORT"):

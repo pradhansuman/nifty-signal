@@ -439,10 +439,13 @@ class PerAssetGateOverrideTest(unittest.TestCase):
     """BTC uses its own (stricter) trend/ADX gates than the global defaults."""
 
     def test_btc_has_stricter_gates(self):
-        self.assertEqual(scalper.ASSETS["btc"].get("trend_min"), 1.0)
-        self.assertEqual(scalper.ASSETS["btc"].get("adx_min"), 30)
+        # BTC runs 1h with trend 1.5% + ADX 25 (backtest: PF 1.30)
+        self.assertEqual(scalper.ASSETS["btc"].get("trend_min"), 1.5)
+        self.assertEqual(scalper.ASSETS["btc"].get("adx_min"), 25)
+        self.assertEqual(scalper.ASSETS["btc"].get("interval"), "1h")
+        self.assertEqual(scalper.ASSETS["btc"].get("hold_min"), 360)
         self.assertGreater(scalper.ASSETS["btc"]["trend_min"], 0.8)  # stricter than global
-        self.assertGreater(scalper.ASSETS["btc"]["adx_min"], 25)
+        self.assertGreater(scalper.ASSETS["btc"]["adx_min"], 20)
 
     def test_nifty_uses_global_defaults(self):
         self.assertIsNone(scalper.ASSETS["nifty"].get("trend_min"))

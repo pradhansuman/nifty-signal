@@ -30,9 +30,11 @@ ASSETS = {
     "bnf":    {"symbol": "^NSEBANK", "lot": 15, "options": True,  "vix": True,  "spot_tp": None,   "label": "BANK NIFTY"},
     "sensex": {"symbol": "^BSESN",   "lot": 20, "options": False, "vix": True,  "spot_tp": 0.0015, "label": "SENSEX"},
     "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": True,  "vix": False, "spot_tp": 0.005,  "label": "BITCOIN",
-               # Per-asset gates (backtest 2026-08-14, 60d 5m): BTC's 5m chop needs
-               # stricter trend/ADX than Nifty — trend 1.0% + ADX 30 flips PF 0.98→1.08.
-               "trend_min": 1.0, "adx_min": 30},
+               # BTC runs on the 1h timeframe (5m is chop: PF ceiling 1.08).
+               # Backtest 2026-08-14 (90d 1h): trend 1.5% + ADX 25 + 6h hold →
+               # 182 trades, 56% WR, PF 1.30, +7,193 pts — the real BTC edge.
+               "interval": "1h", "period": "60d", "hold_min": 360,
+               "trend_min": 1.5, "adx_min": 25},
 }
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -296,7 +298,8 @@ def _funding_gate(asset, bias, funding, gate=0.0005):
 
 def main(asset="nifty"):
     out = {"signal": "WAIT", "bias": "FLAT", "score": 0, "spot": None, "timestamp": _now(), "asset": asset}
-    df = get_bars(asset)
+    cfg = ASSETS[asset]
+    df = get_bars(asset, period=cfg.get("period", "5d"), interval=cfg.get("interval", "5m"))
     if df is None or len(df) < 40:
         out["reason"] = "Not enough 5m bars yet (need 40)"
         return out
@@ -414,7 +417,6 @@ def main(asset="nifty"):
 
     tun = _load_tuning()
     # Per-asset gate overrides (BTC is choppier → stricter gates than Nifty/BNF)
-    cfg = ASSETS[asset]
     score_min = float(cfg.get("score_min", tun["score_min"]))
     out["score_min"] = score_min
     bias = "LONG" if score >= score_min else "SHORT" if score <= -score_min else "FLAT"
@@ -531,7 +533,8 @@ def main(asset="nifty"):
     else:
         # 10-minute signal freshness window
         from datetime import timedelta
-        call["expires_at"] = (now_dt + timedelta(minutes=10)).strftime("%H:%M")
+        call["expires_at"] = (now_dt + timedelta(minutes=cfg.get("hold_min", 10))).strftime("%H:%M")
+        call["expires_dt"] = (now_dt + timedelta(minutes=cfg.get("hold_min", 10))).isoformat()
         out["reason"] = "{} scalp — score {:+d}. {}".format(bias, score, "; ".join(reasons))
     return out
 

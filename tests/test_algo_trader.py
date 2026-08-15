@@ -24,11 +24,13 @@ class AlgoTraderTest(unittest.TestCase):
         self.log_patch.start()
         self.addCleanup(self.cfg_patch.stop)
         self.addCleanup(self.log_patch.stop)
-        # fresh in-memory state
+        # fresh in-memory state (today = CURRENT date — hardcoding a past date
+        # makes load_state() reset the state and wipe the flags mid-test)
+        from datetime import datetime as _dt
         algo_trader._algo_state = {k: (0 if k not in ("active_positions", "closed_trades") else [])
                                    for k in ("today", "trades_today", "lots_today", "pnl_today",
                                              "active_positions", "closed_trades", "daily_limit_hit")}
-        algo_trader._algo_state["today"] = "2026-08-14"
+        algo_trader._algo_state["today"] = _dt.now().strftime("%Y-%m-%d")
         # ensure a known config (all strategies enabled, dry-run)
         cfg = dict(algo_trader.DEFAULT_CONFIG)
         cfg["live_mode"] = False

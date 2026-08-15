@@ -416,6 +416,87 @@ def api_bnf_oi():
 def api_bnf_backtest():
     return jsonify(get_backtest(asset="banknifty"))
 
+# ── Indian Stock Movers (day-trade + swing screening) ──
+# Computed in a background thread: the yfinance batch download takes ~20s, so
+# the endpoint returns the last result instantly instead of blocking the whole
+# dashboard (Flask dev server is single-threaded).
+_stock_movers_cache = {"data": None, "ts": 0.0, "lock": threading.Lock()}
+
+
+def _stock_movers_refresh():
+    try:
+        _stock_movers_cache["data"] = run_script("stock_movers.py")
+    except Exception as e:
+        _stock_movers_cache["data"] = {"error": str(e)}
+    _stock_movers_cache["ts"] = time.time()
+    _stock_movers_cache["lock"].release()
+
+
+def _stock_movers_cached():
+    """Cached movers data; triggers a background refresh if stale (>15 min)."""
+    c = _stock_movers_cache
+    if c["data"] is None or (time.time() - c["ts"]) > 900:
+        if c["lock"].acquire(blocking=False):
+            threading.Thread(target=_stock_movers_refresh, daemon=True).start()
+    return c["data"] or {}
+
+
+_stock_alerted = set()  # symbols already alerted today (live breakout alerts)
+
+
+def _stock_movers_live_alerts(data=None, alerted=None):
+    """🔔 Live intraday alerts: day move ≥3% AND volume ≥2× average (market hours).
+    One alert per symbol per day. Returns count fired (testable)."""
+    if data is None:
+        data = _stock_movers_cached()
+    alerted = alerted if alerted is not None else _stock_alerted
+    fired = 0
+    for r in (data or {}).get("day_trade", []):
+        sym = r.get("symbol")
+        if not sym or sym in alerted:
+            continue
+        if abs(r.get("day_pct") or 0) >= 3.0 and (r.get("vol_ratio") or 0) >= 2.0:
+            alerted.add(sym)
+            fired += 1
+            up = (r.get("day_pct") or 0) > 0
+            name = r.get("name") or sym
+            _add_alert("critical",
+                       ("🟢 ବ୍ରେକଆଉଟ୍" if up else "🔴 ବ୍ରେକଡାଉନ୍") + ": " + name + f" ({r['day_pct']:+.2f}%)",
+                       f"{name} ({sym}) @ ₹{r.get('price', 0):,.0f} | 🎯 ଲକ୍ଷ୍ୟ ₹{r.get('target', 0):,.0f} ({r.get('target_pct', 0):+.1f}%) | ⏳ {r.get('timeline', '')}")
+    return fired
+
+
+def _stock_movers_daily_digest(data=None):
+    """📊 Daily movers digest (15:35 IST weekdays, Odia) — top day + swing picks.
+    Returns the line list (testable)."""
+    if data is None:
+        data = _stock_movers_cached()
+    day = (data or {}).get("day_trade") or []
+    swing = (data or {}).get("swing") or []
+    lines = ["📊 ଦୈନିକ ଷ୍ଟକ୍ ମୁଭର୍ ରିପୋର୍ଟ (ପେପର୍)", "─" * 18]
+    lines.append("⚡ ଡେ ଟ୍ରେଡ୍:")
+    for r in day[:5]:
+        lines.append(f"  {r.get('name')} {r.get('day_pct', 0):+.2f}% @ ₹{r.get('price', 0):,.0f} → 🎯 ₹{r.get('target', 0):,.0f} ({r.get('target_pct', 0):+.1f}%)")
+    lines.append("📈 ସୁଇଙ୍ଗ୍ (5–10 ଦିନ):")
+    for r in swing[:3]:
+        lines.append(f"  {r.get('name')} 5d {r.get('mom5', 0):+.1f}% → 🎯 ₹{r.get('target', 0):,.0f} ({r.get('target_pct', 0):+.1f}%)")
+    if not day and not swing:
+        lines.append("ଆଜି କୌଣସି ମୁଭର୍ ନାହିଁ।")
+    _add_alert("info", "📊 ଦୈନିକ ଷ୍ଟକ୍ ମୁଭର୍", "\n".join(lines))
+    return lines
+
+
+@app.route("/api/stocks/movers")
+def api_stock_movers():
+    """NIFTY-50 liquid names with significant movement — day-trade & swing
+    perspectives (target price, % move, timeline). Cached 15 min, async compute."""
+    out = _stock_movers_cached()
+    if not out:
+        out = {"status": "computing",
+               "note": "First scan running — ~20s (NIFTY-50 batch download)"}
+    return jsonify(_clean_nan(out))
+
+
 @app.route("/api/gapgo")
 def api_gapgo():
     """Gap & Go / Gap Fade (cached 60s)."""
@@ -1312,6 +1393,7 @@ def alert_scheduler():
     last_market_open_push = None
     last_scalp_report = None
     last_scalp_snapshot = None
+    last_stock_report = None
     
     while True:
         try:
@@ -1476,6 +1558,12 @@ def alert_scheduler():
                         _scalp_tick(_a)
                     except Exception:
                         pass
+                # 🔔 Stock movers live alerts (market hours only, ≥3% + ≥2× volume)
+                if in_market:
+                    try:
+                        _stock_movers_live_alerts()
+                    except Exception:
+                        pass
 
             # ── OI Buildup (smart money) — snapshot every 5 min + alert on bias flip ──
             if in_market and current_minute.endswith(("00", "05", "10", "15", "20", "25",
@@ -1563,6 +1651,14 @@ def alert_scheduler():
                     _add_alert("info", "📊 ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ", _scalp_daily_report())
                 except Exception as e:
                     print("scalp report failed:", e)
+
+            # ── Daily Stock Movers digest at 3:35 PM (Odia, top day + swing picks) ──
+            if current_minute == "15:35" and last_stock_report != today:
+                last_stock_report = today
+                try:
+                    _stock_movers_daily_digest()
+                except Exception as e:
+                    print("stock movers report failed:", e)
 
             # ── Daily P&L Summary at 3:30 PM ──
             if current_minute == "15:30" and last_eod_summary != today:

@@ -31,6 +31,9 @@ const L10N = {
   'bnf-signal': '🏦 BNF ସିଗନାଲ୍',
   'bnf-expiry': '⏳ BNF ଏକ୍ସପାୟରୀ କାଉଣ୍ଟଡାଉନ୍',
   'bnf-chain': '📋 BNF ଅପ୍ସନ୍ ଚେନ୍',
+  'stock-movers': '🚀 ଷ୍ଟକ୍ ମୁଭର୍ସ',
+  'stock-day': '⚡ ଡେ ଟ୍ରେଡ୍ ମୁଭର୍ସ',
+  'stock-swing': '📈 ସୁଇଙ୍ଗ୍ କ୍ୟାଣ୍ଡିଡେଟ୍ସ',
   'bnf-oi': '🧠 BNF OI ବିଲ୍ଡଅପ୍',
   'bnf-alerts': '🔔 BNF ଆଲର୍ଟ',
   'bnf-strat': '🧭 ବ୍ୟାଙ୍କ୍ ନିଫ୍ଟି ରଣନୀତି ସ୍ଥିତି',
@@ -1761,6 +1764,48 @@ function renderWeekly(d) {
 // Stagger initial loads: light first, heavy progressively — avoids cold-start pileup
 fetchSignal(); fetchChain(); fetchBnfChain(); fetchChart(); fetchBtcChart(); fetchBnfChart(); fetchSensexChart();
 refreshStrategies(); refreshBtcStrategies(); refreshBnfStrategies(); refreshSensexStrategies();
+async function fetchStockMovers() {
+  const card = document.getElementById('stockMoversCard');
+  if (!card) return;
+  try {
+    const resp = await fetch('/api/stocks/movers?_=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const d = await resp.json();
+    const upd = document.getElementById('stockMoversUpd');
+    if (upd) upd.textContent = d.timestamp || '';
+    const note = document.getElementById('stockMoversNote');
+    if (d.error) {
+      note.textContent = '⚠️ ' + d.error;
+      return;
+    }
+    if (note) note.textContent = d.screened ? 'Screened ' + d.screened + ' NIFTY-50 names · ' + (d.source || '') : '';
+    const dayList = document.getElementById('stockDayList');
+    const swingList = document.getElementById('stockSwingList');
+    const rowHTML = (r, primary) => {
+      const up = r.direction === 'UP';
+      const col = up ? 'var(--green)' : 'var(--red)';
+      const arrow = up ? '🟢' : '🔴';
+      const pctTxt = (primary === 'day' ? r.day_pct : r.mom5) != null ? ((primary === 'day' ? r.day_pct : r.mom5) >= 0 ? '+' : '') + (primary === 'day' ? r.day_pct : r.mom5) + '%' : '--';
+      const detail = (r.trend ? r.trend + ' · ' : '') + 'Vol ' + (r.vol_ratio ? r.vol_ratio + '×' : '--') + ' · RSI ' + (r.rsi != null ? r.rsi : '--') + ' · ATR ' + (r.atr != null ? r.atr : '--');
+      return '<div class="strat-row" style="border-left-color:' + col + '">' +
+        '<span class="strat-name">' + arrow + ' <b>' + r.name + '</b> <span style="opacity:.55;font-size:10px">' + r.symbol + '</span><br>' +
+        '<span style="font-size:10px;color:var(--text-dim)">' + detail + '</span></span>' +
+        '<span class="strat-state ' + (up ? 'strat-ok' : 'strat-bad') + '">' + pctTxt + '</span>' +
+        '<span class="strat-reason">₹' + Number(r.price).toLocaleString('en-IN') + ' → 🎯 ₹' + Number(r.target).toLocaleString('en-IN') + ' (' + (r.target_pct >= 0 ? '+' : '') + r.target_pct + '%)<br>' +
+        '<span style="font-size:10px;color:var(--text-dim)">⏳ ' + r.timeline + '</span></span></div>';
+    };
+    dayList.innerHTML = (d.day_trade || []).length
+      ? d.day_trade.map(r => rowHTML(r, 'day')).join('')
+      : '<div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">No big movers right now</div>';
+    swingList.innerHTML = (d.swing || []).length
+      ? d.swing.map(r => rowHTML(r, 'swing')).join('')
+      : '<div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">No swing setups right now</div>';
+  } catch (e) {
+    const note = document.getElementById('stockMoversNote');
+    if (note) note.textContent = '⚠️ Stock movers unavailable';
+  }
+}
+
 async function fetchAssetScalper(asset, p) {
   const banner = document.getElementById(p + 'ScalperBanner');
   if (!banner) return;
@@ -1825,6 +1870,8 @@ fetchExpiry(); fetchExpiry('bnf'); fetchGap(); fetchWeekly(); initTimeframeToggl
 setTimeout(() => { fetchBtc(); fetchBnf(); fetchSensex(); fetchOi(); fetchOi('bnf'); }, 800);
 setTimeout(() => { fetchIvRank(); fetchIvRank('bnf'); fetchFiiDii(); fetchOutlook(); }, 2500);
 setTimeout(() => { fetchBacktest(); fetchBacktest('bnf'); }, 5000);
+setTimeout(fetchStockMovers, 8000);
+setInterval(fetchStockMovers, 15 * 60 * 1000);  // movers refresh every 15 min
 fetchFiiDii();
 fetchOutlook();
 fetchBtc();

@@ -1336,6 +1336,18 @@ _alert_log = []  # Store recent alerts for the dashboard
 ALERT_LOG_FILE = os.path.join(WORKSPACE, ".openclaw", "tmp", "alerts.json")
 ALERT_MAX = 50
 
+def _load_alerts():
+    """Load persisted alerts at boot so history survives restarts."""
+    try:
+        with open(ALERT_LOG_FILE) as f:
+            data = json.load(f)
+        if isinstance(data, list):
+            _alert_log.extend(data[-ALERT_MAX:])
+    except Exception:
+        pass
+
+_load_alerts()
+
 def _save_alerts():
     try:
         os.makedirs(os.path.dirname(ALERT_LOG_FILE), exist_ok=True)

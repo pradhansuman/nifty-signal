@@ -41,7 +41,7 @@ const L10N = {
   'sx-tech': '📊 ସେନସେକ୍ସ ଟେକ୍ନିକାଲ୍',
   'sx-200ema': '📈 SENSEX + ୨୦୦ EMA',
 };
-let curLang = localStorage.getItem('dash_lang') || 'en';
+let curLang = 'en';  // all-English UI (Odia toggle removed per user, 2026-08-16)
 function applyLang() {
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const k = el.getAttribute('data-i18n');

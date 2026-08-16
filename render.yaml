@@ -18,6 +18,9 @@ services:
         sync: false
       - key: UPSTOX_ANALYTICS_TOKEN
         sync: false
+      # Telegram alert language: en = English, or (default) = Odia.
+      - key: TG_LANG
+        value: "en"
       # Keep the background alert scheduler running on the cloud instance.
       # Set to "true" ONLY if you want alerts from this instance disabled.
       - key: NO_SCHEDULER

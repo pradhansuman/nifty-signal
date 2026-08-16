@@ -444,6 +444,11 @@ def _stock_movers_cached():
 _stock_alerted = set()  # symbols already alerted today (live breakout alerts)
 
 
+def _t(or_txt, en_txt):
+    """Locale picker for alert text: Odia by default, English when TG_LANG=en."""
+    return en_txt if os.environ.get("TG_LANG", "or") == "en" else or_txt
+
+
 def _stock_movers_live_alerts(data=None, alerted=None):
     """🔔 Live intraday alerts: day move ≥3% AND volume ≥2× average (market hours).
     One alert per symbol per day. Returns count fired (testable)."""
@@ -461,8 +466,8 @@ def _stock_movers_live_alerts(data=None, alerted=None):
             up = (r.get("day_pct") or 0) > 0
             name = r.get("name") or sym
             _add_alert("critical",
-                       ("🟢 ବ୍ରେକଆଉଟ୍" if up else "🔴 ବ୍ରେକଡାଉନ୍") + ": " + name + f" ({r['day_pct']:+.2f}%)",
-                       f"{name} ({sym}) @ ₹{r.get('price', 0):,.0f} | 🎯 ଲକ୍ଷ୍ୟ ₹{r.get('target', 0):,.0f} ({r.get('target_pct', 0):+.1f}%) | ⏳ {r.get('timeline', '')}")
+                       ("🟢 " + _t("ବ୍ରେକଆଉଟ୍", "BREAKOUT") if up else "🔴 " + _t("ବ୍ରେକଡାଉନ୍", "BREAKDOWN")) + ": " + name + f" ({r['day_pct']:+.2f}%)",
+                       f"{name} ({sym}) @ ₹{r.get('price', 0):,.0f} | {_t('🎯 ଲକ୍ଷ୍ୟ', '🎯 Target')} ₹{r.get('target', 0):,.0f} ({r.get('target_pct', 0):+.1f}%) | ⏳ {r.get('timeline', '')}")
     return fired
 
 
@@ -473,16 +478,16 @@ def _stock_movers_daily_digest(data=None):
         data = _stock_movers_cached()
     day = (data or {}).get("day_trade") or []
     swing = (data or {}).get("swing") or []
-    lines = ["📊 ଦୈନିକ ଷ୍ଟକ୍ ମୁଭର୍ ରିପୋର୍ଟ (ପେପର୍)", "─" * 18]
-    lines.append("⚡ ଡେ ଟ୍ରେଡ୍:")
+    lines = ["📊 " + _t("ଦୈନିକ ଷ୍ଟକ୍ ମୁଭର୍ ରିପୋର୍ଟ (ପେପର୍)", "Daily Stock Movers Report (paper)"), "─" * 18]
+    lines.append("⚡ " + _t("ଡେ ଟ୍ରେଡ୍:", "Day Trades:"))
     for r in day[:5]:
         lines.append(f"  {r.get('name')} {r.get('day_pct', 0):+.2f}% @ ₹{r.get('price', 0):,.0f} → 🎯 ₹{r.get('target', 0):,.0f} ({r.get('target_pct', 0):+.1f}%)")
-    lines.append("📈 ସୁଇଙ୍ଗ୍ (5–10 ଦିନ):")
+    lines.append("📈 " + _t("ସୁଇଙ୍ଗ୍ (5–10 ଦିନ):", "Swing (5–10 sessions):"))
     for r in swing[:3]:
         lines.append(f"  {r.get('name')} 5d {r.get('mom5', 0):+.1f}% → 🎯 ₹{r.get('target', 0):,.0f} ({r.get('target_pct', 0):+.1f}%)")
     if not day and not swing:
-        lines.append("ଆଜି କୌଣସି ମୁଭର୍ ନାହିଁ।")
-    _add_alert("info", "📊 ଦୈନିକ ଷ୍ଟକ୍ ମୁଭର୍", "\n".join(lines))
+        lines.append(_t("ଆଜି କୌଣସି ମୁଭର୍ ନାହିଁ।", "No movers today."))
+    _add_alert("info", "📊 " + _t("ଦୈନିକ ଷ୍ଟକ୍ ମୁଭର୍", "Daily Stock Movers"), "\n".join(lines))
     return lines
 
 
@@ -832,21 +837,21 @@ def _scalp_daily_report():
     s = _scalp_summary()
     by = s.get("by_asset") or {}
     emoji = {"nifty": "📈", "bnf": "🏦", "sensex": "🇮🇳", "btc": "₿"}
-    name = {"nifty": "ନିଫ୍ଟି", "bnf": "ବ୍ୟାଙ୍କ୍ ନିଫ୍ଟି", "sensex": "ସେନସେକ୍ସ", "btc": "ବିଟକଏନ୍"}
+    name = {"nifty": _t("ନିଫ୍ଟି", "NIFTY"), "bnf": _t("ବ୍ୟାଙ୍କ୍ ନିଫ୍ଟି", "BANK NIFTY"), "sensex": _t("ସେନସେକ୍ସ", "SENSEX"), "btc": _t("ବିଟକଏନ୍", "BTC")}
     lines = []
     for a in ("nifty", "bnf", "sensex", "btc"):
         b = by.get(a)
         if not b:
             continue
         pnl = _rs(b["rs"]) if b["rs"] else _pts(b["pts"])
-        lines.append("{} {}: {} କଲ୍ · {}W/{}L · {}".format(
-            emoji[a], name[a], b["n"], b["w"], b["n"] - b["w"], pnl))
+        lines.append("{} {}: {} {} · {}W/{}L · {}".format(
+            emoji[a], name[a], b["n"], _t("କଲ୍", "calls"), b["w"], b["n"] - b["w"], pnl))
     if not lines:
-        return "📊 ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ (paper)\nଆଜି କୌଣସି ସ୍କାଲ୍ପ୍ କଲ୍ ନାହିଁ।"
+        return "📊 " + _t("ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ (paper)", "Daily Scalp Report (paper)") + "\n" + _t("ଆଜି କୌଣସି ସ୍କାଲ୍ପ୍ କଲ୍ ନାହିଁ।", "No scalp calls today.")
     net = _rs(s["net_rs"]) if s["net_rs"] else _pts(s["net_pts"])
-    total = "ମୋଟ: {} କଲ୍ · {}W/{}L · WR {}% · {}".format(
-        s["resolved"], s["wins"], s["resolved"] - s["wins"], s["win_rate"], net)
-    return "\n".join(["📊 ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ (paper)"] + ["─" * 18] + lines + ["─" * 18, total])
+    total = _t("ମୋଟ:", "Total:") + " {} {} · {}W/{}L · WR {}% · {}".format(
+        s["resolved"], _t("କଲ୍", "calls"), s["wins"], s["resolved"] - s["wins"], s["win_rate"], net)
+    return "\n".join(["📊 " + _t("ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ (paper)", "Daily Scalp Report (paper)")] + ["─" * 18] + lines + ["─" * 18, total])
 
 
 def _scalp_expired(c, now=None):
@@ -1660,7 +1665,7 @@ def alert_scheduler():
             if current_minute == "15:40" and last_scalp_report != today:
                 last_scalp_report = today
                 try:
-                    _add_alert("info", "📊 ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ", _scalp_daily_report())
+                    _add_alert("info", "📊 " + _t("ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ", "Daily Scalp Report"), _scalp_daily_report())
                 except Exception as e:
                     print("scalp report failed:", e)
 

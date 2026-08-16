@@ -131,10 +131,10 @@ function render(s) {
   const sig = s.signal || 'LOADING';
   const banner = document.getElementById('signalBanner');
   banner.className = 'signal-banner ' + (
-    sig === 'BUY_CALLS' ? 'buy' : sig === 'STAND_ASIDE' ? 'exit' : 'wait'
+    sig === 'BUY_CALLS' || sig === 'BUY_PUTS' ? 'buy' : sig === 'STAND_ASIDE' ? 'exit' : 'wait'
   );
   
-  const icons = { BUY_CALLS: '🟢', WAIT: '🟡', STAND_ASIDE: '🔴', ERROR: '⚪' };
+  const icons = { BUY_CALLS: '🟢', BUY_PUTS: '🔴', WAIT: '🟡', STAND_ASIDE: '🔴', ERROR: '⚪' };
   document.getElementById('signalIcon').textContent = icons[sig] || '⚪';
   document.getElementById('signalText').textContent = sig.replace('_', ' ');
   document.getElementById('signalSub').textContent = s.reason || '';
@@ -1056,7 +1056,7 @@ function renderSensex(d) {
 
   const sigEl = el('sensexSignal');
   const sig = d.signal || 'WAIT';
-  sigEl.textContent = sig === 'BUY_LONG' ? '🟢 LONG' : sig === 'BUY_SHORT' ? '🔴 SHORT' : sig === 'EXIT_LONGS' ? '⚠️ EXIT L' : sig === 'EXIT_SHORTS' ? '⚠️ EXIT S' : '⏳ WAIT';
+  sigEl.textContent = sig === 'BUY_LONG' ? '🟢 LONG' : sig === 'BUY_SHORT' ? '🔴 SHORT' : sig === 'EXIT_LONGS' ? '⚠️ EXIT L' : sig === 'EXIT_SHORTS' ? '⚠️ EXIT S' : sig === 'ERROR' ? 'ERR' : '⏳ WAIT';
   sigEl.style.color = sig === 'BUY_LONG' ? 'var(--green)' : sig === 'BUY_SHORT' ? 'var(--red)' : sig === 'WAIT' ? 'var(--yellow)' : 'var(--text-dim)';
 
   const chg = d.change_pct;

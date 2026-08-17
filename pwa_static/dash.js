@@ -1449,7 +1449,7 @@ async function fetchScalper() {
       add('Trend (200E)', d.trend_dist != null ? (strong ? 'STRONG' : 'WEAK') : '--', d.trend_dist != null ? '|spot−200E| ' + d.trend_dist.toFixed(2) + '% vs gate ' + gate + '%' : '', strong ? 'ok' : 'bad');
       const adxG = d.adx_gate != null ? d.adx_gate : 25;
       const adxOk = d.adx != null && d.adx >= adxG;
-      add('ADX (14)', d.adx != null ? d.adx.toFixed(0) : '--', d.adx != null ? 'ADX ' + d.adx.toFixed(0) + ' vs gate ' + adxG + ' (trend strength)' : '', adxOk ? 'ok' : 'bad');
+      add('ADX (14)', d.adx != null ? d.adx.toFixed(2) : '--', d.adx != null ? 'ADX ' + d.adx.toFixed(2) + ' vs gate ' + adxG + ' (trend strength)' : '', adxOk ? 'ok' : 'bad');
       const vg = d.vix_gate || [12, 18];
       const vixOk = d.vix != null && d.vix >= vg[0] && d.vix <= vg[1];
       add('Nifty VIX', d.vix != null ? d.vix.toFixed(1) : '--', d.vix != null ? 'VIX ' + d.vix.toFixed(1) + ' vs ' + vg[0] + '–' + vg[1] + ' (premium regime)' : '', vixOk ? 'ok' : 'bad');

@@ -460,7 +460,7 @@ def main(asset="nifty"):
     out["adx_gate"] = adx_min
     adx_block = None
     if bias != "FLAT" and adx_val < adx_min:
-        adx_block = "ADX {:.0f} < {} — no sustained trend".format(adx_val, adx_min)
+        adx_block = "ADX {:.2f} < {:.1f} — no sustained trend".format(adx_val, adx_min)
         bias = "FLAT"
 
     # ── VIX regime gate (backtest: VIX 12-18 + ADX>25 → PF 1.96, WR 66%) ──

@@ -3,6 +3,7 @@ import os
 import sys
 import unittest
 from unittest import mock
+from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".openclaw", "tmp"))
@@ -209,7 +210,7 @@ class WeeklyReviewTest(unittest.TestCase):
     def test_build_from_dict_shaped_journal(self):
         import weekly_review as wr
         import unittest.mock as mock
-        trades = [{"date": "2026-08-12", "pnl": 7327.5, "lots": 3, "strike": "24450",
+        trades = [{"date": datetime.now().strftime("%Y-%m-%d"), "pnl": 7327.5, "lots": 3, "strike": "24450",
                    "status": "closed", "direction": "long"}]
         with mock.patch.object(wr, "CACHE_FILE", "/tmp/wr_test_cache.json"):
             with mock.patch.object(wr, "get_all", return_value={"trades": trades, "stats": {}}):
@@ -221,7 +222,7 @@ class WeeklyReviewTest(unittest.TestCase):
     def test_build_from_list_shaped_journal(self):
         import weekly_review as wr
         import unittest.mock as mock
-        trades = [{"date": "2026-08-12", "pnl": -500.0, "lots": 1, "strike": "24400",
+        trades = [{"date": datetime.now().strftime("%Y-%m-%d"), "pnl": -500.0, "lots": 1, "strike": "24400",
                    "status": "closed", "direction": "short"}]
         with mock.patch.object(wr, "CACHE_FILE", "/tmp/wr_test_cache.json"):
             with mock.patch.object(wr, "get_all", return_value=trades):

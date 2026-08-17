@@ -590,51 +590,64 @@ async function fetchORB() {
 }
 
 async function fetchIntraday() {
+  const fmt = n => (n == null ? null : Number(n).toLocaleString('en-IN', {maximumFractionDigits: 2}));
+  const levelsHtml = s => {
+    if (!s || s.entry == null) return '';
+    return `<span style="color:var(--text-dim)">Entry</span> <b>${fmt(s.entry)}</b> · ` +
+           `<span style="color:var(--text-dim)">Stop</span> <b style="color:var(--red)">${fmt(s.stop)}</b> · ` +
+           `<span style="color:var(--text-dim)">Target</span> <b style="color:var(--green)">${fmt(s.target)}</b>`;
+  };
+  const nearHint = s => {
+    // show EMA proximity when no fresh cross (so you can see it's approaching)
+    if (s && (s.entry == null) && s.spot != null) {
+      if (s.ema20 != null && s.ema50 != null) return `20 EMA ${fmt(s.ema20)} vs 50 EMA ${fmt(s.ema50)}`;
+      if (s.ema20 != null && s.ema50 == null) return `Spot ${fmt(s.spot)} vs 20 EMA ${fmt(s.ema20)}`;
+      if (s.ema9 != null && s.ema21 != null) return `EMA9 ${fmt(s.ema9)} vs EMA21 ${fmt(s.ema21)}`;
+    }
+    return null;
+  };
+  const setBox = (el, detailEl, levelsEl, text, color, detail, levels) => {
+    const e = document.getElementById(el);
+    if (!e) return;
+    e.textContent = text; e.style.color = color;
+    if (detailEl) { const d = document.getElementById(detailEl); if (d) d.textContent = detail; }
+    if (levelsEl) { const l = document.getElementById(levelsEl); if (l) l.innerHTML = levels || ''; }
+  };
   try {
     const resp = await fetch('/api/intraday');
     const d = await resp.json();
     
     // VWAP
     const v = d.vwap || {};
-    const vsEl = document.getElementById('vwapSignal');
-    const vdEl = document.getElementById('vwapDetail');
-    if (v.signal === 'VWAP_BUY') {
-      vsEl.textContent = '🟢 BUY (mean reversion)';
-      vsEl.style.color = 'var(--green)';
-    } else if (v.signal === 'VWAP_SELL') {
-      vsEl.textContent = '🔴 SELL (mean reversion)';
-      vsEl.style.color = 'var(--red)';
-    } else {
-      vsEl.textContent = v.signal || '--';
-      vsEl.style.color = 'var(--yellow)';
-    }
-    vdEl.textContent = v.reason || 'Outside hours';
+    if (v.signal === 'VWAP_BUY') setBox('vwapSignal', 'vwapDetail', null, '🟢 BUY (mean reversion)', 'var(--green)', v.reason);
+    else if (v.signal === 'VWAP_SELL') setBox('vwapSignal', 'vwapDetail', null, '🔴 SELL (mean reversion)', 'var(--red)', v.reason);
+    else setBox('vwapSignal', 'vwapDetail', null, v.signal || '--', 'var(--yellow)', v.reason || 'Outside hours');
     
-    // EMA
+    // 9/21 EMA
     const e = d.ema || {};
-    const esEl = document.getElementById('emaSignal');
-    const edEl = document.getElementById('emaDetail');
-    if (e.signal === 'EMA_BUY') {
-      esEl.textContent = '🟢 GOLDEN CROSS';
-      esEl.style.color = 'var(--green)';
-    } else if (e.signal === 'EMA_SELL') {
-      esEl.textContent = '🔴 DEATH CROSS';
-      esEl.style.color = 'var(--red)';
-    } else if (e.signal === 'EMA_LONG') {
-      esEl.textContent = '🟢 In Uptrend';
-      esEl.style.color = 'var(--green)';
-    } else if (e.signal === 'EMA_SHORT') {
-      esEl.textContent = '🔴 In Downtrend';
-      esEl.style.color = 'var(--red)';
-    } else {
-      esEl.textContent = e.signal || '--';
-      esEl.style.color = 'var(--yellow)';
-    }
-    edEl.textContent = e.reason || 'Outside hours';
+    if (e.signal === 'EMA_BUY') setBox('emaSignal', 'emaDetail', 'emaLevels', '🟢 GOLDEN CROSS', 'var(--green)', e.reason, levelsHtml(e));
+    else if (e.signal === 'EMA_SELL') setBox('emaSignal', 'emaDetail', 'emaLevels', '🔴 DEATH CROSS', 'var(--red)', e.reason, levelsHtml(e));
+    else if (e.signal === 'EMA_LONG') setBox('emaSignal', 'emaDetail', 'emaLevels', '🟢 In Uptrend', 'var(--green)', e.reason || nearHint(e));
+    else if (e.signal === 'EMA_SHORT') setBox('emaSignal', 'emaDetail', 'emaLevels', '🔴 In Downtrend', 'var(--red)', e.reason || nearHint(e));
+    else setBox('emaSignal', 'emaDetail', 'emaLevels', e.signal || '--', 'var(--yellow)', e.reason || 'Outside hours');
+    
+    // 20/50 trend cross (1h)
+    const t = d.trend || {};
+    if (t.signal === 'GOLDEN_CROSS') setBox('trendSignal', 'trendDetail', 'trendLevels', '🟢 GOLDEN (UP)', 'var(--green)', t.reason, levelsHtml(t));
+    else if (t.signal === 'DEATH_CROSS') setBox('trendSignal', 'trendDetail', 'trendLevels', '🔴 DEATH (DOWN)', 'var(--red)', t.reason, levelsHtml(t));
+    else setBox('trendSignal', 'trendDetail', 'trendLevels', 'Neutral', 'var(--yellow)', nearHint(t) || t.reason || '—');
+    
+    // 20 EMA reclaim (15m)
+    const e20 = d.ema20 || {};
+    if (e20.signal === 'RECLAIM') setBox('ema20Signal', 'ema20Detail', 'ema20Levels', '🟢 RECLAIM (bullish)', 'var(--green)', e20.reason, levelsHtml(e20));
+    else if (e20.signal === 'LOSS') setBox('ema20Signal', 'ema20Detail', 'ema20Levels', '🔴 LOSS (bearish)', 'var(--red)', e20.reason, levelsHtml(e20));
+    else setBox('ema20Signal', 'ema20Detail', 'ema20Levels', 'Neutral', 'var(--yellow)', nearHint(e20) || e20.reason || '—');
     
   } catch(e) {
-    document.getElementById('vwapSignal').textContent = 'N/A';
-    document.getElementById('emaSignal').textContent = 'N/A';
+    setBox('vwapSignal', 'vwapDetail', null, 'N/A', 'var(--yellow)', '—');
+    setBox('emaSignal', 'emaDetail', 'emaLevels', 'N/A', 'var(--yellow)', '—');
+    setBox('trendSignal', 'trendDetail', 'trendLevels', 'N/A', 'var(--yellow)', '—');
+    setBox('ema20Signal', 'ema20Detail', 'ema20Levels', 'N/A', 'var(--yellow)', '—');
   }
 }
 

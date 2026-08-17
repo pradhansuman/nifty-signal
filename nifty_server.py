@@ -1418,6 +1418,8 @@ def alert_scheduler():
     last_scalp_report = None
     last_scalp_snapshot = None
     last_stock_report = None
+    last_trend_signal = None   # day-level dedup for 20/50 cross alerts
+    last_ema20_signal = None   # day-level dedup for 20 EMA reclaim alerts
     
     while True:
         try:
@@ -1563,12 +1565,56 @@ def alert_scheduler():
                                         reason=(vwap.get("reason") or "")[:80])
                         except Exception:
                             pass
-                    # EMA crossover
+                    # EMA crossover → full actionable call (entry / stop / target / exit)
                     ema = intra.get("ema", {})
                     if ema and ema.get("signal") in ("EMA_BUY", "EMA_SELL"):
-                        _add_alert("critical", f"📈 EMA: {ema['signal']}",
-                            f"{ema.get('reason', '')} | Spot: {ema.get('spot')} | "
-                            f"EMA9: {ema.get('ema9')} | EMA21: {ema.get('ema21')}")
+                        up = ema["signal"] == "EMA_BUY"
+                        d_emoji = "🟢" if up else "🔴"
+                        dir_txt = "BUY (CE)" if up else "SELL (PE)"
+                        body = (
+                            f"{ema.get('reason', '')}\n"
+                            f"🎯 Entry: ₹{ema.get('entry'):,.2f} (spot)\n"
+                            f"🛑 Stop Loss: ₹{ema.get('stop'):,.2f}\n"
+                            f"💹 Target: ₹{ema.get('target'):,.2f} (R:R {ema.get('rr', 2):.1f})\n"
+                            f"📏 ATR(14): {ema.get('atr', 0):.1f} | EMA9: {ema.get('ema9')} vs EMA21: {ema.get('ema21')}\n"
+                            f"⏳ Exit: {ema.get('exit_rule', '')}"
+                        )
+                        _add_alert("critical", f"📈 EMA {dir_txt}: NIFTY", body)
+                        try:
+                            s_ref = get_signal()
+                            _algo_trade("ema", "BUY" if up else "SELL",
+                                        s_ref.get("atm_strike") or s_ref.get("entry_strike"),
+                                        s_ref.get("selected_expiry", ""), 1, None,
+                                        "CE" if up else "PE",
+                                        reason=(ema.get("reason") or "")[:80])
+                        except Exception:
+                            pass
+                    # 20/50 trend cross (1h) → actionable trend-change alert
+                    tr = intra.get("trend") or {}
+                    if tr.get("signal") in ("GOLDEN_CROSS", "DEATH_CROSS") and tr["signal"] != last_trend_signal:
+                        last_trend_signal = tr["signal"]
+                        up = tr["signal"] == "GOLDEN_CROSS"
+                        d_emoji = "🟢" if up else "🔴"
+                        dir_txt = "GOLDEN CROSS (trend UP)" if up else "DEATH CROSS (trend DOWN)"
+                        _add_alert("critical", f"📊 20/50 {dir_txt}: NIFTY",
+                            f"{tr.get('reason', '')}\n"
+                            f"🎯 Entry: ₹{tr.get('entry'):,.2f}\n"
+                            f"🛑 Stop Loss: ₹{tr.get('stop'):,.2f}\n"
+                            f"💹 Target: ₹{tr.get('target'):,.2f} (R:R {tr.get('rr', 2):.1f})\n"
+                            f"⏳ Exit: {tr.get('exit_rule', '')}")
+                    # 20 EMA reclaim (15m) → entry-zone alert
+                    e20 = intra.get("ema20") or {}
+                    if e20.get("signal") in ("RECLAIM", "LOSS") and e20["signal"] != last_ema20_signal:
+                        last_ema20_signal = e20["signal"]
+                        up = e20["signal"] == "RECLAIM"
+                        d_emoji = "🟢" if up else "🔴"
+                        dir_txt = "20 EMA RECLAIM (bullish)" if up else "20 EMA LOSS (bearish)"
+                        _add_alert("critical", f"📈 {dir_txt}: NIFTY",
+                            f"{e20.get('reason', '')}\n"
+                            f"🎯 Entry: ₹{e20.get('entry'):,.2f}\n"
+                            f"🛑 Stop Loss: ₹{e20.get('stop'):,.2f}\n"
+                            f"💹 Target: ₹{e20.get('target'):,.2f} (R:R {e20.get('rr', 2):.1f})\n"
+                            f"⏳ Exit: {e20.get('exit_rule', '')}")
                 except Exception as e:
                     pass
 

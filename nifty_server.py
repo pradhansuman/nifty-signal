@@ -888,6 +888,7 @@ def _scalp_refresh_statuses():
             c["status"] = "EXPIRED"
             c["hit_time"] = now_hm
             c["hit_premium"] = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type")) or c.get("entry")
+            c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
             events.append((c, "expired"))
             continue
         prem = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type"))
@@ -990,10 +991,15 @@ def _scalp_tick(asset):
     tag = "{} {}".format(emoji, asset.upper())
     # New call fired → entry push + start watch
     if sc_sig in ("SCALP_LONG", "SCALP_SHORT") and not call.get("blocked") and call.get("entry"):
-        new_call = watch["signal"] != sc_sig or watch["option"] != call.get("option")
+        # Re-enter ONLY on direction flip or no active watch. The previous
+        # version also re-fired when the ATM strike drifted (option change),
+        # piling multiple same-direction calls while one was still holding —
+        # root cause of the 2026-08-17 BNF 9-short flood.
+        new_call = watch["signal"] != sc_sig
         if new_call:
             watch.update({
                 "signal": sc_sig, "option": call.get("option"), "entry": call.get("entry"),
+                "expires_dt": call.get("expires_dt"), "expires_at": call.get("expires_at"),
                 "ts": _ist_now(), "highest": call.get("entry"),
                 "breakeven": False, "trail": False})
             _scalp_append_call(asset, sc, call)
@@ -1035,9 +1041,10 @@ def _scalp_tick(asset):
                         _add_alert("critical", "🛑 {} SCALP STOP HIT (−10%)".format(tag),
                             "{} at ₹{} (entry ₹{}). EXIT NOW — scalp over.".format(call.get("option"), prem, entry))
                     watch.update({"signal": None, "option": None})
-        # Expiry check: call older than its hold window (6h BTC / 10-min others)
-        if watch["ts"] and call.get("expires_at"):
-            if _scalp_expired(call) and watch["signal"]:
+        # Expiry check: use the WATCHED call's own expiry (not the fresh recomputed
+        # call, whose expires_at = now + hold and would never fire).
+        if watch["ts"] and (watch.get("expires_dt") or watch.get("expires_at")):
+            if _scalp_expired(watch) and watch["signal"]:
                 if _SCALP_VERBOSE_ALERTS:
                     _add_alert("info", "⏳ {} Scalp call expired — no entry taken".format(tag),
                         "{} expired at {} (hold elapsed). Next call when setup re-fires.".format(

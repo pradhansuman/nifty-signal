@@ -455,6 +455,49 @@ async function fetchJournal() {
   } catch(e) {}
 }
 
+// ── Cockpit alert sound (Web Audio, synthesized — no file needed) ──
+let audioCtx = null;
+let soundOn = localStorage.getItem('alert_sound') !== 'off';
+let _lastAlertKey = null;  // dedup: only chime once per new critical alert
+document.addEventListener('click', unlockAudio, { once: true });  // browser autoplay unlock
+function unlockAudio() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  } catch (e) {}
+}
+function playTone(freq, t0, dur) {
+  if (!audioCtx) return;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.35, t0 + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t0); osc.stop(t0 + dur + 0.02);
+}
+function playCockpitAlert() {
+  if (!soundOn) return;
+  unlockAudio();
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + 0.05;
+  // two-tone aircraft chime ×3 (880 Hz / 660 Hz) — attention-grabbing, ~1.4s
+  for (let i = 0; i < 3; i++) {
+    playTone(880, t + i * 0.5, 0.16);
+    playTone(660, t + i * 0.5 + 0.24, 0.16);
+  }
+}
+function toggleSound() {
+  soundOn = !soundOn;
+  localStorage.setItem('alert_sound', soundOn ? 'on' : 'off');
+  const b = document.getElementById('soundToggle');
+  if (b) b.textContent = soundOn ? '🔔 Sound On' : '🔇 Sound Off';
+  if (soundOn) { unlockAudio(); playCockpitAlert(); }
+}
+function testSound() { unlockAudio(); playCockpitAlert(); }
+
 async function fetchAlerts() {
   try {
     const resp = await fetch('/api/alerts');
@@ -475,6 +518,14 @@ async function fetchAlerts() {
       badge.style.background = 'var(--red)';
     } else {
       badge.style.display = 'none';
+    }
+
+    // 🔔 play cockpit chime when a NEW critical alert arrives (not on initial load)
+    if (alerts.length) {
+      const newest = alerts[alerts.length - 1];
+      const key = (newest.time || '') + '|' + (newest.title || '');
+      if (_lastAlertKey && key !== _lastAlertKey && newest.level === 'critical') playCockpitAlert();
+      _lastAlertKey = key;
     }
     
     el.innerHTML = alerts.reverse().map(a => {

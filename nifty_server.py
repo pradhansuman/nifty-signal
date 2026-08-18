@@ -28,6 +28,7 @@ from expiry_countdown import get_expiry
 from weekly_review import get_weekly_report, build_weekly_report
 from oi_buildup import get_oi_buildup, take_snapshot
 from gap_go import compute_gap_signal
+from regime import session_regime
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
@@ -656,12 +657,34 @@ def api_orb():
 
 @app.route("/api/intraday")
 def api_intraday():
-    """VWAP + EMA intraday signals. Valid during market hours."""
     import time as _t
     if _intraday_cache["data"] is None or (_t.time() - _intraday_cache["ts"]) > 60:
         _intraday_cache["data"] = run_script("intraday_signals.py")
         _intraday_cache["ts"] = _t.time()
     return jsonify(_clean_nan(_intraday_cache["data"]))
+
+
+_regime_cache = {"ts": 0, "data": None}
+
+
+@app.route("/api/regime")
+def api_regime():
+    """Session regime (TRENDING / TRANSITION / CHOPPY-RANGE) + recommended scalp strategy."""
+    import time as _t
+    if _regime_cache["data"] is None or (_t.time() - _regime_cache["ts"]) > 60:
+        s = get_signal()
+        vwap = None
+        try:
+            intra = run_script("intraday_signals.py")
+            vwap = (intra.get("vwap") or {}).get("vwap")
+        except Exception:
+            vwap = None
+        r = session_regime(s.get("adx"), s.get("di_plus"), s.get("di_minus"),
+                           s.get("vix"), s.get("spot"), s.get("ema_200"), vwap=vwap)
+        r["signal"] = s.get("signal", "")  # current 200-EMA signal for context
+        _regime_cache["data"] = r
+        _regime_cache["ts"] = _t.time()
+    return jsonify(_clean_nan(_regime_cache["data"]))
 
 
 _scalper_cache = {"ts": 0, "data": None}

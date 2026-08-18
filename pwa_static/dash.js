@@ -651,6 +651,30 @@ async function fetchIntraday() {
   }
 }
 
+async function fetchRegime() {
+  const set = (id, txt, color) => { const e = document.getElementById(id); if (e) { e.textContent = txt; if (color) e.style.color = color; } };
+  try {
+    const resp = await fetch('/api/regime');
+    const d = await resp.json();
+    const banner = document.getElementById('regimeBanner');
+    if (!banner) return;
+    const colors = { TRENDING: '#00e676', TRANSITION: '#ffab00', CHOPPY: '#ff5252', RANGE: '#40c4ff' };
+    banner.textContent = (d.direction === 'bullish' ? '🟢 ' : d.direction === 'bearish' ? '🔴 ' : '⚪ ') + d.label;
+    banner.style.background = (colors[d.regime] || '#7c4dff') + '22';
+    banner.style.color = colors[d.regime] || 'var(--yellow)';
+    document.getElementById('regimeStrategy').textContent = '🎯 ' + (d.strategy || '');
+    document.getElementById('regimeAdx').textContent = d.adx != null ? d.adx : '--';
+    document.getElementById('regimeDi').textContent = d.di_spread != null ? (d.di_spread >= 0 ? '+' : '') + d.di_spread : '--';
+    document.getElementById('regimeVix').textContent = d.vix != null ? d.vix : '--';
+    document.getElementById('regimeReason').textContent = d.reason || '';
+    const upd = document.getElementById('regimeUpdated');
+    if (upd) upd.textContent = (d.confidence || '') + ' · ' + (d.signal || '');
+  } catch(e) {
+    const b = document.getElementById('regimeBanner');
+    if (b) { b.textContent = 'N/A'; b.style.color = 'var(--yellow)'; }
+  }
+}
+
 async function fetchAlgoStatus() {
   try {
     const resp = await fetch('/api/algo/status');
@@ -1945,9 +1969,11 @@ fetchAlerts();
 fetchTunnelURL();
 fetchORB();
 fetchIntraday();
+fetchRegime();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchScalper, 30000);
+setInterval(fetchRegime, 60000);
 setInterval(() => { fetchAssetScalper('bnf', 'bnf'); fetchAssetScalper('sensex', 'sx'); fetchAssetScalper('btc', 'btc'); }, 30000);
 setInterval(refreshStrategies, 120000);
 setInterval(refreshBtcStrategies, 60000);

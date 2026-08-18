@@ -1644,6 +1644,7 @@ def alert_scheduler():
     last_stock_report = None
     last_trend_signal = None   # day-level dedup for 20/50 cross alerts
     last_ema20_signal = None   # day-level dedup for 20 EMA reclaim alerts
+    last_asset_ema_check = None  # 5-min mark dedup for BTC/BNF/Sensex 200 EMA alerts
     
     while True:
         try:
@@ -1651,7 +1652,31 @@ def alert_scheduler():
             now = datetime.now(tz)
             today = now.date()
             current_minute = now.strftime("%H:%M")
-            
+
+            # ── Multi-asset 200 EMA alerts (BTC 24/7; BNF/Sensex market-hours) ──
+            # Fired here (not just on endpoint hits) so the cloud/Render sender
+            # generates the same BTC/BNF/Sensex alerts as the local dashboard.
+            # Otherwise Telegram misses them: the Mac skips pushing while Render
+            # is alive, and Render's endpoints are never polled by anyone.
+            if current_minute[-2:] in _FIVE_MIN_MARKS and last_asset_ema_check != current_minute:
+                last_asset_ema_check = current_minute
+                try:
+                    b = get_btc_signal("1h")
+                    _track_asset_alert("btc", b.get("signal"), b.get("reason"), b.get("recommendation"), "1h")
+                except Exception:
+                    pass
+                if now.weekday() < 5:
+                    try:
+                        bn = get_banknifty_signal()
+                        _track_asset_alert("banknifty", bn.get("signal"), bn.get("reason"), bn.get("recommendation"))
+                    except Exception:
+                        pass
+                    try:
+                        sx = get_sensex_signal("1h")
+                        _track_asset_alert("sensex", sx.get("signal"), sx.get("reason"), sx.get("recommendation"))
+                    except Exception:
+                        pass
+
             if now.weekday() >= 5:  # Weekend — BTC scalper still runs 24/7; skip India-market work
                 if current_minute == "00:10" and last_scalp_snapshot != today:
                     last_scalp_snapshot = today

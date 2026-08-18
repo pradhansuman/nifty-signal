@@ -32,6 +32,7 @@ from regime import session_regime
 from trade_gate import trade_gate
 import upstox_rt
 import option_recorder
+import cost_model
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
@@ -828,8 +829,12 @@ def _scalp_pnl(c):
         spread = 2 * (c.get("half_spread") or 0.0)
         per_unit = hp - entry - spread
         lot = SCALP_LOT.get(asset, 0)
-        return (round(per_unit, 2), round(per_unit * lot, 2),
-                round(per_unit / entry * 100, 2) if entry else 0.0)
+        # realistic execution costs (STT + brokerage + exchange + GST + stamp)
+        costs = cost_model.round_trip_cost(entry, hp, lot) if lot else 0.0
+        per_unit_net = per_unit - (costs / lot if lot else 0.0)
+        c["costs_rs"] = round(costs, 2)
+        return (round(per_unit_net, 2), round(per_unit_net * lot, 2),
+                round(per_unit_net / entry * 100, 2) if entry else 0.0)
     # spot assets: LONG wins when price rises, SHORT when it falls
     d = 1 if c.get("signal") == "SCALP_LONG" else -1
     per_unit = d * (hp - entry)

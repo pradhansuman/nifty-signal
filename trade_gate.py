@@ -19,6 +19,8 @@ from __future__ import annotations
 
 import math
 
+from cost_model import round_trip_cost, cost_pct
+
 
 def trade_gate(signal=None, regime=None, scalper=None, intraday=None):
     """
@@ -156,7 +158,15 @@ def trade_gate(signal=None, regime=None, scalper=None, intraday=None):
         add("RISK CHECK", "warn", "no explicit stop/target — size for 1×ATR stop, 2:1")
 
     # ── 12. EXECUTION COST ──
-    add("EXECUTION COST", "warn", "factor ~0.1–0.3% round-trip (brokerage + slippage) into the target")
+    lot = {"nifty": 65, "bnf": 15}.get(scalper.get("asset") or signal.get("asset") or "nifty", 0)
+    entry_prem = call.get("entry") if isinstance(call, dict) else None
+    if entry_prem and lot:
+        pct = cost_pct(entry_prem, entry_prem, lot)
+        amt = round_trip_cost(entry_prem, entry_prem, lot)
+        add("EXECUTION COST", "pass" if pct < 1.0 else "warn",
+            f"~{pct:.2f}% round-trip (₹{amt:.0f}) — {'ok' if pct < 1.0 else 'thin edge on cheap premium'}")
+    else:
+        add("EXECUTION COST", "warn", "factor ~0.1–0.3% round-trip (brokerage + slippage)")
 
     # ── VERDICT ──
     hard_fail = [s for s in steps if s["status"] == "fail"]

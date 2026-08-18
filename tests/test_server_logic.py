@@ -9,6 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".openclaw", "tmp"))
 
 import nifty_server as ns
+import cost_model
 
 
 class CleanNanTest(unittest.TestCase):
@@ -136,18 +137,27 @@ class FiveMinTickTest(unittest.TestCase):
 
 class ScalpPnlTest(unittest.TestCase):
     def test_nifty_long_target_pnl_net_of_spread(self):
-        # entry 100 mid, half_spread 1 (buy 101, sell at bid) — target hit at 110
+        # entry 100 mid, half_spread 1 (buy 101, sell at bid) — target hit at 110.
+        # Now NET of realistic round-trip costs (STT + brokerage + exchange + GST).
         c = {"asset": "nifty", "signal": "SCALP_LONG", "entry": 100.0, "half_spread": 1.0,
              "hit_premium": 110.0}
         pts, rs, pct = ns._scalp_pnl(c)
-        self.assertEqual(pts, 8.0)   # 110 − 100 − 2×1
-        self.assertEqual(rs, 8.0 * 65)  # × lot
+        gross = 110.0 - 100.0 - 2 * 1.0  # 8.0 before costs
+        costs = cost_model.round_trip_cost(100.0, 110.0, 65)
+        expected = gross - costs / 65.0
+        self.assertAlmostEqual(pts, expected, places=2)
+        self.assertAlmostEqual(rs, expected * 65, places=2)
+        self.assertLess(pts, gross)  # costs must be deducted
 
     def test_nifty_stop_pnl_negative(self):
         c = {"asset": "nifty", "signal": "SCALP_LONG", "entry": 100.0, "half_spread": 1.0,
              "hit_premium": 90.0}
         pts, rs, _ = ns._scalp_pnl(c)
-        self.assertEqual(pts, -12.0)  # 90 − 100 − 2 → −12
+        gross = 90.0 - 100.0 - 2 * 1.0  # -12.0 before costs
+        costs = cost_model.round_trip_cost(100.0, 90.0, 65)
+        expected = gross - costs / 65.0
+        self.assertAlmostEqual(pts, expected, places=2)
+        self.assertLess(pts, gross)  # loss is larger once costs are included
 
     def test_btc_long_pnl_direction(self):
         c = {"asset": "btc", "signal": "SCALP_LONG", "entry": 63000.0, "half_spread": 0.0,

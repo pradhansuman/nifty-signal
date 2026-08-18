@@ -1,6 +1,17 @@
 #!/usr/bin/env python3
-"""Scalper backtest — replay 5m history through the exact scalper scoring,
-simulate ±10%-style premium targets, and report win rate / profit factor.
+"""DEPRECATED as the scalper P&L backtest — superseded by option_backtest.py.
+
+This module backtests the scalper SIGNAL EDGE on spot points (a proxy). It is
+NOT a real option P&L backtest: no bid/ask, no slippage, no cost model, no
+option prices. It is retained ONLY for spot-edge research (asym_rr_backtest,
+btc_research, edge_research import its precompute/score_at/run_backtest).
+
+For actual CE/PE P&L / NET expectancy, use option_backtest.py — it replays the
+Option Recorder's real chain snapshots (bid/ask/LTP/OI/vol/IV/greeks) with the
+full cost model, bid/ask + slippage, 1m execution, MFE/MAE, time-stop, and
+walk-forward validation.
+
+(Original method description follows, kept for the spot-edge research use.)
 
 Method:
   - Same indicators as scalper.py (EMA9/21, fresh cross, session VWAP, 3-bar

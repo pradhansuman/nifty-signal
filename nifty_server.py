@@ -581,6 +581,43 @@ def api_backtest():
     """Strategy backtest report (cached 1 hour)."""
     return jsonify(get_backtest())
 
+
+_option_backtest_cache = {"ts": 0, "data": None}
+
+
+@app.route("/api/option-backtest")
+def api_option_backtest():
+    """Real option-P&L scalper backtest on recorded chain data (cached 1 hour).
+
+    Measured results only — replays the Option Recorder's snapshots (bid/ask/
+    LTP/OI/vol/IV/greeks) through the scalper signal engine with the full cost
+    model, bid/ask + slippage, 1m execution, MFE/MAE, time-stop, walk-forward.
+    """
+    import time as _t
+    from collections import Counter
+    if _option_backtest_cache["data"] is None or (_t.time() - _option_backtest_cache["ts"]) > 3600:
+        try:
+            import option_backtest as _ob
+            trades, meta = _ob.backtest("nifty")
+            _option_backtest_cache["data"] = {
+                "asset": meta.get("asset"),
+                "expiry": meta.get("expiry"),
+                "snapshots": meta.get("snapshots"),
+                "signals": meta.get("signals"),
+                "bars_5m": meta.get("bars_5m"),
+                "trades": len(trades),
+                "net": _ob._expectancy(trades),
+                "train": _ob._expectancy([t for t in trades if t["split"] == "train"]),
+                "test": _ob._expectancy([t for t in trades if t["split"] == "test"]),
+                "exit_mix": dict(Counter(t["reason"] for t in trades)),
+                "note": ("Measured results only. 0 trades = insufficient recorded "
+                         "option data (needs ~2+ weeks for the 200-EMA warmup)."),
+            }
+        except Exception as e:
+            _option_backtest_cache["data"] = {"error": str(e)[:120]}
+        _option_backtest_cache["ts"] = _t.time()
+    return jsonify(_clean_nan(_option_backtest_cache["data"]))
+
 @app.route("/api/chain")
 def api_chain():
     """Option chain table with walls (cached 60s)."""

@@ -88,6 +88,14 @@
     padding: 16px;
     border: 1px solid var(--border);
   }
+  /* Collapsible section (secondary asset/report sections — collapsed by default) */
+  details.sec { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); margin-bottom: 12px; }
+  details.sec > summary { cursor: pointer; padding: 14px 16px; font-weight: 700; font-size: 13px; color: var(--text); list-style: none; user-select: none; }
+  details.sec > summary::-webkit-details-marker { display: none; }
+  details.sec > summary::before { content: '▸ '; color: var(--accent); }
+  details.sec[open] > summary::before { content: '▾ '; }
+  details.sec[open] > summary { border-bottom: 1px solid var(--border); }
+  details.sec > .card { margin: 10px; }
   .card-header {
     display: flex;
     justify-content: space-between;
@@ -286,6 +294,36 @@
     <div class="card-header"><span class="label" data-i18n="live-alerts">🔔 Live Alerts</span><span style="font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px;display:none" id="alertBadge">0</span><span style="font-size:11px;color:var(--text-dim)" id="tunnelBadge"></span><button id="soundToggle" onclick="toggleSound()" title="Alert sound on/off" style="margin-left:auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer">🔔 Sound On</button><button onclick="testSound()" title="Test the alert sound" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;margin-left:6px">▶ Test</button></div>
     <div id="alertsList" style="max-height:280px;overflow-y:auto;font-size:12px;line-height:1.5">
       <div style="color:var(--text-dim);padding:12px;text-align:center">Waiting for market signals...</div>
+    </div>
+  </div>
+
+  <!-- Intraday (VWAP + EMA) -->
+  <div class="card" id="intradayCard">
+    <div class="card-header"><span class="label" data-i18n="intraday-sig">📊 Intraday Signals</span><span style="font-size:11px;color:var(--text-dim)">cross / reclaim · actionable</span></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="vwapBox">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">VWAP Reversion</div>
+        <div style="font-size:13px;font-weight:700" id="vwapSignal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="vwapDetail"></div>
+      </div>
+      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="emaBox">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">9/21 EMA Cross (5m)</div>
+        <div style="font-size:13px;font-weight:700" id="emaSignal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="emaDetail"></div>
+        <div style="font-size:11px;font-weight:600;margin-top:4px" id="emaLevels"></div>
+      </div>
+      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="trendBox">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">20/50 Trend Cross (1h)</div>
+        <div style="font-size:13px;font-weight:700" id="trendSignal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="trendDetail"></div>
+        <div style="font-size:11px;font-weight:600;margin-top:4px" id="trendLevels"></div>
+      </div>
+      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="ema20Box">
+        <div style="font-size:12px;font-weight:700;margin-bottom:2px">20 EMA Reclaim (15m)</div>
+        <div style="font-size:13px;font-weight:700" id="ema20Signal">--</div>
+        <div style="font-size:10px;color:var(--text-dim)" id="ema20Detail"></div>
+        <div style="font-size:11px;font-weight:600;margin-top:4px" id="ema20Levels"></div>
+      </div>
     </div>
   </div>
 
@@ -618,35 +656,7 @@
     <div id="orbDetails" style="font-size:11px;color:var(--text-dim);margin-top:4px"></div>
   </div>
 
-  <!-- Intraday (VWAP + EMA) -->
-  <div class="card" id="intradayCard">
-    <div class="card-header"><span class="label" data-i18n="intraday-sig">📊 Intraday Signals</span><span style="font-size:11px;color:var(--text-dim)">cross / reclaim · actionable</span></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="vwapBox">
-        <div style="font-size:12px;font-weight:700;margin-bottom:2px">VWAP Reversion</div>
-        <div style="font-size:13px;font-weight:700" id="vwapSignal">--</div>
-        <div style="font-size:10px;color:var(--text-dim)" id="vwapDetail"></div>
-      </div>
-      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="emaBox">
-        <div style="font-size:12px;font-weight:700;margin-bottom:2px">9/21 EMA Cross (5m)</div>
-        <div style="font-size:13px;font-weight:700" id="emaSignal">--</div>
-        <div style="font-size:10px;color:var(--text-dim)" id="emaDetail"></div>
-        <div style="font-size:11px;font-weight:600;margin-top:4px" id="emaLevels"></div>
-      </div>
-      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="trendBox">
-        <div style="font-size:12px;font-weight:700;margin-bottom:2px">20/50 Trend Cross (1h)</div>
-        <div style="font-size:13px;font-weight:700" id="trendSignal">--</div>
-        <div style="font-size:10px;color:var(--text-dim)" id="trendDetail"></div>
-        <div style="font-size:11px;font-weight:600;margin-top:4px" id="trendLevels"></div>
-      </div>
-      <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="ema20Box">
-        <div style="font-size:12px;font-weight:700;margin-bottom:2px">20 EMA Reclaim (15m)</div>
-        <div style="font-size:13px;font-weight:700" id="ema20Signal">--</div>
-        <div style="font-size:10px;color:var(--text-dim)" id="ema20Detail"></div>
-        <div style="font-size:11px;font-weight:600;margin-top:4px" id="ema20Levels"></div>
-      </div>
-    </div>
-  </div>
+
 
   
 
@@ -739,6 +749,7 @@
     </div>
   </div>
 
+<details class="sec"><summary>🪙 Bitcoin</summary>
 <!-- ── BITCOIN SECTION ── -->
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">₿ ─── BITCOIN (24/7) ─── ₿</div>
 
@@ -823,6 +834,9 @@
     <div id="btcStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
   </div>
 
+</details>
+
+<details class="sec"><summary>🏦 Bank Nifty</summary>
 <!-- ── BANK NIFTY SECTION ── -->
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">🏦 ─── BANK NIFTY ─── 🏦</div>
 
@@ -971,6 +985,9 @@
     <div id="bnfStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
   </div>
 
+</details>
+
+<details class="sec"><summary>🇮🇳 Sensex</summary>
 <!-- ── SENSEX SECTION ── -->
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">🇮🇳 ─── SENSEX ─── 🇮🇳</div>
 
@@ -1054,6 +1071,9 @@
     <div id="sensexStrategiesList" class="strat-grid"><div style="color:var(--text-dim);padding:8px;text-align:center">Loading...</div></div>
   </div>
 
+</details>
+
+<details class="sec"><summary>🚀 Indian Stock Movers</summary>
 <!-- ── INDIAN STOCKS (MOVERS) ── -->
 <div style="margin:18px 0 10px;font-size:15px;font-weight:800;color:var(--accent);text-align:center;letter-spacing:1px">🇮🇳 ─── INDIAN STOCKS (MOVERS) ─── 🇮🇳</div>
 
@@ -1068,6 +1088,9 @@
   <div class="strat-grid" id="stockSwingList"><div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">Loading...</div></div>
 </div>
 
+</details>
+
+<details class="sec"><summary>📊 Weekly Review</summary>
 <!-- Weekly Review -->
 <div class="card" id="weeklyCard">
   <div class="card-header"><span class="label">📊 Weekly Review</span><span style="font-size:10px;color:var(--text-dim)" id="weeklyWeek">--</span></div>
@@ -1088,6 +1111,9 @@
   <div style="margin-top:8px;font-size:12px;color:var(--text-dim)" id="weeklyRead">No report yet — builds every Friday 3:35 PM</div>
 </div>
 
+</details>
+
+<details class="sec"><summary>🧪 Strategy Backtest</summary>
 <!-- Backtest Report -->
 <div class="card" id="backtestCard" style="border-color:#448aff44">
   <div class="card-header">
@@ -1118,6 +1144,8 @@
     <div style="font-size:11px;line-height:1.7;margin-top:6px;color:var(--text-dim)" id="btDetails"></div>
   </details>
 </div>
+
+</details>
 
 <!-- Trading Playbook -->
 <div class="card" style="border-color:#7c3aed44">
@@ -1245,6 +1273,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260818d"></script>
+<script src="/dash.js?v=20260818e"></script>
 </body>
 </html>

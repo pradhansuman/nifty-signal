@@ -1300,7 +1300,13 @@ function initQuickNav() {
   // Click → smooth scroll
   pairs.forEach(p => {
     p.chip.addEventListener('click', () => {
-      p.sec.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Open any collapsed <details> ancestor first (e.g. BTC/BNF/Sensex sections)
+      let el = p.sec;
+      while (el && el !== document.body) {
+        if (el.tagName === 'DETAILS' && !el.open) el.open = true;
+        el = el.parentElement;
+      }
+      setTimeout(() => p.sec.scrollIntoView({ behavior: 'smooth', block: 'start' }), 30);
       pairs.forEach(x => x.chip.classList.remove('active'));
       p.chip.classList.add('active');
     });

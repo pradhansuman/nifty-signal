@@ -280,16 +280,19 @@ def _algo_trade(signal_type, direction, strike, expiry, lots, premium, option_ty
         return None
 
 
-def _track_asset_alert(asset, signal, reason, recommendation=None):
+def _track_asset_alert(asset, signal, reason, recommendation=None, interval=None):
     """Log signal-change alerts for BTC / Bank Nifty / Sensex. Buy/sell
     transitions surface in the Live Alerts feed (and Telegram) with the full
-    actionable recommendation (entry/stop/target/R:R)."""
+    actionable recommendation (entry/stop/target/R:R). Dedup is keyed per
+    (asset, interval) so multi-timeframe polls (e.g. BTC 15m vs 1h) don't
+    ping-pong the signal state and re-fire every minute."""
     try:
-        key = f"{asset}:{_ist_now().date()}"
-        last = _asset_last_signal.get(asset)
+        dedup_key = f"{asset}:{interval or 'default'}"
+        last = _asset_last_signal.get(dedup_key)
         if last == signal:
             return
-        _asset_last_signal[asset] = signal
+        _asset_last_signal[dedup_key] = signal
+        key = f"{asset}:{_ist_now().date()}"
         entry = {
             "time": _ist_now().strftime("%H:%M:%S"),
             "date": _ist_now().strftime("%d-%b"),
@@ -529,7 +532,7 @@ def api_btc():
         _btc_cache["ts"] = _t.time()
         _btc_cache["interval"] = interval
     data = dict(_btc_cache["data"])
-    _track_asset_alert("btc", data.get("signal"), data.get("reason"), data.get("recommendation"))
+    _track_asset_alert("btc", data.get("signal"), data.get("reason"), data.get("recommendation"), interval)
     data["alerts"] = _asset_alert_list("btc")
     return jsonify(data)
 
@@ -1569,8 +1572,8 @@ def _add_alert(level, title, body):
 
 @app.route("/api/alerts")
 def api_alerts():
-    """Recent alerts from the background scheduler."""
-    return jsonify(_alert_log[-20:])
+    """Recent alerts from the background scheduler (latest 5 only)."""
+    return jsonify(_alert_log[-5:])
 
 def _is_market_open():
     """Check if NSE is open now (Mon-Fri, 9:15-15:30 IST)."""

@@ -459,8 +459,8 @@ _stock_alerted = set()  # symbols already alerted today (live breakout alerts)
 
 
 def _t(or_txt, en_txt):
-    """Locale picker for alert text: Odia by default, English when TG_LANG=en."""
-    return en_txt if os.environ.get("TG_LANG", "or") == "en" else or_txt
+    """Alert text is always English — the Odia locale has been removed."""
+    return en_txt
 
 
 def _stock_movers_live_alerts(data=None, alerted=None):

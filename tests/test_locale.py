@@ -1,4 +1,4 @@
-"""Locale tests: alert builders produce English when TG_LANG=en, Odia by default."""
+"""Locale tests: alert builders always produce English (Odia locale removed)."""
 import os
 import sys
 import unittest
@@ -25,9 +25,10 @@ class LocaleTest(unittest.TestCase):
         else:
             os.environ["TG_LANG"] = self.old
 
-    def test_default_is_odia(self):
+    def test_default_is_english(self):
+        # Odia locale removed — alert text is always English, even without TG_LANG
         os.environ.pop("TG_LANG", None)
-        self.assertEqual(ns._t("ନିଫ୍ଟି", "NIFTY"), "ନିଫ୍ଟି")
+        self.assertEqual(ns._t("ନିଫ୍ଟି", "NIFTY"), "NIFTY")
 
     def test_en_switches(self):
         os.environ["TG_LANG"] = "en"

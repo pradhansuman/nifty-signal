@@ -49,14 +49,14 @@ class StockMoversAlertTest(unittest.TestCase):
         self.assertEqual(fired2, 0)
         self.assertEqual(ns._add_alert.call_count, 1)
 
-    def test_digest_builds_odia_lines(self):
+    def test_digest_builds_english_lines(self):
         data = {"day_trade": [_day_row("AA", 3.5, 2.5)],
                 "swing": [{"symbol": "BB", "name": "Bb", "price": 200.0, "mom5": 4.0,
                            "target": 215.0, "target_pct": 7.5, "trend": "UP",
                            "timeline": "5–10 sessions", "day_pct": 0.5, "vol_ratio": None}]}
         lines = ns._stock_movers_daily_digest(data=data)
         joined = "\n".join(lines)
-        self.assertIn("ଦୈନିକ ଷ୍ଟକ୍", joined)
+        self.assertIn("Daily Stock Movers", joined)
         self.assertIn("Aa", joined)  # shows the NAME, not the symbol
         self.assertIn("🎯", joined)
         ns._add_alert.assert_called_once()
@@ -64,7 +64,7 @@ class StockMoversAlertTest(unittest.TestCase):
     def test_digest_empty_day(self):
         lines = ns._stock_movers_daily_digest(data={})
         joined = "\n".join(lines)
-        self.assertIn("ନାହିଁ", joined)
+        self.assertIn("No movers today", joined)
 
 
 if __name__ == "__main__":

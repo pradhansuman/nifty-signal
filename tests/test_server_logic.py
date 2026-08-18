@@ -409,59 +409,6 @@ class ScalpSignalsOnlyAlertsTest(unittest.TestCase):
         self.assertFalse(ns._SCALP_VERBOSE_ALERTS)  # but no alert would be pushed
 
 
-class OdiaTranslateTest(unittest.TestCase):
-    """Odia phrase translation: templates → ଓଡ଼ିଆ, data/HTML untouched."""
-
-    def test_entry_alert_translated(self):
-        from telegram_alert import odia_translate
-        msg = "🟢 NIFTY SCALP: Buy 24400 CE @ 73.1\nEntry ₹73.1 | Target ₹80.4 | Stop ₹65.8 | Expiry 18-Aug | Lot ₹4,751 | Spread 2.3% | ⏳ expires 14:40"
-        out = odia_translate(msg)
-        self.assertIn("ସ୍କାଲ୍ପ୍", out)
-        self.assertIn("କିଣ", out)
-        self.assertIn("ଏଣ୍ଟ୍ରି ₹73.1", out)
-        self.assertIn("ଟାର୍ଗେଟ୍ ₹80.4", out)
-        self.assertIn("ଷ୍ଟପ୍ ₹65.8", out)
-        self.assertIn("ଏକ୍ସପାୟରୀ 18-Aug", out)
-        self.assertIn("ସ୍ପ୍ରେଡ୍", out)
-        self.assertIn("24400 CE @ 73.1", out)  # ticker data preserved
-
-    def test_perfect_setup_title(self):
-        from telegram_alert import odia_translate
-        out = odia_translate("🔥 PERFECT SETUP — 🟢 NIFTY SCALP: Buy 24400 CE")
-        self.assertIn("ପରଫେକ୍ଟ ସେଟଅପ୍", out)
-        self.assertNotIn("PERFECT SETUP", out)
-
-    def test_html_and_numbers_preserved(self):
-        from telegram_alert import odia_translate
-        msg = "<b>NIFTY signal</b>: score +3, ADX 25, momentum +45.5, below VWAP 24300"
-        out = odia_translate(msg)
-        self.assertIn("<b>", out)
-        self.assertIn("+3", out)
-        self.assertIn("45.5", out)
-        self.assertIn("ସିଗନାଲ୍", out)
-        self.assertIn("ତଳେ", out)
-
-    def test_tg_lang_en_disables(self):
-        import os
-        old = os.environ.get("TG_LANG")
-        os.environ["TG_LANG"] = "en"
-        try:
-            from telegram_alert import send_telegram
-            import telegram_alert
-            with mock.patch.object(telegram_alert, "_load_config",
-                                   return_value={"token": "x", "chat_id": "1"}), \
-                 mock.patch.object(telegram_alert.requests, "post") as mp:
-                mp.return_value.status_code = 200
-                mp.return_value.json.return_value = {"ok": True}
-                send_telegram("🟢 NIFTY SCALP: Buy 24400 CE")
-                sent = mp.call_args.kwargs["json"]["text"]
-            self.assertIn("NIFTY SCALP", sent)  # untranslated
-            self.assertNotIn("ସ୍କାଲ୍ପ୍", sent)
-        finally:
-            if old is None:
-                os.environ.pop("TG_LANG", None)
-            else:
-                os.environ["TG_LANG"] = old
 
 
 class ScalpCompactLineTest(unittest.TestCase):
@@ -489,16 +436,6 @@ class ScalpCompactLineTest(unittest.TestCase):
         line = ns._scalp_compact_line("btc", "SCALP_SHORT", call)
         self.assertIn("R:R 1.66", line)
 
-    def test_odia_translates_compact_line(self):
-        from telegram_alert import odia_translate
-        line = ns._scalp_compact_line("btc", "SCALP_SHORT",
-                                      {"entry": 62828.0, "stop": 63159.0, "target": 62277.0})
-        out = odia_translate(line)
-        self.assertIn("ବିକ", out)          # SELL
-        self.assertIn("ଷ୍ଟପ୍ $63,159", out)  # Stop $
-        self.assertIn("ଟାର୍ଗେଟ୍ $62,277", out)
-        self.assertIn("ରିସ୍କ୍ $331/BTC", out)
-        self.assertIn("R:R 1.66", out)     # untouched
 
 
 class ScalpOptionLineTest(unittest.TestCase):
@@ -523,51 +460,12 @@ class ScalpOptionLineTest(unittest.TestCase):
         self.assertTrue(ns._scalp_alert_line("btc", "SCALP_SHORT", spot).startswith("SELL BTC at ~$"))
         self.assertTrue(ns._scalp_alert_line("sensex", "SCALP_LONG", spot).startswith("BUY SENSEX at ~₹"))
 
-    def test_odia_translates_option_line(self):
-        from telegram_alert import odia_translate
-        line = ns._scalp_option_line("nifty", "SCALP_LONG",
-                                     {"strike": 24300.0, "entry": 164.75, "target": 181.38,
-                                      "stop": 148.12, "premium": 164.75})
-        out = odia_translate(line)
-        self.assertIn("କିଣ", out)          # Buy
-        self.assertIn("24,300 CE @ ₹164.75", out)
-        self.assertIn("🎯 ₹181.38", out)    # emoji target survives
-        self.assertIn("🛑 ₹148.12", out)    # emoji stop survives
 
 
-class OdiaReasonTranslateTest(unittest.TestCase):
-    """Gate-reason phrases (the alert body text) now translate to Odia."""
-
-    def test_trend_reason_translated(self):
-        from telegram_alert import odia_translate
-        out = odia_translate("No scalp edge — score +3 (need ±3). trend too weak (|spot-200E| 0.9% < 1.0% gate) — momentum has no edge in chop")
-        self.assertIn("ଟ୍ରେଣ୍ଡ୍ ଦୁର୍ବଳ", out)
-        self.assertIn("ଚପ୍ ରେ ମୋମେଣ୍ଟମ୍ ର କୌଣସି ଧାର ନାହିଁ", out)
-        self.assertIn("ସ୍କୋର୍ +3", out)
-
-    def test_adx_and_vwap_reason(self):
-        from telegram_alert import odia_translate
-        out = odia_translate("ADX 13 < 25 — no sustained trend. below VWAP 24300; RSI 47 neutral")
-        self.assertIn("ସ୍ଥାୟୀ ଟ୍ରେଣ୍ଡ୍ ନାହିଁ", out)
-        self.assertIn("VWAP ତଳେ", out)
-        self.assertIn("ନିରପେକ୍ଷ", out)
-
-    def test_overbought_golden_cross(self):
-        from telegram_alert import odia_translate
-        out = odia_translate("fresh golden cross; RSI 97 overbought; above ORB high")
-        self.assertIn("ଗୋଲ୍ଡେନ୍ କ୍ରସ୍", out)
-        self.assertIn("ଓଭରବଟ୍", out)
-        self.assertIn("ORB ହାଇ ଉପରେ", out)
-
-    def test_funding_reason(self):
-        from telegram_alert import odia_translate
-        out = odia_translate("funding +0.080% — longs pay carry, skip LONG")
-        self.assertIn("କ୍ୟାରି ଦିଏ", out)
-        self.assertIn("ଛାଡ଼", out)
 
 
 class ScalpDailyReportTest(unittest.TestCase):
-    """Daily report builds Odia per-asset lines + totals from the summary."""
+    """Daily report builds English per-asset lines + totals from the summary."""
 
     def test_report_with_calls(self):
         calls = [
@@ -579,13 +477,13 @@ class ScalpDailyReportTest(unittest.TestCase):
         with mock.patch.object(ns, "_scalp_calls", calls), \
              mock.patch.object(ns, "SCALP_LOT", {"nifty": 65, "bnf": 15, "sensex": 20, "btc": 0}):
             rep = ns._scalp_daily_report()
-        self.assertIn("ଦୈନିକ ସ୍କାଲ୍ପ୍ ରିପୋର୍ଟ", rep)
-        self.assertIn("ନିଫ୍ଟି", rep)
-        self.assertIn("ବିଟକଏନ୍", rep)
-        self.assertIn("ମୋଟ", rep)
+        self.assertIn("Daily Scalp Report", rep)
+        self.assertIn("NIFTY", rep)
+        self.assertIn("BTC", rep)
+        self.assertIn("Total", rep)
         self.assertIn("WR", rep)
 
     def test_report_empty(self):
         with mock.patch.object(ns, "_scalp_calls", []):
             rep = ns._scalp_daily_report()
-        self.assertIn("କୌଣସି ସ୍କାଲ୍ପ୍ କଲ୍ ନାହିଁ", rep)
+        self.assertIn("No scalp calls today", rep)

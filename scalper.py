@@ -27,14 +27,16 @@ import delta_exchange  # noqa: E402  (Delta Exchange BTC options chain)
 # ── Multi-asset config ──
 ASSETS = {
     "nifty":  {"symbol": "^NSEI",    "lot": 65, "options": True,  "vix": True,  "spot_tp": None,   "label": "NIFTY",
-               # Backtest 2026-08-14 (5m): trend 1.0% + ADX 30 + 30m hold → PF 1.47, 66% WR
+               # Real-time 1m (Upstox LTP feed) — the scalper needs fast bars
+               "interval": "1m", "period": "5d",
                "trend_min": 1.0, "adx_min": 30, "hold_min": 30},
     "bnf":    {"symbol": "^NSEBANK", "lot": 15, "options": True,  "vix": True,  "spot_tp": None,   "label": "BANK NIFTY",
                # Backtest 2026-08-14 (15m): trend 0.5% + ADX 30 + 30m hold → PF 2.21, 56% WR
                "interval": "15m", "period": "60d",
                "trend_min": 0.5, "adx_min": 30, "hold_min": 30},
     "sensex": {"symbol": "^BSESN",   "lot": 20, "options": False, "vix": True,  "spot_tp": 0.0015, "label": "SENSEX",
-               # Backtest 2026-08-14 (5m): trend 1.0% + ADX 30 + 30m hold → PF 1.60, 57% WR
+               # Real-time 1m (Upstox LTP feed)
+               "interval": "1m", "period": "5d",
                "trend_min": 1.0, "adx_min": 30, "hold_min": 30},
     "btc":    {"symbol": "BTC-USD",  "lot": 0,  "options": True,  "vix": False, "spot_tp": 0.005,  "label": "BITCOIN",
                # BTC runs on the 1h timeframe (5m is chop: PF ceiling 1.08).
@@ -137,6 +139,18 @@ def _adx(df, n=14):
 
 
 def get_bars(asset="nifty", period="5d", interval="5m"):
+    # Real-time Upstox candles for Indian indices (1m feed, resampled) — the
+    # primary source. Yahoo is only a fallback when Upstox is unreachable.
+    if asset in ("nifty", "bnf", "sensex"):
+        try:
+            import upstox_rt as _urt
+            rule = {"1m": "1min", "5m": "5min", "15m": "15min",
+                    "30m": "30min", "1h": "1h"}.get(interval, "1min")
+            df = _urt.get_bars(asset, rule=rule)
+            if df is not None and len(df) >= 20:
+                return df
+        except Exception:
+            pass
     df = yf.download(ASSETS[asset]["symbol"], period=period, interval=interval, progress=False, auto_adjust=True)
     if df is None or df.empty:
         return None
@@ -308,7 +322,7 @@ def main(asset="nifty"):
     cfg = ASSETS[asset]
     df = get_bars(asset, period=cfg.get("period", "5d"), interval=cfg.get("interval", "5m"))
     if df is None or len(df) < 40:
-        out["reason"] = "Not enough 5m bars yet (need 40)"
+        out["reason"] = "Not enough bars yet (need 40)"
         return out
 
     # Session split: indicators warm on 5 days of bars; VWAP/ORB/spot use today only

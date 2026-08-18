@@ -703,6 +703,22 @@ async function fetchTradeGate() {
   }
 }
 
+async function fetchExcursion() {
+  const set = (id, txt) => { const e = document.getElementById(id); if (e) e.textContent = txt; };
+  try {
+    const resp = await fetch('/api/scalp/excursion');
+    const d = await resp.json();
+    const s = d.summary || {};
+    set('excMfe', (s.mfe_avg_r != null ? '+' : '') + (s.mfe_avg_r ?? '--') + 'R');
+    set('excMae', (s.mae_avg_r != null ? '−' : '') + (s.mae_avg_r ?? '--') + 'R');
+    set('excReal', (s.realized_avg_r != null && s.realized_avg_r >= 0 ? '+' : '') + (s.realized_avg_r ?? '--') + 'R');
+    set('excEff', s.efficiency != null ? s.efficiency : '--');
+    set('excursionN', s.resolved != null ? s.resolved + ' trades' : '--');
+  } catch(e) {
+    set('excMfe', 'N/A'); set('excMae', 'N/A'); set('excReal', 'N/A'); set('excEff', 'N/A');
+  }
+}
+
 async function fetchAlgoStatus() {
   try {
     const resp = await fetch('/api/algo/status');
@@ -1999,11 +2015,13 @@ fetchORB();
 fetchIntraday();
 fetchRegime();
 fetchTradeGate();
+fetchExcursion();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchScalper, 30000);
 setInterval(fetchRegime, 60000);
 setInterval(fetchTradeGate, 60000);
+setInterval(fetchExcursion, 60000);
 setInterval(() => { fetchAssetScalper('bnf', 'bnf'); fetchAssetScalper('sensex', 'sx'); fetchAssetScalper('btc', 'btc'); }, 30000);
 setInterval(refreshStrategies, 120000);
 setInterval(refreshBtcStrategies, 60000);

@@ -30,6 +30,8 @@ from oi_buildup import get_oi_buildup, take_snapshot
 from gap_go import compute_gap_signal
 from regime import session_regime
 from trade_gate import trade_gate
+import upstox_rt
+import option_recorder
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
@@ -801,6 +803,7 @@ def _scalp_append_call(asset, sc, call):
         "strike": call.get("strike"),
         "option_type": "CE" if sc.get("signal") == "SCALP_LONG" else "PE",
         "entry": call.get("entry"), "target": call.get("target"), "stop": call.get("stop"),
+        "highest": call.get("entry"), "lowest": call.get("entry"),
         "half_spread": call.get("half_spread") or 0.0,
         "perfect": bool(sc.get("perfect")),
         "funding": call.get("funding"),
@@ -833,6 +836,47 @@ def _scalp_pnl(c):
     return (round(per_unit, 2), 0.0, round(per_unit / entry * 100, 2) if entry else 0.0)
 
 
+def _scalp_excursion(c):
+    """Compute MFE / MAE / R (max favorable & adverse excursion + R-multiple)
+    for a resolved call, and write the fields onto it in place.
+
+    MFE = best the trade went in your favor, MAE = worst against you, both in
+    R-multiples of the initial risk (|entry - stop|). realized_r = pnl_pts / risk.
+    Tells you actual-vs-planned: e.g. MFE +2.5R but realized +0.5R → giving back
+    too much; MAE -0.3R then recovered → stops are fine.
+    """
+    entry = c.get("entry") or 0
+    stop = c.get("stop")
+    highest = c.get("highest")
+    lowest = c.get("lowest")
+    if not entry or stop is None or highest is None or lowest is None:
+        return c
+    asset = c.get("asset") or "nifty"
+    if asset in ("nifty", "bnf"):
+        # options: both CE/PE profit when PREMIUM rises; stop below entry
+        mfe_pts = max(0.0, highest - entry)
+        mae_pts = max(0.0, entry - lowest)
+        risk = max(1e-9, entry - stop)
+    else:
+        # spot (sensex/btc): direction-aware
+        if c.get("signal") == "SCALP_SHORT":
+            mfe_pts = max(0.0, entry - lowest)   # favorable = price down
+            mae_pts = max(0.0, highest - entry)  # adverse = price up
+            risk = max(1e-9, stop - entry)
+        else:
+            mfe_pts = max(0.0, highest - entry)
+            mae_pts = max(0.0, entry - lowest)
+            risk = max(1e-9, entry - stop)
+    pnl = c.get("pnl_pts") or 0.0
+    c["mfe_pts"] = round(mfe_pts, 2)
+    c["mae_pts"] = round(mae_pts, 2)
+    c["mfe_r"] = round(mfe_pts / risk, 2)
+    c["mae_r"] = round(mae_pts / risk, 2)
+    c["realized_r"] = round(pnl / risk, 2)
+    c["risk_pts"] = round(risk, 2)
+    return c
+
+
 def _scalp_summary(calls=None):
     """Dry-run summary across resolved calls (optionally a filtered list)."""
     calls = calls if calls is not None else _scalp_calls
@@ -840,19 +884,32 @@ def _scalp_summary(calls=None):
     wins = [c for c in resolved if c.get("status") == "TARGET_HIT"]
     net_pts = net_rs = 0.0
     by_asset = {}
+    mfe_rs = []; mae_rs = []; real_rs = []
     for c in resolved:
         p_pts, p_rs, _ = _scalp_pnl(c)
         net_pts += p_pts
         net_rs += p_rs
+        if c.get("mfe_r") is not None:
+            mfe_rs.append(c["mfe_r"])
+        if c.get("mae_r") is not None:
+            mae_rs.append(c["mae_r"])
+        if c.get("realized_r") is not None:
+            real_rs.append(c["realized_r"])
         b = by_asset.setdefault(c.get("asset", "?"), {"n": 0, "w": 0, "pts": 0.0, "rs": 0.0})
         b["n"] += 1
         b["w"] += 1 if c.get("status") == "TARGET_HIT" else 0
         b["pts"] += p_pts
         b["rs"] += p_rs
+    def _avg(xs):
+        return round(sum(xs) / len(xs), 2) if xs else 0.0
+    mfe_avg = _avg(mfe_rs); real_avg = _avg(real_rs)
     return {
         "resolved": len(resolved), "wins": len(wins),
         "win_rate": round(len(wins) / len(resolved) * 100, 1) if resolved else 0.0,
         "net_pts": round(net_pts, 2), "net_rs": round(net_rs, 2),
+        "mfe_avg_r": mfe_avg, "mae_avg_r": _avg(mae_rs), "realized_avg_r": real_avg,
+        "efficiency": round(real_avg / mfe_avg, 2) if mfe_avg else 0.0,  # how much of MFE you kept
+        "excursion_n": len(real_rs),
         "by_asset": by_asset,
     }
 
@@ -944,11 +1001,17 @@ def _scalp_refresh_statuses():
             c["hit_time"] = now_hm
             c["hit_premium"] = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type")) or c.get("entry")
             c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
+            _scalp_excursion(c)
             events.append((c, "expired"))
             continue
         prem = _chain_premium(c.get("asset") or "nifty", c.get("strike"), c.get("option_type"))
         if prem is None:
             continue
+        # Track max favorable / adverse excursion while the call is ACTIVE
+        _entry = c.get("entry") or 0
+        if _entry:
+            c["highest"] = max(c.get("highest") or _entry, prem)
+            c["lowest"] = min(c.get("lowest") or _entry, prem)
         # Options (nifty/bnf): both CE and PE profit when PREMIUM rises, so
         # target is always above entry, stop below — works for both signals.
         # Spot assets (sensex/btc): LONG target above entry; SHORT target BELOW
@@ -959,10 +1022,12 @@ def _scalp_refresh_statuses():
         if c.get("target") and target_hit:
             c["status"] = "TARGET_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
             c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
+            _scalp_excursion(c)
             events.append((c, "target"))
         elif c.get("stop") and stop_hit:
             c["status"] = "STOP_HIT"; c["hit_time"] = now_hm; c["hit_premium"] = prem
             c["pnl_pts"], c["pnl_rs"], c["pnl_pct"] = _scalp_pnl(c)
+            _scalp_excursion(c)
             events.append((c, "stop"))
     if events:
         _scalp_save_calls()
@@ -1163,6 +1228,38 @@ def api_scalper():
 def api_scalp_history():
     """Immutable daily P&L snapshots (one row per day) — the over-time record."""
     return jsonify({"history": list(reversed(_scalp_pnl_history))})
+
+
+@app.route("/api/option/history/stats")
+def api_option_history_stats():
+    """Forward-collected real option chain data — record counts by date/asset."""
+    return jsonify(option_recorder.stats())
+
+
+@app.route("/api/scalp/excursion")
+def api_scalp_excursion():
+    """MFE / MAE / R analytics for resolved scalp calls — actual vs planned."""
+    resolved = [c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
+    rows = []
+    for c in resolved:
+        if c.get("mfe_r") is None:
+            _scalp_excursion(c)
+        rows.append({
+            "asset": c.get("asset"), "time": c.get("time"), "signal": c.get("signal"),
+            "option": c.get("option"), "status": c.get("status"),
+            "entry": c.get("entry"), "stop": c.get("stop"), "target": c.get("target"),
+            "mfe_r": c.get("mfe_r"), "mae_r": c.get("mae_r"), "realized_r": c.get("realized_r"),
+            "pnl_pts": c.get("pnl_pts"),
+        })
+    s = _scalp_summary()
+    return jsonify(_clean_nan({
+        "summary": {
+            "resolved": s.get("resolved"), "win_rate": s.get("win_rate"),
+            "mfe_avg_r": s.get("mfe_avg_r"), "mae_avg_r": s.get("mae_avg_r"),
+            "realized_avg_r": s.get("realized_avg_r"), "efficiency": s.get("efficiency"),
+        },
+        "trades": list(reversed(rows)),
+    }))
 
 
 @app.route("/api/scalp/snapshot", methods=["POST"])
@@ -1829,6 +1926,16 @@ def alert_scheduler():
 
 
 def warmup_caches():
+    # Start the real-time Upstox LTP candle feed (1m) — scalper's primary data.
+    try:
+        upstox_rt.start()
+    except Exception:
+        pass
+    # Forward-collect real option chain data (Path A for the option backtest).
+    try:
+        option_recorder.start()
+    except Exception:
+        pass
     """Pre-compute heavy endpoints at boot so the first page load is instant."""
     jobs = [
         (get_signal, (), 1),

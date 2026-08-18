@@ -280,8 +280,10 @@ def _algo_trade(signal_type, direction, strike, expiry, lots, premium, option_ty
         return None
 
 
-def _track_asset_alert(asset, signal, reason):
-    """Log signal-change alerts for BTC / Bank Nifty, push Telegram on change."""
+def _track_asset_alert(asset, signal, reason, recommendation=None):
+    """Log signal-change alerts for BTC / Bank Nifty / Sensex. Buy/sell
+    transitions surface in the Live Alerts feed (and Telegram) with the full
+    actionable recommendation (entry/stop/target/R:R)."""
     try:
         key = f"{asset}:{_ist_now().date()}"
         last = _asset_last_signal.get(asset)
@@ -306,11 +308,14 @@ def _track_asset_alert(asset, signal, reason):
                 json.dump(lst, f, default=str)
         except Exception:
             pass
+        label = "₿ BTC" if asset == "btc" else "🏦 BNF" if asset == "banknifty" else "🇮🇳 SENSEX"
         try:
-            if telegram_alert.is_configured():
-                emoji = "🟢" if signal == "BUY_LONG" else "🔴" if signal == "BUY_SHORT" else "⏳"
-                label = "₿ BTC" if asset == "btc" else "🏦 BNF" if asset == "banknifty" else "🇮🇳 SENSEX"
-                _push_tg(f"{emoji} <b>{label} signal: {signal}</b>\n{reason[:150]}")
+            if signal in ("BUY_LONG", "BUY_SHORT"):
+                direction = "BUY" if signal == "BUY_LONG" else "SELL"
+                body = (recommendation or reason or "").strip()[:400]
+                _add_alert("critical", f"{label} {direction}", body)
+            elif telegram_alert.is_configured():
+                _push_tg(f"⏳ <b>{label} signal: {signal}</b>\n{reason[:150]}")
         except Exception:
             pass
     except Exception:
@@ -524,7 +529,7 @@ def api_btc():
         _btc_cache["ts"] = _t.time()
         _btc_cache["interval"] = interval
     data = dict(_btc_cache["data"])
-    _track_asset_alert("btc", data.get("signal"), data.get("reason"))
+    _track_asset_alert("btc", data.get("signal"), data.get("reason"), data.get("recommendation"))
     data["alerts"] = _asset_alert_list("btc")
     return jsonify(data)
 
@@ -536,7 +541,7 @@ def api_banknifty():
         _bnf_cache["data"] = get_banknifty_signal()
         _bnf_cache["ts"] = _t.time()
     data = dict(_bnf_cache["data"])
-    _track_asset_alert("banknifty", data.get("signal"), data.get("reason"))
+    _track_asset_alert("banknifty", data.get("signal"), data.get("reason"), data.get("recommendation"))
     data["alerts"] = _asset_alert_list("banknifty")
     return jsonify(data)
 
@@ -549,7 +554,7 @@ def api_sensex():
         _sensex_cache["data"] = get_sensex_signal("1h")
         _sensex_cache["ts"] = _t.time()
     data = dict(_sensex_cache["data"])
-    _track_asset_alert("sensex", data.get("signal"), data.get("reason"))
+    _track_asset_alert("sensex", data.get("signal"), data.get("reason"), data.get("recommendation"))
     data["alerts"] = _asset_alert_list("sensex")
     return jsonify(data)
 
@@ -1132,30 +1137,41 @@ def _scalp_tick(asset):
         # root cause of the 2026-08-17 BNF 9-short flood.
         new_call = watch["signal"] != sc_sig
         if new_call:
-            watch.update({
-                "signal": sc_sig, "option": call.get("option"), "entry": call.get("entry"),
-                "expires_dt": call.get("expires_dt"), "expires_at": call.get("expires_at"),
-                "ts": _ist_now(), "highest": call.get("entry"),
-                "breakeven": False, "trail": False})
-            _scalp_append_call(asset, sc, call)
-            d_emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
-            line = _scalp_alert_line(asset, sc_sig, call)
-            # 🔥 PERFECT SETUP — every gate aligned: dedicated alert first
-            if sc.get("perfect"):
-                fund = call.get("funding")
-                fund_txt = " | funding {:.4f}%".format(fund * 100) if fund is not None else ""
-                _add_alert("critical", "🔥 PERFECT SETUP — {} {} {}".format(d_emoji, tag, call.get("option")),
-                    "ALL GATES ALIGNED — score {:+d} | trend {:.2f}% | ADX {:.0f} | RSI {:.0f} | momentum {}{}\n{}\n⏳ expires {}".format(
-                        sc.get("score") or 0, sc.get("trend_dist") or 0,
-                        sc.get("adx") or 0, sc.get("rsi") or 0,
-                        "{:+}".format(sc.get("momentum") or 0), fund_txt,
-                        line, call.get("expires_at")))
-            hm = int((_sc.ASSETS.get(asset, {}) or {}).get("hold_min", 10))
-            hold_lbl = "{}h hold".format(hm // 60) if hm >= 60 else "{}m hold".format(hm)
-            _add_alert("critical", "{} {} SCALP: {}".format(d_emoji, tag, call.get("option")),
-                "{}\n⏳ expires {} ({}) | Lot ₹{:,} | Spread {}%".format(
-                    line, call.get("expires_at"), hold_lbl, call.get("lot_cost") or 0,
-                    call.get("spread_pct") or 0))
+            # 🛡️ RISK ENGINE HARD GATE — don't fire new calls when day limits
+            # are hit (max ₹ loss / max trades / consecutive-loss stop).
+            _resolved = [c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
+            _rl = risk_engine.check_limits(_resolved)
+            _risk_ok = _rl["ok"]
+            if not _risk_ok:
+                if _SCALP_VERBOSE_ALERTS:
+                    _blk = ", ".join(_rl["blocks"])
+                    _add_alert("warning", "🛑 {} SCALP BLOCKED — risk limits ({})".format(tag, _blk),
+                               "No new calls while day limits are breached. Reset at next session.")
+            if _risk_ok:
+                watch.update({
+                    "signal": sc_sig, "option": call.get("option"), "entry": call.get("entry"),
+                    "expires_dt": call.get("expires_dt"), "expires_at": call.get("expires_at"),
+                    "ts": _ist_now(), "highest": call.get("entry"),
+                    "breakeven": False, "trail": False})
+                _scalp_append_call(asset, sc, call)
+                d_emoji = "🟢" if sc_sig == "SCALP_LONG" else "🔴"
+                line = _scalp_alert_line(asset, sc_sig, call)
+                # 🔥 PERFECT SETUP — every gate aligned: dedicated alert first
+                if sc.get("perfect"):
+                    fund = call.get("funding")
+                    fund_txt = " | funding {:.4f}%".format(fund * 100) if fund is not None else ""
+                    _add_alert("critical", "🔥 PERFECT SETUP — {} {} {}".format(d_emoji, tag, call.get("option")),
+                        "ALL GATES ALIGNED — score {:+d} | trend {:.2f}% | ADX {:.0f} | RSI {:.0f} | momentum {}{}\n{}\n⏳ expires {}".format(
+                            sc.get("score") or 0, sc.get("trend_dist") or 0,
+                            sc.get("adx") or 0, sc.get("rsi") or 0,
+                            "{:+}".format(sc.get("momentum") or 0), fund_txt,
+                            line, call.get("expires_at")))
+                hm = int((_sc.ASSETS.get(asset, {}) or {}).get("hold_min", 10))
+                hold_lbl = "{}h hold".format(hm // 60) if hm >= 60 else "{}m hold".format(hm)
+                _add_alert("critical", "{} {} SCALP: {}".format(d_emoji, tag, call.get("option")),
+                    "{}\n⏳ expires {} ({}) | Lot ₹{:,} | Spread {}%".format(
+                        line, call.get("expires_at"), hold_lbl, call.get("lot_cost") or 0,
+                        call.get("spread_pct") or 0))
         else:
             # Same call still active → trailing watch
             prem = call.get("premium")
@@ -1738,14 +1754,22 @@ def alert_scheduler():
                         up = ema["signal"] == "EMA_BUY"
                         d_emoji = "🟢" if up else "🔴"
                         dir_txt = "BUY (CE)" if up else "SELL (PE)"
+                        opt = _sc.optionize("nifty", "LONG" if up else "SHORT",
+                                            ema.get("entry"), ema.get("stop"), ema.get("target"))
                         body = (
                             f"{ema.get('reason', '')}\n"
                             f"🎯 Entry: ₹{ema.get('entry'):,.2f} (spot)\n"
                             f"🛑 Stop Loss: ₹{ema.get('stop'):,.2f}\n"
                             f"💹 Target: ₹{ema.get('target'):,.2f} (R:R {ema.get('rr', 2):.1f})\n"
-                            f"📏 ATR(14): {ema.get('atr', 0):.1f} | EMA9: {ema.get('ema9')} vs EMA21: {ema.get('ema21')}\n"
-                            f"⏳ Exit: {ema.get('exit_rule', '')}"
+                            f"📏 ATR(14): {ema.get('atr', 0):.1f} | EMA9: {ema.get('ema9')} vs EMA21: {ema.get('ema21')}"
                         )
+                        if opt:
+                            body += (
+                                f"\n\n🎯 OPTION: {opt['option']} (Δ {opt['delta']})"
+                                f"\n   Entry ₹{opt['entry']} · Stop ₹{opt['stop']} · Target ₹{opt['target']}"
+                                f"\n   Lot ₹{opt['lot_cost']:,} · Expiry {opt['expiry']}"
+                            )
+                        body += f"\n⏳ Exit: {ema.get('exit_rule', '')}"
                         _add_alert("critical", f"📈 EMA {dir_txt}: NIFTY", body)
                         try:
                             s_ref = get_signal()
@@ -1763,12 +1787,22 @@ def alert_scheduler():
                         up = tr["signal"] == "GOLDEN_CROSS"
                         d_emoji = "🟢" if up else "🔴"
                         dir_txt = "GOLDEN CROSS (trend UP)" if up else "DEATH CROSS (trend DOWN)"
-                        _add_alert("critical", f"📊 20/50 {dir_txt}: NIFTY",
+                        opt = _sc.optionize("nifty", "LONG" if up else "SHORT",
+                                            tr.get("entry"), tr.get("stop"), tr.get("target"))
+                        body = (
                             f"{tr.get('reason', '')}\n"
                             f"🎯 Entry: ₹{tr.get('entry'):,.2f}\n"
                             f"🛑 Stop Loss: ₹{tr.get('stop'):,.2f}\n"
-                            f"💹 Target: ₹{tr.get('target'):,.2f} (R:R {tr.get('rr', 2):.1f})\n"
-                            f"⏳ Exit: {tr.get('exit_rule', '')}")
+                            f"💹 Target: ₹{tr.get('target'):,.2f} (R:R {tr.get('rr', 2):.1f})"
+                        )
+                        if opt:
+                            body += (
+                                f"\n\n🎯 OPTION: {opt['option']} (Δ {opt['delta']})"
+                                f"\n   Entry ₹{opt['entry']} · Stop ₹{opt['stop']} · Target ₹{opt['target']}"
+                                f"\n   Lot ₹{opt['lot_cost']:,} · Expiry {opt['expiry']}"
+                            )
+                        body += f"\n⏳ Exit: {tr.get('exit_rule', '')}"
+                        _add_alert("critical", f"📊 20/50 {dir_txt}: NIFTY", body)
                     # 20 EMA reclaim (15m) → entry-zone alert
                     e20 = intra.get("ema20") or {}
                     if e20.get("signal") in ("RECLAIM", "LOSS") and e20["signal"] != last_ema20_signal:
@@ -1776,12 +1810,22 @@ def alert_scheduler():
                         up = e20["signal"] == "RECLAIM"
                         d_emoji = "🟢" if up else "🔴"
                         dir_txt = "20 EMA RECLAIM (bullish)" if up else "20 EMA LOSS (bearish)"
-                        _add_alert("critical", f"📈 {dir_txt}: NIFTY",
+                        opt = _sc.optionize("nifty", "LONG" if up else "SHORT",
+                                            e20.get("entry"), e20.get("stop"), e20.get("target"))
+                        body = (
                             f"{e20.get('reason', '')}\n"
                             f"🎯 Entry: ₹{e20.get('entry'):,.2f}\n"
                             f"🛑 Stop Loss: ₹{e20.get('stop'):,.2f}\n"
-                            f"💹 Target: ₹{e20.get('target'):,.2f} (R:R {e20.get('rr', 2):.1f})\n"
-                            f"⏳ Exit: {e20.get('exit_rule', '')}")
+                            f"💹 Target: ₹{e20.get('target'):,.2f} (R:R {e20.get('rr', 2):.1f})"
+                        )
+                        if opt:
+                            body += (
+                                f"\n\n🎯 OPTION: {opt['option']} (Δ {opt['delta']})"
+                                f"\n   Entry ₹{opt['entry']} · Stop ₹{opt['stop']} · Target ₹{opt['target']}"
+                                f"\n   Lot ₹{opt['lot_cost']:,} · Expiry {opt['expiry']}"
+                            )
+                        body += f"\n⏳ Exit: {e20.get('exit_rule', '')}"
+                        _add_alert("critical", f"📈 {dir_txt}: NIFTY", body)
                 except Exception as e:
                     pass
 

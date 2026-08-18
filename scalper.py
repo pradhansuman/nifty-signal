@@ -305,6 +305,53 @@ def build_call(asset, spot, bias, expiry):
     return None
 
 
+def optionize(asset, direction, spot_entry, spot_stop, spot_target):
+    """Map a spot-level entry/stop/target (index points) onto the ATM option's
+    premium terms using its delta — turns spot cross/reclaim alerts into a
+    tradeable option call (strike + premium entry/stop/target + lot cost)."""
+    if asset not in ("nifty", "bnf") or not spot_entry:
+        return None
+    try:
+        ch = chain_table.get_chain(asset=asset)
+        rows = ch.get("rows") or []
+        spot = spot_entry or ch.get("chain_spot")
+        if not rows or not spot:
+            return None
+        atm = ch.get("atm") or min(rows, key=lambda r: abs((r.get("strike") or 0) - spot))["strike"]
+        row = next((r for r in rows if r.get("strike") == atm), None)
+        if not row:
+            return None
+        side = "CE" if direction == "LONG" else "PE"
+        ltp = row.get("ce_ltp" if side == "CE" else "pe_ltp")
+        delta = row.get("ce_delta" if side == "CE" else "pe_delta")
+        ask = row.get("ce_ask" if side == "CE" else "pe_ask")
+        if ltp is None:
+            return None
+        ltp = float(ltp)
+        d = abs(float(delta)) if delta is not None else 0.5  # ATM ~0.5 fallback
+        loss_spot = abs(spot_entry - spot_stop)
+        gain_spot = abs(spot_target - spot_entry)
+        stop_prem = ltp - loss_spot * d
+        target_prem = ltp + gain_spot * d
+        if stop_prem <= 0:
+            stop_prem = round(ltp * 0.5, 2)
+        lot = ASSETS[asset]["lot"]
+        return {
+            "option": "Buy {:,} {}".format(int(atm), side),
+            "strike": int(atm),
+            "side": side,
+            "entry": round(ltp, 2),
+            "stop": round(stop_prem, 2),
+            "target": round(target_prem, 2),
+            "delta": round(d, 2),
+            "ask": round(float(ask), 2) if ask else round(ltp, 2),
+            "lot_cost": round(ltp * lot, 0),
+            "expiry": ch.get("expiry"),
+        }
+    except Exception:
+        return None
+
+
 def _funding_gate(asset, bias, funding, gate=0.0005):
     """BTC funding-rate gate: block the side that pays carry. Returns
     (bias, block_text). Fail-open (no block) for non-BTC or missing funding."""

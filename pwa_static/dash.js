@@ -719,6 +719,25 @@ async function fetchExcursion() {
   }
 }
 
+async function fetchRisk() {
+  const set = (id, txt, color) => { const e = document.getElementById(id); if (e) { e.textContent = txt; if (color) e.style.color = color; } };
+  try {
+    const resp = await fetch('/api/risk');
+    const d = await resp.json();
+    const det = d.details || {};
+    set('riskNet', (det.net_rs != null && det.net_rs >= 0 ? '+' : '') + (det.net_rs ?? '--'));
+    set('riskTrades', (det.trades ?? '--') + '/' + (det.max_trades_day ?? '--'));
+    set('riskConsec', (det.consecutive_losses ?? '--') + '/' + (det.max_consecutive_losses ?? '--'));
+    const st = document.getElementById('riskStatus');
+    if (st) {
+      if (d.ok) { st.textContent = '✅ OK'; st.style.color = 'var(--green)'; }
+      else { st.textContent = '⛔ ' + (d.blocks || []).join(', '); st.style.color = 'var(--red)'; }
+    }
+  } catch(e) {
+    set('riskNet', 'N/A'); set('riskTrades', 'N/A'); set('riskConsec', 'N/A');
+  }
+}
+
 async function fetchAlgoStatus() {
   try {
     const resp = await fetch('/api/algo/status');
@@ -2015,12 +2034,14 @@ fetchORB();
 fetchIntraday();
 fetchRegime();
 fetchTradeGate();
+fetchRisk();
 fetchExcursion();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchScalper, 30000);
 setInterval(fetchRegime, 60000);
 setInterval(fetchTradeGate, 60000);
+setInterval(fetchRisk, 60000);
 setInterval(fetchExcursion, 60000);
 setInterval(() => { fetchAssetScalper('bnf', 'bnf'); fetchAssetScalper('sensex', 'sx'); fetchAssetScalper('btc', 'btc'); }, 30000);
 setInterval(refreshStrategies, 120000);

@@ -56,8 +56,8 @@ class TradeGateTest(unittest.TestCase):
 
     def test_steps_length(self):
         g = trade_gate.trade_gate(**_base())
-        # 12 pre-trade steps
-        self.assertEqual(len(g["steps"]), 12)
+        # 13 pre-trade steps (12 + day-level RISK LIMITS)
+        self.assertEqual(len(g["steps"]), 13)
 
 
 if __name__ == "__main__":

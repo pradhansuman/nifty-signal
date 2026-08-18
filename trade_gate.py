@@ -20,9 +20,10 @@ from __future__ import annotations
 import math
 
 from cost_model import round_trip_cost, cost_pct
+from risk_engine import check_limits as risk_check_limits
 
 
-def trade_gate(signal=None, regime=None, scalper=None, intraday=None):
+def trade_gate(signal=None, regime=None, scalper=None, intraday=None, trades=None):
     """
     signal:   get_signal() dict        (spot, ema_200, distance_pct, expected_move_1sd,
                                          contrarian_signal, atm_iv, ...)
@@ -156,6 +157,18 @@ def trade_gate(signal=None, regime=None, scalper=None, intraday=None):
             f"R:R {rr:.1f} (stop {stop:,.0f} / target {tgt:,.0f})")
     else:
         add("RISK CHECK", "warn", "no explicit stop/target — size for 1×ATR stop, 2:1")
+
+    # ── 11b. RISK LIMITS (day-level) ──
+    rl = risk_check_limits(trades or [])
+    if not rl["ok"]:
+        labels = {"max_loss_day": "max ₹ loss/day hit",
+                  "max_trades_day": "max trades/day reached",
+                  "consecutive_losses": "consecutive-loss stop"}
+        add("RISK LIMITS", "fail", " · ".join(labels.get(b, b) for b in rl["blocks"]))
+    else:
+        d = rl["details"]
+        add("RISK LIMITS", "pass",
+            f"net ₹{d['net_rs']:,.0f} · {d['trades']} trades · {d['consecutive_losses']} consec losses")
 
     # ── 12. EXECUTION COST ──
     lot = {"nifty": 65, "bnf": 15}.get(scalper.get("asset") or signal.get("asset") or "nifty", 0)

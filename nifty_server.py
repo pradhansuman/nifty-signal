@@ -33,6 +33,7 @@ from trade_gate import trade_gate
 import upstox_rt
 import option_recorder
 import cost_model
+import risk_engine
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
@@ -693,6 +694,14 @@ def api_regime():
     return jsonify(_clean_nan(_regime_cache["data"]))
 
 
+@app.route("/api/risk")
+def api_risk():
+    """Day-level risk engine status — loss/trades/consecutive-loss + sizing."""
+    resolved = [c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
+    rl = risk_engine.check_limits(resolved)
+    return jsonify(_clean_nan(rl))
+
+
 @app.route("/api/trade-gate")
 def api_trade_gate():
     """Unified pre-trade checklist → TRADE / NO TRADE with step-by-step verdict."""
@@ -713,7 +722,8 @@ def api_trade_gate():
             pass
         reg = session_regime(s.get("adx"), s.get("di_plus"), s.get("di_minus"),
                              s.get("vix"), s.get("spot"), s.get("ema_200"), vwap=vwap)
-        gate = trade_gate(signal=s, regime=reg, scalper=sc, intraday=intra)
+        gate = trade_gate(signal=s, regime=reg, scalper=sc, intraday=intra,
+                         trades=[c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")])
         gate["regime"] = reg["regime"]
         gate["scalper_signal"] = sc.get("signal", "")
         gate["nifty_signal"] = s.get("signal", "")

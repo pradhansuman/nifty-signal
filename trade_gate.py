@@ -132,7 +132,23 @@ def trade_gate(signal=None, regime=None, scalper=None, intraday=None, trades=Non
         add("OPTIONS FILTER", "warn", "no PCR/IV — chain not loaded (token?)")
 
     # ── 9. LIQUIDITY CHECK ──
-    add("LIQUIDITY CHECK", "warn", "verify bid-ask spread < 1 tick & OI > 1k lots manually")
+    call_lq = scalper.get("call") if isinstance(scalper.get("call"), dict) else {}
+    oi = call_lq.get("oi")
+    spct = call_lq.get("spread_pct")
+    if oi is not None and spct is not None:
+        oi_ok = oi >= 500
+        sp_ok = spct <= 1.5
+        if oi_ok and sp_ok:
+            add("LIQUIDITY CHECK", "pass", f"OI {oi:,.0f} lots · spread {spct:.1f}% — liquid")
+        else:
+            issues = []
+            if not oi_ok:
+                issues.append(f"OI {oi:,.0f} < 500 lots")
+            if not sp_ok:
+                issues.append(f"spread {spct:.1f}% > 1.5%")
+            add("LIQUIDITY CHECK", "warn", "thin — " + " · ".join(issues))
+    else:
+        add("LIQUIDITY CHECK", "warn", "no OI/spread from chain — verify manually")
 
     # ── 10. EXPECTED VALUE ──
     ev = signal.get("expected_move_1sd")

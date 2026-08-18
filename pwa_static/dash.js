@@ -738,6 +738,37 @@ async function fetchRisk() {
   }
 }
 
+async function fetchTicker() {
+  const track = document.getElementById('tickerTrack');
+  if (!track) return;
+  const fetchJ = (u) => fetch(u).then(r => r.json()).catch(() => ({}));
+  try {
+    const [nifty, bnf, sensex, btc] = await Promise.all([
+      fetchJ('/api/signal'), fetchJ('/api/banknifty'), fetchJ('/api/sensex'), fetchJ('/api/btc'),
+    ]);
+    const items = [
+      { label: 'NIFTY 50', val: nifty.spot, chg: nifty.change_pct, sym: '₹' },
+      { label: 'BANK NIFTY', val: bnf.spot, chg: bnf.change_pct, sym: '₹' },
+      { label: 'SENSEX', val: sensex.spot, chg: sensex.change_pct, sym: '₹' },
+      { label: 'BITCOIN', val: btc.spot, chg: btc.change_pct, sym: '$' },
+    ];
+    let html = '';
+    for (const it of items) {
+      if (it.val == null || it.val === undefined) continue;
+      const num = Number(it.val);
+      const chgN = (it.chg == null || it.chg === undefined) ? null : Number(it.chg);
+      const dir = (chgN == null) ? '' : (chgN >= 0 ? 'up' : 'down');
+      const arrow = (chgN == null) ? '' : (chgN >= 0 ? '▲' : '▼');
+      const chgTxt = (chgN == null) ? '' : ' ' + arrow + ' ' + Math.abs(chgN).toFixed(2) + '%';
+      html += '<span class="ticker-item"><b>' + it.label + '</b> ' + it.sym + num.toLocaleString('en-IN') + '<span class="' + dir + '">' + chgTxt + '</span></span>';
+    }
+    if (!html) { track.innerHTML = '<span class="ticker-item">Waiting for prices…</span>'; return; }
+    track.innerHTML = html.repeat(6);  // duplicate for seamless marquee loop
+  } catch(e) {
+    track.innerHTML = '<span class="ticker-item">Ticker unavailable</span>';
+  }
+}
+
 async function fetchAlgoStatus() {
   try {
     const resp = await fetch('/api/algo/status');
@@ -2035,6 +2066,7 @@ fetchBtc();
 fetchBnf();
 fetchJournal();
 fetchAlerts();
+fetchTicker();
 fetchTunnelURL();
 fetchORB();
 fetchIntraday();
@@ -2082,6 +2114,7 @@ setInterval(() => fetchBacktest('bnf'), 3600000);
 setInterval(fetchBnf, 60000);
 setInterval(fetchJournal, 120000);
 setInterval(fetchAlerts, 30000);
+setInterval(fetchTicker, 30000);
 setInterval(fetchORB, 60000);
 setInterval(fetchIntraday, 60000);
 setInterval(fetchAlgoStatus, 30000);

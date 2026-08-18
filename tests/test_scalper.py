@@ -227,6 +227,18 @@ class ScalperBuildCallTest(unittest.TestCase):
         call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
         self.assertEqual(call["strike"], 24350)
 
+    def test_liquidity_skips_dead_strike(self):
+        # dead strike (OI 50) has tighter spread; liquid strike (OI 5000) wider.
+        # Liquidity filter must drop the dead strike → pick the liquid one.
+        r_dead = chain_row(24350, 87.5, bid=87.2, ask=87.8, delta=0.5)      # ~0.7% spread
+        r_dead["ce_oi"] = 50
+        r_liquid = chain_row(24300, 95.0, bid=93.0, ask=95.0, delta=0.55)   # ~2.1% spread
+        r_liquid["ce_oi"] = 5000
+        scalper.chain_table.get_chain.return_value = mock_chain([r_dead, r_liquid])
+        call = scalper.build_call("nifty", 24350, "LONG", "2026-08-18")
+        self.assertEqual(call["strike"], 24300)  # liquid beats tighter-spread dead strike
+        self.assertEqual(call["oi"], 5000)
+
     def test_spot_call_btc(self):
         # BTC is now options-first (Delta), but falls back to a spot call when
         # the chain is unavailable/empty.

@@ -59,6 +59,23 @@ class TradeGateTest(unittest.TestCase):
         # 13 pre-trade steps (12 + day-level RISK LIMITS)
         self.assertEqual(len(g["steps"]), 13)
 
+    def test_liquidity_pass_when_liquid(self):
+        b = _base()
+        b["scalper"]["call"]["oi"] = 8000
+        b["scalper"]["call"]["spread_pct"] = 0.3
+        g = trade_gate.trade_gate(**b)
+        liq = [s for s in g["steps"] if s["step"] == "LIQUIDITY CHECK"][0]
+        self.assertEqual(liq["status"], "pass")
+
+    def test_liquidity_warn_when_thin(self):
+        b = _base()
+        b["scalper"]["call"]["oi"] = 100
+        b["scalper"]["call"]["spread_pct"] = 3.0
+        g = trade_gate.trade_gate(**b)
+        liq = [s for s in g["steps"] if s["step"] == "LIQUIDITY CHECK"][0]
+        self.assertEqual(liq["status"], "warn")
+        self.assertIn("thin", liq["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

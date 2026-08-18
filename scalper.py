@@ -80,6 +80,7 @@ def _load_tuning():
         "vix_min": float(os.environ.get("SCALP_VIX_MIN", "12")),
         "vix_max": float(os.environ.get("SCALP_VIX_MAX", "18")),
         "theta_max": float(os.environ.get("SCALP_THETA_MAX", "0.5")),  # % of premium per 10-min hold
+        "oi_min": float(os.environ.get("SCALP_OI_MIN", "500")),  # min option OI (lots) for a tradeable strike
         "funding_gate": float(os.environ.get("SCALP_FUNDING_GATE", "0.0005")),  # BTC: block the crowded carry side (0.05%/8h)
         "window_open": False,  # override: ignore lunch-chop window block
         "regime_off": False,    # override: allow counter-trend scalps (chatty mode)
@@ -198,7 +199,7 @@ def _spot_call(asset, spot, bias):
         "entry": round(spot, 2), "buy_ask": round(spot, 2),
         "target": round(target, 2), "stop": round(stop, 2),
         "lot_cost": 0, "spread": 0.0, "spread_pct": 0.0, "half_spread": 0.0,
-        "delta": None, "theta": None,
+        "delta": None, "theta": None, "oi": None, "volume": None,
         "target_pts": round(spot * tp, 0), "stop_pts": round(spot * tp, 0),
     }
     if asset == "btc":
@@ -237,9 +238,13 @@ def build_call(asset, spot, bias, expiry):
             if bias == "LONG":
                 ltp, bid, ask, delta = r.get("ce_ltp"), r.get("ce_bid"), r.get("ce_ask"), r.get("ce_delta")
                 theta = r.get("ce_theta")
+                oi = r.get("ce_oi")
+                vol = r.get("ce_vol")
             else:
                 ltp, bid, ask, delta = r.get("pe_ltp"), r.get("pe_bid"), r.get("pe_ask"), r.get("pe_delta")
                 theta = r.get("pe_theta")
+                oi = r.get("pe_oi")
+                vol = r.get("pe_vol")
             if not ltp or ltp <= 0:
                 continue
             if delta is not None and not (0.40 <= abs(delta) <= 0.80):
@@ -253,9 +258,18 @@ def build_call(asset, spot, bias, expiry):
                 "spread_pct": spread / float(ltp) * 100,
                 "delta": float(delta) if delta is not None else None,
                 "theta": float(theta) if theta is not None else None,
+                "oi": float(oi) if oi else 0,
+                "volume": float(vol) if vol else 0,
             })
         if not cands:
             return None
+        # ── Liquidity: prefer strikes with real OI (volume confirms participation).
+        #    Skip dead strikes; if the whole chain is thin, fall back to spread-only
+        #    selection (the spread filter below still applies). ──
+        _oi_min = _load_tuning().get("oi_min", 500)
+        _liquid = [c for c in cands if c["oi"] >= _oi_min]
+        if _liquid:
+            cands = _liquid
         cands.sort(key=lambda c: c["spread_pct"])
         best = cands[0]
         if best["spread_pct"] > 3.0:
@@ -295,6 +309,8 @@ def build_call(asset, spot, bias, expiry):
             "half_spread": round(half_spread, 2),
             "delta": best["delta"],
             "theta": best["theta"],
+            "oi": best["oi"],
+            "volume": best["volume"],
             "target_pts": round(spot * 0.0015, 0),
             "stop_pts": round(spot * 0.0009, 0),
         }

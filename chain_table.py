@@ -28,9 +28,9 @@ def _token():
 
 def _next_tuesday():
     today = datetime.now()
+    if today.weekday() == 1:  # Tuesday is the weekly expiry day → this week's chain
+        return today.strftime("%Y-%m-%d")
     days = (1 - today.weekday()) % 7
-    if days == 0:
-        days = 7
     return (today + timedelta(days=days)).strftime("%Y-%m-%d")
 
 

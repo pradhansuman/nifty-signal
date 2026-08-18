@@ -15,8 +15,6 @@ _cache = {"ts": 0, "data": None}
 def _next_weekday(day_of_week):
     today = datetime.now()
     days = (day_of_week - today.weekday()) % 7
-    if days == 0:
-        days = 7
     return today + timedelta(days=days)
 
 

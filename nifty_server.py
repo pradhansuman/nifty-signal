@@ -29,6 +29,7 @@ from weekly_review import get_weekly_report, build_weekly_report
 from oi_buildup import get_oi_buildup, take_snapshot
 from gap_go import compute_gap_signal
 from regime import session_regime
+from trade_gate import trade_gate
 
 app = Flask(__name__, static_folder="pwa_static", static_url_path="")
 
@@ -666,6 +667,8 @@ def api_intraday():
 
 _regime_cache = {"ts": 0, "data": None}
 
+_trade_gate_cache = {"ts": 0, "data": None}
+
 
 @app.route("/api/regime")
 def api_regime():
@@ -685,6 +688,35 @@ def api_regime():
         _regime_cache["data"] = r
         _regime_cache["ts"] = _t.time()
     return jsonify(_clean_nan(_regime_cache["data"]))
+
+
+@app.route("/api/trade-gate")
+def api_trade_gate():
+    """Unified pre-trade checklist → TRADE / NO TRADE with step-by-step verdict."""
+    import time as _t
+    if _trade_gate_cache["data"] is None or (_t.time() - _trade_gate_cache["ts"]) > 60:
+        s = get_signal()
+        try:
+            import scalper as _sc
+            sc = _sc.main("nifty")
+        except Exception:
+            sc = {}
+        vwap = None
+        intra = {}
+        try:
+            intra = run_script("intraday_signals.py")
+            vwap = (intra.get("vwap") or {}).get("vwap")
+        except Exception:
+            pass
+        reg = session_regime(s.get("adx"), s.get("di_plus"), s.get("di_minus"),
+                             s.get("vix"), s.get("spot"), s.get("ema_200"), vwap=vwap)
+        gate = trade_gate(signal=s, regime=reg, scalper=sc, intraday=intra)
+        gate["regime"] = reg["regime"]
+        gate["scalper_signal"] = sc.get("signal", "")
+        gate["nifty_signal"] = s.get("signal", "")
+        _trade_gate_cache["data"] = gate
+        _trade_gate_cache["ts"] = _t.time()
+    return jsonify(_clean_nan(_trade_gate_cache["data"]))
 
 
 _scalper_cache = {"ts": 0, "data": None}

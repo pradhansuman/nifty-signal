@@ -322,6 +322,13 @@
   <div style="font-size:10px;color:var(--text-dim);margin-top:6px" id="regimeReason"></div>
 </div>
 
+<div class="card" id="tradeGateCard" style="border-color:#00e67633">
+  <div class="card-header"><span class="label">🚦 Trade Gate</span><span class="value" id="tradeGateVerdict">--</span></div>
+  <div id="tradeGateBanner" style="font-size:16px;font-weight:800;padding:10px;border-radius:10px;text-align:center;background:#141b22">Loading...</div>
+  <div id="tradeGateReason" style="margin-top:6px;font-size:12px;color:var(--text-dim)"></div>
+  <div id="tradeGateSteps" style="margin-top:8px;font-size:11px;line-height:1.6"></div>
+</div>
+
 <div class="card">
   <div class="card-header"><span class="label" data-i18n="pnl-history">📅 Dry-Run P&amp;L by Day</span><span class="value" id="scalperPnlHistUpd">--</span></div>
   <div class="strat-grid" id="scalperPnlHistory"><div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">Loading...</div></div>
@@ -1218,6 +1225,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260818a"></script>
+<script src="/dash.js?v=20260818b"></script>
 </body>
 </html>

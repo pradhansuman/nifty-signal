@@ -652,7 +652,6 @@ async function fetchIntraday() {
 }
 
 async function fetchRegime() {
-  const set = (id, txt, color) => { const e = document.getElementById(id); if (e) { e.textContent = txt; if (color) e.style.color = color; } };
   try {
     const resp = await fetch('/api/regime');
     const d = await resp.json();
@@ -671,6 +670,35 @@ async function fetchRegime() {
     if (upd) upd.textContent = (d.confidence || '') + ' · ' + (d.signal || '');
   } catch(e) {
     const b = document.getElementById('regimeBanner');
+    if (b) { b.textContent = 'N/A'; b.style.color = 'var(--yellow)'; }
+  }
+}
+
+async function fetchTradeGate() {
+  const ICON = { pass: '✅', fail: '❌', warn: '⚠️', 'n/a': '·' };
+  try {
+    const resp = await fetch('/api/trade-gate');
+    const d = await resp.json();
+    const banner = document.getElementById('tradeGateBanner');
+    if (!banner) return;
+    const isTrade = d.verdict === 'TRADE';
+    banner.textContent = (isTrade ? '✅ TRADE' : '⛔ NO TRADE') + (d.direction === 'bullish' ? ' · BULL' : d.direction === 'bearish' ? ' · BEAR' : '');
+    banner.style.color = isTrade ? '#00e676' : '#ff5252';
+    banner.style.background = (isTrade ? '#00e676' : '#ff5252') + '22';
+    const v = document.getElementById('tradeGateVerdict');
+    if (v) v.textContent = (d.confidence || '') + ' · ' + (d.regime || '');
+    const r = document.getElementById('tradeGateReason');
+    if (r) r.textContent = d.reason || '';
+    const steps = document.getElementById('tradeGateSteps');
+    if (steps) {
+      steps.innerHTML = (d.steps || []).map(s =>
+        `<div style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--bg)">` +
+        `<span>${ICON[s.status] || '·'} ${s.step}</span>` +
+        `<span style="color:var(--text-dim);text-align:right">${s.detail}</span></div>`
+      ).join('');
+    }
+  } catch(e) {
+    const b = document.getElementById('tradeGateBanner');
     if (b) { b.textContent = 'N/A'; b.style.color = 'var(--yellow)'; }
   }
 }
@@ -1970,10 +1998,12 @@ fetchTunnelURL();
 fetchORB();
 fetchIntraday();
 fetchRegime();
+fetchTradeGate();
 fetchAlgoStatus();
 setInterval(fetchSignal, 60000);
 setInterval(fetchScalper, 30000);
 setInterval(fetchRegime, 60000);
+setInterval(fetchTradeGate, 60000);
 setInterval(() => { fetchAssetScalper('bnf', 'bnf'); fetchAssetScalper('sensex', 'sx'); fetchAssetScalper('btc', 'btc'); }, 30000);
 setInterval(refreshStrategies, 120000);
 setInterval(refreshBtcStrategies, 60000);

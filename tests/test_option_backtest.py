@@ -139,6 +139,27 @@ class FilterTest(unittest.TestCase):
         self.assertGreater(rv, 1.0)
 
 
+    def test_select_strike_skips_when_no_delta_eligible(self):
+        # all deltas outside 0.40–0.80 → must NOT fall back to nearest strike
+        minute = pd.Timestamp("2026-08-18 10:00")
+        lookup = {minute: {
+            24200: {"strike": 24200, "spot": 24200, "ce_delta": 0.95},
+            24250: {"strike": 24250, "spot": 24200, "ce_delta": 0.15},
+        }}
+        strike, row = ob._select_strike(lookup, minute, 1, 24200.0, 0.40, 0.80)
+        self.assertIsNone(strike)
+        self.assertIsNone(row)
+
+    def test_select_strike_picks_delta_eligible(self):
+        minute = pd.Timestamp("2026-08-18 10:00")
+        lookup = {minute: {
+            24200: {"strike": 24200, "spot": 24200, "ce_delta": 0.55},
+            24250: {"strike": 24250, "spot": 24200, "ce_delta": 0.30},
+        }}
+        strike, row = ob._select_strike(lookup, minute, 1, 24200.0, 0.40, 0.80)
+        self.assertEqual(strike, 24200)
+
+
 class ExpectancyTest(unittest.TestCase):
     def test_expectancy_math(self):
         trades = [

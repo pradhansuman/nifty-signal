@@ -40,6 +40,50 @@ CHAIN_ASSET = {"nifty": "nifty", "bnf": "banknifty"}
 _lock = threading.Lock()
 _thread = None
 
+# ── Recorder health / error tracking (persisted for gap detection) ──
+_stats_lock = threading.Lock()
+_stats = {}
+
+
+def _stats_file():
+    # Computed at call time so tests can redirect BASE.
+    return os.path.join(BASE, "_recorder_stats.json")
+
+
+def _load_stats():
+    global _stats
+    try:
+        with open(_stats_file()) as f:
+            _stats = json.load(f)
+    except Exception:
+        _stats = {}
+
+
+def _save_stats():
+    try:
+        with open(_stats_file(), "w") as f:
+            json.dump(_stats, f, default=str)
+    except Exception:
+        pass
+
+
+def _mark_ok(asset, rows):
+    with _stats_lock:
+        st = _stats.setdefault(asset, {})
+        st["ok"] = st.get("ok", 0) + 1
+        st["rows"] = st.get("rows", 0) + rows
+        st["last_ok_ts"] = datetime.now(IST).strftime("%Y-%m-%dT%H:%M:%S")
+        _save_stats()
+
+
+def _mark_error(asset, msg):
+    with _stats_lock:
+        st = _stats.setdefault(asset, {})
+        st["errors"] = st.get("errors", 0) + 1
+        st["last_error"] = str(msg)[:200]
+        st["last_error_ts"] = datetime.now(IST).strftime("%Y-%m-%dT%H:%M:%S")
+        _save_stats()
+
 
 def _is_market_open(now=None):
     now = now or datetime.now(IST)
@@ -82,17 +126,31 @@ def snapshot(asset="nifty"):
 
 
 def record(asset="nifty"):
-    """Snapshot + append to today's JSONL (only during market hours)."""
+    """Snapshot + append to today's JSONL (only during market hours).
+
+    Returns rows written (0 if outside hours, empty chain, or on error).
+    Errors and success timestamps are tracked for gap detection (see health()).
+    """
     if not _is_market_open():
         return 0
-    recs = snapshot(asset)
-    if not recs:
+    try:
+        recs = snapshot(asset)
+    except Exception as e:
+        _mark_error(asset, e)
         return 0
-    day = datetime.now(IST).strftime("%Y-%m-%d")
-    with _lock:
-        with open(_path(asset, day), "a") as f:
-            for r in recs:
-                f.write(json.dumps(r, default=str) + "\n")
+    if not recs:
+        _mark_error(asset, "empty chain snapshot (no rows)")
+        return 0
+    try:
+        day = datetime.now(IST).strftime("%Y-%m-%d")
+        with _lock:
+            with open(_path(asset, day), "a") as f:
+                for r in recs:
+                    f.write(json.dumps(r, default=str) + "\n")
+    except Exception as e:
+        _mark_error(asset, e)
+        return 0
+    _mark_ok(asset, len(recs))
     return len(recs)
 
 
@@ -101,18 +159,16 @@ def _poller():
         try:
             if _is_market_open():
                 for a in ASSETS:
-                    try:
-                        record(a)
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    record(a)  # record() tracks its own errors
+        except Exception as e:
+            _mark_error("poller", e)
         time.sleep(INTERVAL_SECONDS)
 
 
 def start():
     """Start the background recorder (idempotent)."""
     global _thread
+    _load_stats()
     if _thread is None or not _thread.is_alive():
         _thread = threading.Thread(target=_poller, daemon=True)
         _thread.start()
@@ -131,6 +187,36 @@ def stats():
                 p = os.path.join(d, f)
                 n = sum(1 for _ in open(p)) if f.endswith(".jsonl") else 0
                 out[a][f.replace(".jsonl", "")] = n
+    return out
+
+
+def health():
+    """Recorder reliability: ok/error counts, last-success/error timestamps, and
+    a market-open gap flag (is the recorder falling behind while it should be
+    collecting?)."""
+    _load_stats()
+    now = datetime.now(IST)
+    out = {}
+    for a in ASSETS:
+        st = _stats.get(a, {})
+        last_ok = st.get("last_ok_ts")
+        gap = False
+        if _is_market_open(now) and last_ok:
+            try:
+                age = (now - datetime.fromisoformat(last_ok).replace(tzinfo=IST)).total_seconds()
+                gap = age > INTERVAL_SECONDS * 3
+            except Exception:
+                gap = False
+        out[a] = {
+            "ok_snapshots": st.get("ok", 0),
+            "errors": st.get("errors", 0),
+            "rows": st.get("rows", 0),
+            "last_ok_ts": last_ok,
+            "last_error": st.get("last_error"),
+            "last_error_ts": st.get("last_error_ts"),
+            "gap_warning": gap,
+        }
+    out["as_of"] = now.strftime("%Y-%m-%dT%H:%M:%S")
     return out
 
 

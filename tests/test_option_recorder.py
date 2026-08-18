@@ -69,6 +69,24 @@ class OptionRecorderTest(unittest.TestCase):
         early = datetime.datetime(2026, 8, 24, 9, 0)  # before open
         self.assertFalse(orc._is_market_open(early))
 
+    def test_record_tracks_error_on_empty_snapshot(self):
+        orc._stats = {}
+        empty = {"error": None, "chain_spot": 24200.0, "expiry": "2026-08-25", "rows": []}
+        with mock.patch("chain_table.get_chain", return_value=empty):
+            with mock.patch.object(orc, "_is_market_open", return_value=True):
+                self.assertEqual(orc.record("nifty"), 0)
+        h = orc.health()
+        self.assertGreaterEqual(h["nifty"]["errors"], 1)
+
+    def test_record_tracks_ok_count(self):
+        orc._stats = {}
+        with mock.patch("chain_table.get_chain", return_value=self._fake_chain()):
+            with mock.patch.object(orc, "_is_market_open", return_value=True):
+                self.assertEqual(orc.record("nifty"), 2)
+        h = orc.health()
+        self.assertGreaterEqual(h["nifty"]["ok_snapshots"], 1)
+        self.assertGreaterEqual(h["nifty"]["rows"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()

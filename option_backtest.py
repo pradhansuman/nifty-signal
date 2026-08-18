@@ -159,9 +159,9 @@ def _select_strike(lookup, minute, side, spot, delta_lo, delta_hi):
         if delta_lo <= abs(float(d)) <= delta_hi:
             elig.append((strike, r))
     if not elig:
-        # fall back to nearest strike to spot
-        elig = sorted(rows.items(), key=lambda kv: abs(kv[0] - spot))[:1]
-        return elig[0] if elig else (None, None)
+        # No delta-eligible contract → skip the trade (respect the 0.40–0.80
+        # contract-selection rule). Do NOT fall back to nearest strike.
+        return None, None
     elig.sort(key=lambda kv: abs(kv[0] - spot))
     return elig[0][0], elig[0][1]
 
@@ -407,9 +407,9 @@ def main():
             print(f"  MFE avg ₹{e['mfe']} · MAE avg ₹{e['mae']} · R {e['r']} "
                   f"(favorable/adverse excursion)")
 
-    # ── 2. S/R proximity filter (OOS comparison) ──
+    # ── 2. S/R proximity filter (SIMPLE session floor-pivot R1/S1, OOS comparison) ──
     t_sr, _ = backtest(asset, filters={"sr": True})
-    print(f"\n+S/R proximity filter  (buffer ±{DEFAULTS['sr_buffer']} pts)")
+    print(f"\n+S/R proximity filter  (simple pivot R1/S1, buffer ±{DEFAULTS['sr_buffer']} pts)")
     _print("ALL", t_sr)
     _print("TEST (OOS)", _split(t_sr, "test"))
 
@@ -430,6 +430,12 @@ def main():
     for hm in (5, 10, 15, 20, 30):
         t_hm, _ = backtest(asset, params={"hold_min": hm})
         _print(f"hold {hm:>2}m", t_hm)
+
+    # ── 6. RVOL threshold sensitivity (OOS comparison — do NOT assume 1.0×) ──
+    print("\nRVOL threshold sensitivity (OOS only, no other filters):")
+    for rv_min in (0.5, 1.0, 1.5, 2.0):
+        t_rv2, _ = backtest(asset, filters={"rvol": True}, params={"rvol_min": rv_min})
+        _print(f"rvol_min {rv_min:>4}×", _split(t_rv2, "test"))
 
     print("=" * 100)
     print("NOTE: NET expectancy is after bid/ask spread + slippage + full cost model")

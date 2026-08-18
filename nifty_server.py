@@ -18,7 +18,7 @@ from tomorrow_outlook import get_outlook
 from btc_monitor import get_btc_signal
 from iv_rank import get_iv_rank
 from backtest import get_backtest
-from chain_table import get_chain
+from chain_table import get_chain, get_chain_age
 from telegram_alert import send_telegram, get_chat_id_from_updates, save_config, is_configured
 import telegram_alert
 from chart_data import get_chart_data
@@ -731,7 +731,8 @@ def api_trade_gate():
         reg = session_regime(s.get("adx"), s.get("di_plus"), s.get("di_minus"),
                              s.get("vix"), s.get("spot"), s.get("ema_200"), vwap=vwap)
         gate = trade_gate(signal=s, regime=reg, scalper=sc, intraday=intra,
-                         trades=[c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")])
+                         trades=[c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")],
+                         chain_age=get_chain_age("nifty"))
         gate["regime"] = reg["regime"]
         gate["scalper_signal"] = sc.get("signal", "")
         gate["nifty_signal"] = s.get("signal", "")

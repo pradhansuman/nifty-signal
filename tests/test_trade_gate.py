@@ -76,6 +76,26 @@ class TradeGateTest(unittest.TestCase):
         self.assertEqual(liq["status"], "warn")
         self.assertIn("thin", liq["detail"])
 
+    def test_data_quality_stale_chain_hard_blocks(self):
+        b = _base()
+        g = trade_gate.trade_gate(chain_age=400, **b)
+        self.assertEqual(g["verdict"], "NO TRADE")
+        self.assertIn("DATA QUALITY", g["hard_fails"])
+
+    def test_data_quality_fresh_passes(self):
+        b = _base()
+        g = trade_gate.trade_gate(chain_age=10, **b)
+        dq = [s for s in g["steps"] if s["step"] == "DATA QUALITY"][0]
+        self.assertEqual(dq["status"], "pass")
+
+    def test_data_quality_blocked_call_hard_blocks(self):
+        b = _base()
+        b["scalper"]["signal"] = "SCALP_LONG"
+        b["scalper"]["call"] = {"blocked": True, "block_reason": "spread too wide"}
+        g = trade_gate.trade_gate(**b)
+        self.assertEqual(g["verdict"], "NO TRADE")
+        self.assertIn("DATA QUALITY", g["hard_fails"])
+
 
 if __name__ == "__main__":
     unittest.main()

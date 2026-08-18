@@ -18,6 +18,14 @@ _cache = {"nifty": {"ts": 0, "data": None}, "banknifty": {"ts": 0, "data": None}
 from tomorrow_outlook import get_outlook
 
 
+def get_chain_age(asset="nifty"):
+    """Seconds since the chain cache was last refreshed (None if never)."""
+    c = _cache.get(asset)
+    if not c or not c.get("ts"):
+        return None
+    return time.time() - c["ts"]
+
+
 def _token():
     token = os.environ.get("UPSTOX_TOKEN", "")
     if not token:
@@ -158,9 +166,9 @@ def get_chain(force=False, strike_range=8, asset="nifty"):
         out["gift_trend"] = ol.get("indication")
     except Exception:
         pass
-
-        c["ts"] = now
+    c["ts"] = now
     c["data"] = out
+    out["cached_at"] = now
     try:
         with open(os.path.join(WORKSPACE, ".openclaw", "tmp", cfg["cache"]), "w") as f:
             json.dump(out, f)

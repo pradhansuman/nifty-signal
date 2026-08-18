@@ -22,14 +22,20 @@ import math
 from cost_model import round_trip_cost, cost_pct
 from risk_engine import check_limits as risk_check_limits
 
+# Maximum acceptable option-chain staleness before DATA QUALITY hard-fails.
+MAX_CHAIN_AGE = 300  # seconds (recorder snapshots every 60s; chain cache TTL 60s)
 
-def trade_gate(signal=None, regime=None, scalper=None, intraday=None, trades=None):
+
+def trade_gate(signal=None, regime=None, scalper=None, intraday=None, trades=None,
+               chain_age=None):
     """
     signal:   get_signal() dict        (spot, ema_200, distance_pct, expected_move_1sd,
                                          contrarian_signal, atm_iv, ...)
     regime:   session_regime() dict    (regime, direction, label, ...)
     scalper:  scalper.main("nifty") dict (score, window, bias, signal, call, adx, vix, ...)
     intraday: intraday_signals output  (ema, vwap, ...)
+    trades:   today's resolved scalp calls (for risk limits)
+    chain_age: seconds since the option chain was last refreshed (None = unknown)
 
     Returns {"verdict": "TRADE"|"NO_TRADE", "confidence": ..., "reason": ...,
              "steps": [{step, status, detail}, ...], "hard_fails": [...]}
@@ -53,14 +59,25 @@ def trade_gate(signal=None, regime=None, scalper=None, intraday=None, trades=Non
     else:
         add("MARKET DATA", "fail", "no spot / 200 EMA data")
 
-    # ── 2. DATA QUALITY ──
-    # We don't have a dedicated freshness check; use error-presence + plausibility.
+    # ── 2. DATA QUALITY (hard gate) ──
+    dq_fail = None
     if not have_data:
-        add("DATA QUALITY", "fail", "no data to validate")
+        dq_fail = "no spot / 200 EMA data"
     elif signal.get("signal") == "ERROR" or scalper.get("asset") == "error":
-        add("DATA QUALITY", "fail", "upstream returned an error")
+        dq_fail = "upstream returned an error"
+    elif chain_age is not None and chain_age > MAX_CHAIN_AGE:
+        dq_fail = "option chain stale ({:.0f}s old, max {}s)".format(chain_age, MAX_CHAIN_AGE)
     else:
-        add("DATA QUALITY", "warn", "no explicit freshness check — verify quote is live")
+        call = scalper.get("call")
+        if isinstance(call, dict) and call.get("blocked"):
+            dq_fail = "option chain blocked — {}".format(call.get("block_reason", ""))
+        elif scalper.get("signal", "").startswith("SCALP_") and not isinstance(call, dict):
+            dq_fail = "no option premium available from chain"
+    if dq_fail:
+        add("DATA QUALITY", "fail", dq_fail)
+    else:
+        age_txt = "chain {:.0f}s old".format(chain_age) if chain_age is not None else "freshness unknown"
+        add("DATA QUALITY", "pass", age_txt)
 
     # ── 3. MARKET REGIME ──
     reg = regime.get("regime", "")

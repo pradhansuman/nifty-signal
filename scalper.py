@@ -13,6 +13,7 @@ Output: JSON for GET /api/scalper (cached 30s server-side).
 import json
 import os
 import sys
+import time
 from datetime import datetime
 
 import numpy as np
@@ -381,11 +382,14 @@ def _funding_gate(asset, bias, funding, gate=0.0005):
 
 
 def main(asset="nifty"):
+    t0 = time.perf_counter()
     out = {"signal": "WAIT", "bias": "FLAT", "score": 0, "spot": None, "timestamp": _now(), "asset": asset}
     cfg = ASSETS[asset]
     df = get_bars(asset, period=cfg.get("period", "5d"), interval=cfg.get("interval", "5m"))
+    t1 = time.perf_counter()
     if df is None or len(df) < 40:
         out["reason"] = "Not enough bars yet (need 40)"
+        out["latency_ms"] = {"data": round((t1 - t0) * 1000, 1), "signal": 0, "decision": 0, "total": round((t1 - t0) * 1000, 1)}
         return out
 
     # Session split: indicators warm on 5 days of bars; VWAP/ORB/spot use today only
@@ -600,11 +604,26 @@ def main(asset="nifty"):
         block_txt = regime_block or trend_block or adx_block or vix_block or funding_block or window_block
         out["reason"] = "No scalp edge — score {:+d} (need ±{:.0f}). {}{}".format(
             score, score_min, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
+        t_flat = time.perf_counter()
+        out["latency_ms"] = {
+            "data": round((t1 - t0) * 1000, 1),
+            "signal": round((t_flat - t1) * 1000, 1),
+            "decision": 0,
+            "total": round((t_flat - t0) * 1000, 1),
+        }
         return out
 
     out["signal"] = "SCALP_LONG" if bias == "LONG" else "SCALP_SHORT"
     out["confidence"] = min(100, abs(score) * 14)
+    t2 = time.perf_counter()
     call = build_call(asset, spot, bias, out.get("expiry"))
+    t3 = time.perf_counter()
+    out["latency_ms"] = {
+        "data": round((t1 - t0) * 1000, 1),
+        "signal": round((t2 - t1) * 1000, 1),
+        "decision": round((t3 - t2) * 1000, 1),
+        "total": round((t3 - t0) * 1000, 1),
+    }
     # BTC options on Delta are often 5-7% spread → the honest filter blocks them.
     # Fall back to a spot-level BTC call rather than showing nothing.
     if asset == "btc" and (call is None or call.get("blocked")):

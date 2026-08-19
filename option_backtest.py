@@ -13,7 +13,7 @@ of a zero-cost spot-points proxy, it trades the REAL option contract with:
   - NET ₹ expectancy after ALL costs
 
 Data source (Option Recorder, Path A):
-  .openclaw/tmp/option_history/{asset}/{YYYY-MM-DD}.jsonl
+  data/option_history/{asset}/{YYYY-MM-DD}.jsonl
 
 Run:
   .openclaw/tmp/venv/bin/python3 option_backtest.py
@@ -32,9 +32,11 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from cost_model import round_trip_cost, cost_pct  # noqa: E402
+from option_recorder import BASE as DATA_ROOT  # noqa: E402
+
+import scalper_enhancements as enh  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-DATA_ROOT = os.path.join(HERE, ".openclaw", "tmp", "option_history")
 
 LOT = {"nifty": 65, "bnf": 15}
 
@@ -86,10 +88,20 @@ def load_chain(asset="nifty", expiry=None):
     df["minute"] = df["ts"].dt.floor("min")
     df["strike"] = pd.to_numeric(df["strike"], errors="coerce")
 
-    # Use the dominant expiry (avoids mixing contracts across a roll-over).
-    if expiry is None:
-        expiry = df["expiry"].value_counts().idxmax()
-    df = df[df["expiry"] == expiry].copy()
+    # Expiry selection — each trading day keeps ITS OWN dominant expiry (the
+    # live weekly chain actually traded that day). A single GLOBAL dominant
+    # expiry would silently discard every other week once the dataset spans
+    # multiple expiries (chain rolls at expiry day-change).
+    if expiry is not None:
+        # Explicit expiry → single-contract study (global filter, unchanged).
+        df = df[df["expiry"] == expiry].copy()
+    else:
+        day = df["ts"].dt.date
+        parts = []
+        for _d, grp in df.groupby(day, sort=True):
+            dom = grp["expiry"].value_counts().idxmax()
+            parts.append(grp[grp["expiry"] == dom])
+        df = pd.concat(parts).copy() if parts else df.iloc[0:0]
 
     df = df.drop_duplicates(subset=["minute", "strike"]).sort_values(["minute", "strike"])
     minutes = sorted(df["minute"].unique().tolist())
@@ -279,6 +291,7 @@ def backtest(asset="nifty", expiry=None, filters=None, params=None):
     filters: dict of optional gates {"sr": bool, "rvol": bool}.
     Returns (trades, meta) where meta carries diagnostics."""
     p = dict(DEFAULTS)
+    p.update(enh.ENH_DEFAULTS)          # configurable enhancement thresholds
     if params:
         p.update(params)
     p.setdefault("lot", LOT.get(asset, 65))
@@ -288,6 +301,9 @@ def backtest(asset="nifty", expiry=None, filters=None, params=None):
     if df is None or len(minutes) < 20:
         return [], {"error": f"no recorded option data for {asset}"}
     df5m = build_5m(spot_1m)
+    from scalper_backtest import precompute as _precompute
+    P = _precompute(df5m)
+    enh.attach_indicators(P, p["vwap_window"], p["adx_slope_window"])
     sigs = generate_signals(df5m, p["score_min"])
     lookup = _chain_lookup(df)
 
@@ -304,15 +320,30 @@ def backtest(asset="nifty", expiry=None, filters=None, params=None):
         if entry_idx is None:
             continue
         spot_at_entry = float(spot_1m.loc[minutes[entry_idx]]) if minutes[entry_idx] in spot_1m.index else sig["spot"]
+        # 5m bar index of this signal (no lookahead — same bar the score used)
+        pos = int(df5m.index.searchsorted(sts))
+        pos = min(pos, len(df5m) - 1)
 
         # S/R proximity filter
         if filters.get("sr"):
-            # locate the 5m bar index for this signal (bar itself — no lookahead)
-            pos = df5m.index.searchsorted(sts)
             if pos > 0:
-                r1, s1 = sr_levels(df5m, int(pos))
+                r1, s1 = sr_levels(df5m, pos)
                 if sr_blocked(sig["side"], spot_at_entry, r1, s1, p["sr_buffer"]):
                     continue
+
+        # Candidate confirmation filters — OFF by default; False blocks, None skips
+        if filters.get("vwap_slope"):
+            if enh.vwap_slope_ok(P, pos, sig["side"], p["vwap_window"]) is False:
+                continue
+        if filters.get("ema_sep_atr"):
+            if enh.ema_sep_atr_ok(P, pos, sig["side"], p["ema_sep_min"]) is False:
+                continue
+        if filters.get("adx_dir"):
+            if enh.adx_dir_ok(P, pos, sig["side"], p["adx_level"]) is False:
+                continue
+        if filters.get("orb_retest"):
+            if enh.orb_retest_ok(P, pos, sig["side"], p["orb_tol"], p["orb_lookback"]) is False:
+                continue
 
         # RVOL filter (chain activity at the entry minute)
         if filters.get("rvol"):
@@ -320,10 +351,15 @@ def backtest(asset="nifty", expiry=None, filters=None, params=None):
             if rv is None or rv < p["rvol_min"]:
                 continue
 
-        strike, _ = _select_strike(lookup, minutes[entry_idx], sig["side"],
-                                   spot_at_entry, p["delta_lo"], p["delta_hi"])
+        strike, row = _select_strike(lookup, minutes[entry_idx], sig["side"],
+                                     spot_at_entry, p["delta_lo"], p["delta_hi"])
         if strike is None:
             continue
+        # Option microstructure gate (fresh quote + spread + vol + OI + premium)
+        if filters.get("micro"):
+            if not enh.microstructure_ok(row, sig["side"], p["micro_max_spread"],
+                                         p["micro_min_oi"], p["micro_min_vol"]):
+                continue
         t = run_option_trade(lookup, minutes, entry_idx, sig["side"], strike, p)
         if t is None:
             continue
@@ -333,8 +369,10 @@ def backtest(asset="nifty", expiry=None, filters=None, params=None):
         t["score"] = sig["score"]
         trades.append(t)
 
+    uniq = sorted({str(e) for e in df["expiry"].dropna().unique()})
     meta = {
-        "asset": asset, "expiry": expiry or df["expiry"].iloc[0],
+        "asset": asset,
+        "expiry": expiry or (uniq[0] if len(uniq) == 1 else f"per-day ({len(uniq)} expiries)"),
         "snapshots": len(minutes), "signals": len(sigs),
         "bars_5m": len(df5m), "trades": len(trades),
         "cut": str(cut),
@@ -343,10 +381,29 @@ def backtest(asset="nifty", expiry=None, filters=None, params=None):
 
 
 # ── Reporting ───────────────────────────────────────────────────────
+def bootstrap_ci(nets, n_boot=2000, ci=0.95, seed=0):
+    """Bootstrap confidence interval + standard error of the per-trade NET mean.
+
+    Returns {mean, lo, hi, se} (₹/trade), or None when n < 5 (degenerate).
+    Deterministic for a given seed → reproducible research.
+    """
+    nets = np.asarray(nets, dtype=float)
+    if len(nets) < 5:
+        return None
+    rng = np.random.default_rng(seed)
+    means = np.empty(n_boot)
+    for k in range(n_boot):
+        means[k] = rng.choice(nets, size=len(nets), replace=True).mean()
+    lo, hi = np.percentile(means, [100 * (1 - ci) / 2, 100 * (1 + ci) / 2])
+    return {"mean": float(nets.mean()), "lo": float(lo), "hi": float(hi),
+            "se": float(means.std(ddof=0))}
+
+
 def _expectancy(trades):
     if not trades:
         return {"n": 0, "wr": None, "net": 0.0, "ev": None, "pf": None,
-                "gw": 0.0, "gl": 0.0, "mfe": None, "mae": None, "r": None}
+                "gw": 0.0, "gl": 0.0, "mfe": None, "mae": None, "r": None,
+                "mdd": 0.0, "ci_lo": None, "ci_hi": None, "boot_se": None}
     nets = [t["net"] for t in trades]
     wins = [n for n in nets if n > 0]
     losses = [n for n in nets if n <= 0]
@@ -358,6 +415,10 @@ def _expectancy(trades):
     maes = [t["mae"] for t in trades if t["mae"] is not None]
     mfe = float(np.mean(mfes)) if mfes else None
     mae = float(np.mean(maes)) if maes else None
+    # max drawdown on cumulative NET (₹) in trade order
+    cum = np.cumsum(nets)
+    mdd = float((cum - np.maximum.accumulate(cum)).min())
+    ci = bootstrap_ci(nets)
     return {
         "n": len(trades), "wr": wr, "net": round(sum(nets), 2),
         "ev": round(float(np.mean(nets)), 2), "pf": round(pf, 2) if pf != float("inf") else None,
@@ -365,6 +426,10 @@ def _expectancy(trades):
         "mfe": round(mfe, 3) if mfe is not None else None,
         "mae": round(mae, 3) if mae is not None else None,
         "r": round(mfe / mae, 2) if (mfe and mae) else None,
+        "mdd": round(mdd, 2),
+        "ci_lo": round(ci["lo"], 2) if ci else None,
+        "ci_hi": round(ci["hi"], 2) if ci else None,
+        "boot_se": round(ci["se"], 2) if ci else None,
     }
 
 
@@ -379,6 +444,53 @@ def _split(trades, key):
     return [t for t in trades if t["split"] == key]
 
 
+# ── Ablation: baseline → each enhancement → combined ───────────────
+def ablate(asset="nifty"):
+    """Run the candidate enhancement filters one-by-one and combined.
+
+    Returns [(label, all_expectancy, oos_expectancy)]. Every enhancement is OFF
+    by default; this harness is the only place they are enabled, and the verdict
+    (keep/reject) is decided by OOS NET expectancy — never by in-sample fit.
+    """
+    configs = [
+        ("BASELINE", {}),
+        ("+VWAP slope", {"vwap_slope": True}),
+        ("+EMA sep/ATR", {"ema_sep_atr": True}),
+        ("+ADX direction", {"adx_dir": True}),
+        ("+ORB retest", {"orb_retest": True}),
+        ("+Microstructure", {"micro": True}),
+        ("+COMBINED", {"vwap_slope": True, "ema_sep_atr": True, "adx_dir": True,
+                       "orb_retest": True, "micro": True}),
+    ]
+    out = []
+    for label, flt in configs:
+        trades, _meta = backtest(asset, filters=flt)
+        test = _split(trades, "test") if trades else []
+        out.append((label, _expectancy(trades), _expectancy(test)))
+    return out
+
+
+def _print_ablation(asset):
+    print(f"\nAblation — {asset.upper()} (baseline → each enhancement → combined; NET ₹)")
+    print("-" * 110)
+    print(f"  {'config':<16} {'n':>4} {'WR':>7} {'NET EV':>9} {'PF':>6} {'maxDD':>9} "
+          f"| {'OOS n':>5} {'OOS EV':>9} {'OOS 95% CI':>22}")
+    for label, all_e, oos_e in ablate(asset):
+        ci = (f"[{oos_e['ci_lo']},{oos_e['ci_hi']}]"
+              if oos_e.get('ci_lo') is not None else "[—,—]")
+        print(f"  {label:<16} {all_e['n']:>4} "
+              f"{all_e['wr'] if all_e['wr'] is not None else '-':>7} "
+              f"{all_e['ev'] if all_e['ev'] is not None else 0:>9} "
+              f"{all_e['pf'] if all_e['pf'] is not None else '-':>6} "
+              f"{all_e['mdd']:>9} "
+              f"| {oos_e['n']:>5} "
+              f"{oos_e['ev'] if oos_e['ev'] is not None else 0:>9} "
+              f"{ci:>22}")
+    print("-" * 110)
+    print("NOTE: thresholds are defaults; optimize on TRAIN only, then evaluate OOS.")
+    print("      A candidate is adopted only if its OOS 95% CI is entirely > 0.")
+
+
 def main():
     asset = sys.argv[1] if len(sys.argv) > 1 else "nifty"
     df, minutes, spot_1m = load_chain(asset)
@@ -387,7 +499,9 @@ def main():
         return
 
     print(f"Option P&L Backtest — {asset.upper()} (recorded chain data)")
-    print(f"  expiry {df['expiry'].iloc[0]} · {len(minutes)} 1m snapshots · "
+    uniq = sorted({str(e) for e in df["expiry"].dropna().unique()})
+    exp_txt = uniq[0] if len(uniq) == 1 else f"{len(uniq)} weekly chains (per-day dominant)"
+    print(f"  expiry {exp_txt} · {len(minutes)} 1m snapshots · "
           f"{len(df5m := build_5m(spot_1m))} 5m bars")
     print("=" * 100)
 
@@ -440,7 +554,11 @@ def main():
     print("=" * 100)
     print("NOTE: NET expectancy is after bid/ask spread + slippage + full cost model")
     print("      (brokerage ₹20×2 + STT 0.1% + exchange + stamp + GST).")
-    print("      Statistical significance needs ~2+ weeks of recorded data.")
+    print("      Significance is judged by the OOS confidence interval + bootstrap SE,")
+    print("      NOT by a minimum trade count. No edge is claimed while the CI spans 0.")
+
+    # ── 7. Enhancement ablation (baseline → each → combined) ──
+    _print_ablation(asset)
 
 
 if __name__ == "__main__":

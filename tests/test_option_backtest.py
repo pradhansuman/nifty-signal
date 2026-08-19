@@ -4,8 +4,10 @@ Exercises the trade-execution math (bid/ask + slippage + full cost model),
 MFE/MAE, S/R filter, RVOL, expectancy, and the end-to-end pipeline with mocked
 data loading + signal generation.
 """
+import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -209,6 +211,86 @@ class PipelineTest(unittest.TestCase):
         # walk-forward split present (train + test)
         splits = {t["split"] for t in trades}
         self.assertTrue(splits & {"train", "test"})
+
+
+class LoadChainPerDayExpiryTest(unittest.TestCase):
+    """load_chain must keep EACH day's own dominant expiry, not one global one."""
+
+    def _write(self, tmp, day, rows):
+        with open(os.path.join(tmp, "nifty", f"{day}.jsonl"), "w") as f:
+            for r in rows:
+                f.write(json.dumps(r) + "\n")
+
+    def _row(self, ts, strike, expiry):
+        return {"ts": ts, "asset": "nifty", "spot": 24200.0, "expiry": expiry,
+                "strike": strike, "ce_ltp": 100.0, "ce_bid": 99.0, "ce_ask": 101.0,
+                "ce_oi": 1000, "ce_vol": 10000, "ce_delta": 0.55,
+                "pe_ltp": 100.0, "pe_bid": 99.0, "pe_ask": 101.0,
+                "pe_oi": 1000, "pe_vol": 10000, "pe_delta": -0.55}
+
+    def test_multi_day_multi_expiry_stitched(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "nifty"))
+            # day 1: 25-Aug dominant (2 rows) + 1 minority 18-Aug row
+            self._write(tmp, "2026-08-18", [
+                self._row("2026-08-18T10:00:00", 24000, "2026-08-25"),
+                self._row("2026-08-18T10:01:00", 24100, "2026-08-25"),
+                self._row("2026-08-18T10:02:00", 24200, "2026-08-18"),
+            ])
+            # day 2: 01-Sep dominant (2 rows) + 1 minority 25-Aug row
+            self._write(tmp, "2026-08-19", [
+                self._row("2026-08-19T10:00:00", 24000, "2026-09-01"),
+                self._row("2026-08-19T10:01:00", 24100, "2026-09-01"),
+                self._row("2026-08-19T10:02:00", 24200, "2026-08-25"),
+            ])
+            with mock.patch.object(ob, "DATA_ROOT", tmp):
+                df, minutes, spot = ob.load_chain("nifty")
+        # both days survive with their own dominant expiry; minority rows gone
+        self.assertEqual(len(df), 4)
+        d18 = df[df["expiry"] == "2026-08-25"]
+        d19 = df[df["expiry"] == "2026-09-01"]
+        self.assertEqual(len(d18), 2)
+        self.assertEqual(len(d19), 2)
+        self.assertFalse((df["expiry"] == "2026-08-18").any())  # minority dropped
+
+    def test_explicit_expiry_global_filter(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(os.path.join(tmp, "nifty"))
+            self._write(tmp, "2026-08-18", [
+                self._row("2026-08-18T10:00:00", 24000, "2026-08-25"),
+                self._row("2026-08-18T10:01:00", 24100, "2026-08-25"),
+                self._row("2026-08-18T10:02:00", 24200, "2026-08-18"),
+            ])
+            with mock.patch.object(ob, "DATA_ROOT", tmp):
+                df, minutes, spot = ob.load_chain("nifty", expiry="2026-08-18")
+        self.assertEqual(len(df), 1)
+        self.assertEqual(df.iloc[0]["expiry"], "2026-08-18")
+
+
+class BootstrapCITest(unittest.TestCase):
+    def test_returns_none_below_min_n(self):
+        self.assertIsNone(ob.bootstrap_ci([1.0, 2.0, 3.0, 4.0]))
+
+    def test_deterministic_given_seed(self):
+        nets = [float(x) for x in range(-10, 11)]  # 21 values, mean 0
+        a = ob.bootstrap_ci(nets, n_boot=500, seed=0)
+        b = ob.bootstrap_ci(nets, n_boot=500, seed=0)
+        self.assertEqual(a, b)
+
+    def test_ci_covers_mean_and_bounds_ordered(self):
+        nets = [float(x) for x in range(1, 31)]  # strictly positive → CI entirely > 0
+        ci = ob.bootstrap_ci(nets, n_boot=1000, seed=1)
+        self.assertLess(ci["lo"], ci["mean"])
+        self.assertLess(ci["mean"], ci["hi"])
+        self.assertGreater(ci["lo"], 0)
+        self.assertGreater(ci["se"], 0)
+
+    def test_positive_mean_but_ci_spans_zero(self):
+        # A small noisy sample: positive mean but CI includes zero → honest.
+        nets = [-8.0, -6.0, -4.0, -2.0, 0.0, 2.0, 4.0, 6.0, 8.0, 50.0]
+        ci = ob.bootstrap_ci(nets, n_boot=2000, seed=7)
+        self.assertGreater(ci["mean"], 0)
+        self.assertLess(ci["lo"], 0)
 
 
 if __name__ == "__main__":

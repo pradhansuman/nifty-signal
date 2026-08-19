@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import threading
 import time
 from datetime import datetime
@@ -28,7 +29,29 @@ import pytz
 IST = pytz.timezone("Asia/Kolkata")
 
 BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                    ".openclaw", "tmp", "option_history")
+                    "data", "option_history")
+
+# Pre-relocation location (pre-2026-08-18). The dataset is irreplaceable recorded
+# history, so a legacy dataset is moved into the new location once, automatically.
+_LEGACY_BASE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            ".openclaw", "tmp", "option_history")
+
+
+def _migrate_legacy():
+    """One-time rescue: move a legacy .openclaw/tmp dataset into data/.
+
+    No-op when the legacy dir is absent or data/ already exists (never merges,
+    never overwrites — data wins).
+    """
+    try:
+        if os.path.isdir(_LEGACY_BASE) and not os.path.isdir(BASE):
+            os.makedirs(os.path.dirname(BASE), exist_ok=True)
+            shutil.move(_LEGACY_BASE, BASE)
+    except Exception:
+        pass  # never let migration break the recorder
+
+
+_migrate_legacy()
 
 # asset -> record every N seconds
 ASSETS = ("nifty", "bnf")

@@ -13,6 +13,12 @@
 .openclaw/tmp/cloudflared
 .openclaw/tmp/bore
 
+# Raw option history — irreplaceable, forward-collected, grows ~2 MB/day.
+# NOT tracked in git (git is not a data archive). Keep local / object storage.
+# Committable research outputs (schema, health, expectancy+CI, verdict) live in
+# research/latest.json (tracked) instead.
+data/
+
 # Python
 __pycache__/
 *.pyc

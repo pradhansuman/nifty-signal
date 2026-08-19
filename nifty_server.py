@@ -174,7 +174,7 @@ _signal_cache = {"ts": 0, "data": None}
 _btc_cache = {"ts": 0, "data": None}
 _bnf_cache = {"ts": 0, "data": None}
 _sensex_cache = {"ts": 0, "data": None}
-_intraday_cache = {"ts": 0, "data": None}
+_intraday_cache = {"ts": {}, "data": {}}
 
 
 def _clean_nan(obj):
@@ -708,10 +708,15 @@ def api_orb():
 @app.route("/api/intraday")
 def api_intraday():
     import time as _t
-    if _intraday_cache["data"] is None or (_t.time() - _intraday_cache["ts"]) > 60:
-        _intraday_cache["data"] = run_script("intraday_signals.py")
-        _intraday_cache["ts"] = _t.time()
-    return jsonify(_clean_nan(_intraday_cache["data"]))
+    asset = request.args.get("asset", "nifty")
+    if asset not in ("nifty", "bnf", "sensex"):
+        asset = "nifty"
+    if (asset not in _intraday_cache["data"]
+            or (_t.time() - _intraday_cache["ts"].get(asset, 0)) > 60):
+        import intraday_signals as isig
+        _intraday_cache["data"][asset] = isig.compute(asset)
+        _intraday_cache["ts"][asset] = _t.time()
+    return jsonify(_clean_nan(_intraday_cache["data"][asset]))
 
 
 _regime_cache = {"ts": 0, "data": None}
@@ -2076,7 +2081,8 @@ def warmup_caches():
         (lambda: get_backtest(asset="nifty"), (), 19),
         (lambda: get_backtest(asset="banknifty"), (), 21),
         (lambda: get_expiry(asset="banknifty"), (), 23),
-        (lambda: _intraday_cache.update(data=run_script("intraday_signals.py"), ts=time.time()), (), 25),
+        (lambda: (_intraday_cache["data"].update(nifty=run_script("intraday_signals.py")),
+                  _intraday_cache["ts"].update(nifty=time.time())), (), 25),
     ]
     for fn, args, delay in jobs:
         try:

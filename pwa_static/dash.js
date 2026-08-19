@@ -589,7 +589,24 @@ async function fetchORB() {
   }
 }
 
-async function fetchIntraday() {
+let intradayAsset = 'nifty';
+const INTRA_ASSETS = ['nifty', 'bnf', 'sensex'];
+
+async function setIntradayAsset(asset) {
+  if (!INTRA_ASSETS.includes(asset)) return;
+  intradayAsset = asset;
+  document.querySelectorAll('[data-intra-asset]').forEach(b => {
+    const on = b.dataset.intraAsset === asset;
+    b.style.background = on ? '#00e676' : 'transparent';
+    b.style.color = on ? '#06270f' : 'var(--text-dim)';
+    b.style.borderColor = on ? '#00e676' : 'var(--text-dim)';
+  });
+  await fetchIntraday(asset);
+}
+
+async function fetchIntraday(asset) {
+  asset = asset || intradayAsset || 'nifty';
+  intradayAsset = asset;
   const fmt = n => (n == null ? null : Number(n).toLocaleString('en-IN', {maximumFractionDigits: 2}));
   const levelsHtml = s => {
     if (!s || s.entry == null) return '';
@@ -614,7 +631,7 @@ async function fetchIntraday() {
     if (levelsEl) { const l = document.getElementById(levelsEl); if (l) l.innerHTML = levels || ''; }
   };
   try {
-    const resp = await fetch('/api/intraday');
+    const resp = await fetch('/api/intraday?asset=' + encodeURIComponent(asset));
     const d = await resp.json();
     
     // VWAP

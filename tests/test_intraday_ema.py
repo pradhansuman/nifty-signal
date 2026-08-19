@@ -81,3 +81,41 @@ class TrendCrossTest(unittest.TestCase):
         r = isig.ema20_reclaim_signal(df)
         self.assertEqual(r["signal"], "RECLAIM")
         self.assertLess(r["stop"], r["entry"])
+
+
+class VwapZeroVolumeTest(unittest.TestCase):
+    """Index LTP (Upstox) and NSE Yahoo indices have ZERO volume — VWAP must
+    degrade to a typical-price running mean, never NaN (regression for the
+    `(typical*vol).cumsum()/vol.cumsum()` 0/0 bug)."""
+
+    def test_zero_volume_returns_finite_vwap(self):
+        n = 30
+        idx = pd.date_range("2026-01-01 09:15", periods=n, freq="5min")
+        closes = [1000.0 + i for i in range(n)]
+        df = pd.DataFrame({"Open": closes, "High": [c + 5 for c in closes],
+                           "Low": [c - 5 for c in closes], "Close": closes,
+                           "Volume": [0.0] * n}, index=idx)
+        r = isig.vwap_signal(df)
+        self.assertIsNotNone(r["vwap"])
+        self.assertTrue(np.isfinite(r["vwap"]))
+        self.assertGreater(r["vwap"], 0)
+
+    def test_missing_volume_column_returns_finite_vwap(self):
+        n = 30
+        idx = pd.date_range("2026-01-01 09:15", periods=n, freq="5min")
+        closes = [1000.0 + i for i in range(n)]
+        df = pd.DataFrame({"Open": closes, "High": [c + 5 for c in closes],
+                           "Low": [c - 5 for c in closes], "Close": closes}, index=idx)
+        r = isig.vwap_signal(df)
+        self.assertIsNotNone(r["vwap"])
+        self.assertTrue(np.isfinite(r["vwap"]))
+
+    def test_flat_zero_volume_is_neutral(self):
+        n = 30
+        idx = pd.date_range("2026-01-01 09:15", periods=n, freq="5min")
+        closes = [1000.0] * n
+        df = pd.DataFrame({"Open": closes, "High": [c + 5 for c in closes],
+                           "Low": [c - 5 for c in closes], "Close": closes,
+                           "Volume": [0.0] * n}, index=idx)
+        r = isig.vwap_signal(df)
+        self.assertEqual(r["signal"], "NEUTRAL")

@@ -311,7 +311,15 @@
 
   <!-- Intraday (VWAP + EMA) -->
   <div class="card" id="intradayCard">
-    <div class="card-header"><span class="label" data-i18n="intraday-sig">📊 Intraday Signals</span><span style="font-size:11px;color:var(--text-dim)">cross / reclaim · actionable</span></div>
+    <div class="card-header" style="flex-wrap:wrap;gap:6px">
+      <span class="label" data-i18n="intraday-sig">📊 Intraday Signals</span>
+      <span style="display:inline-flex;gap:4px">
+        <button data-intra-asset="nifty" onclick="setIntradayAsset('nifty')" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid #00e676;background:#00e676;color:#06270f;cursor:pointer">Nifty</button>
+        <button data-intra-asset="bnf" onclick="setIntradayAsset('bnf')" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid var(--text-dim);background:transparent;color:var(--text-dim);cursor:pointer">BankNifty</button>
+        <button data-intra-asset="sensex" onclick="setIntradayAsset('sensex')" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;border:1px solid var(--text-dim);background:transparent;color:var(--text-dim);cursor:pointer">Sensex</button>
+      </span>
+      <span style="font-size:11px;color:var(--text-dim)">cross / reclaim · actionable</span>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <div style="flex:1;min-width:46%;padding:8px;border-radius:8px;background:var(--bg)" id="vwapBox">
         <div style="font-size:12px;font-weight:700;margin-bottom:2px">VWAP Reversion</div>
@@ -1286,6 +1294,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260818f"></script>
+<script src="/dash.js?v=20260819a"></script>
 </body>
 </html>

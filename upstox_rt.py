@@ -47,13 +47,28 @@ _lock = threading.Lock()
 _poller_thread = None
 
 
+def _in_market_hours(dt):
+    """True for a weekday 09:15-15:30 IST bar (NSE regular session)."""
+    if dt.weekday() >= 5:
+        return False
+    return "09:15" <= dt.strftime("%H:%M") <= "15:30"
+
+
+def _is_market_bar(ts_str):
+    try:
+        return _in_market_hours(datetime.strptime(ts_str, "%Y-%m-%d %H:%M"))
+    except Exception:
+        return False
+
+
 def _load():
     try:
         if os.path.exists(CANDLE_PATH):
             with open(CANDLE_PATH) as f:
                 saved = json.load(f)
                 for a in SYMBOLS:
-                    _candles[a] = saved.get(a, [])
+                    # drop phantom bars the old poller wrote outside market hours
+                    _candles[a] = [b for b in saved.get(a, []) if _is_market_bar(b[0])]
     except Exception:
         pass
 
@@ -155,7 +170,8 @@ def _tick():
 def _poller():
     while True:
         try:
-            _tick()
+            if _in_market_hours(datetime.now(IST)):
+                _tick()
         except Exception:
             pass
         time.sleep(POLL_SECONDS)

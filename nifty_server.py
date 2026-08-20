@@ -69,6 +69,17 @@ def _ist_now():
         return datetime.now()
 
 
+def _resolved_today():
+    """Today's resolved scalp calls — for DAY-level risk limits (max loss /
+    max trades / consecutive-loss). Without the date filter the risk engine
+    would count the lifetime total against today's caps and permanently block
+    new calls."""
+    today = _ist_now().strftime("%Y-%m-%d")
+    return [c for c in _scalp_calls
+            if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")
+            and c.get("date") == today]
+
+
 @app.before_request
 def log_request():
     """Log every incoming request to /tmp/nifty_requests.log"""
@@ -747,7 +758,7 @@ def api_regime():
 @app.route("/api/risk")
 def api_risk():
     """Day-level risk engine status — loss/trades/consecutive-loss + sizing."""
-    resolved = [c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
+    resolved = _resolved_today()
     rl = risk_engine.check_limits(resolved)
     return jsonify(_clean_nan(rl))
 
@@ -773,7 +784,7 @@ def api_trade_gate():
         reg = session_regime(s.get("adx"), s.get("di_plus"), s.get("di_minus"),
                              s.get("vix"), s.get("spot"), s.get("ema_200"), vwap=vwap)
         gate = trade_gate(signal=s, regime=reg, scalper=sc, intraday=intra,
-                         trades=[c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")],
+                         trades=_resolved_today(),
                          chain_age=get_chain_age("nifty"))
         gate["regime"] = reg["regime"]
         gate["scalper_signal"] = sc.get("signal", "")
@@ -1185,7 +1196,7 @@ def _scalp_tick(asset):
         if new_call:
             # 🛡️ RISK ENGINE HARD GATE — don't fire new calls when day limits
             # are hit (max ₹ loss / max trades / consecutive-loss stop).
-            _resolved = [c for c in _scalp_calls if c.get("status") in ("TARGET_HIT", "STOP_HIT", "EXPIRED")]
+            _resolved = _resolved_today()
             _rl = risk_engine.check_limits(_resolved)
             _risk_ok = _rl["ok"]
             if not _risk_ok:

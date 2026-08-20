@@ -3,44 +3,44 @@
   "collect": {
     "nifty": {
       "2026-08-18": 3230,
-      "2026-08-19": 3978
+      "2026-08-19": 4811
     },
     "bnf": {
       "2026-08-18": 3162,
-      "2026-08-19": 3978
+      "2026-08-19": 4794
     }
   },
   "health": {
     "nifty": {
-      "ok_snapshots": 234,
+      "ok_snapshots": 283,
       "errors": 0,
-      "rows": 3978,
-      "last_ok_ts": "2026-08-19T14:16:41",
+      "rows": 4811,
+      "last_ok_ts": "2026-08-19T15:31:17",
       "last_error": null,
       "last_error_ts": null,
-      "gap_warning": true
+      "gap_warning": false
     },
     "bnf": {
-      "ok_snapshots": 234,
+      "ok_snapshots": 282,
       "errors": 0,
-      "rows": 3978,
-      "last_ok_ts": "2026-08-19T14:16:42",
+      "rows": 4794,
+      "last_ok_ts": "2026-08-19T15:28:41",
       "last_error": null,
       "last_error_ts": null,
-      "gap_warning": true
+      "gap_warning": false
     },
-    "as_of": "2026-08-19T14:17:23"
+    "as_of": "2026-08-19T15:45:35"
   },
   "clean": {
     "asset": "bnf",
     "files": 2,
-    "raw": 7140,
-    "parsed": 7140,
+    "raw": 7956,
+    "parsed": 7956,
     "no_ts_or_strike": 0,
     "no_quote": 0,
     "duplicates": 17,
     "non_dominant_expiry": 0,
-    "final": 7123,
+    "final": 7939,
     "days": 2,
     "expiry": "2026-08-25"
   },
@@ -404,48 +404,68 @@
       "entry_ts": "2026-08-19 13:56:00+05:30",
       "split": "test",
       "score": -5
+    },
+    {
+      "side": 1,
+      "strike": 57300.0,
+      "entry": 423.35,
+      "exit": 397.9,
+      "reason": "TIME",
+      "gross": -381.75,
+      "cost": 60.55,
+      "net": -442.3,
+      "mfe": 6.7,
+      "mae": 30.5,
+      "duration_min": 10,
+      "oi": 399030.0,
+      "vol": 3142710,
+      "delta": 0.5723,
+      "signal_ts": "2026-08-19 14:35:00+05:30",
+      "entry_ts": "2026-08-19 14:36:00+05:30",
+      "split": "test",
+      "score": 4
     }
   ],
   "backtest_meta": {
     "asset": "bnf",
     "expiry": "2026-08-25",
-    "snapshots": 419,
-    "signals": 18,
-    "bars_5m": 95,
-    "trades": 18,
-    "cut": "2026-08-19 06:20:11.999999+05:30"
+    "snapshots": 467,
+    "signals": 19,
+    "bars_5m": 106,
+    "trades": 19,
+    "cut": "2026-08-19 07:10:36+05:30"
   },
   "oos": {
-    "n": 18,
-    "wr": 0.3888888888888889,
-    "net": -3108.49,
-    "ev": -172.69,
-    "pf": 0.09,
+    "n": 19,
+    "wr": 0.3684210526315789,
+    "net": -3550.79,
+    "ev": -186.88,
+    "pf": 0.08,
     "gw": 45.36,
-    "gl": 311.45,
-    "mfe": 6.317,
-    "mae": 12.908,
-    "r": 0.49,
-    "mdd": -3262.04,
-    "ci_lo": -278.29,
-    "ci_hi": -67.21,
-    "boot_se": 54.6
+    "gl": 322.36,
+    "mfe": 6.337,
+    "mae": 13.834,
+    "r": 0.46,
+    "mdd": -3704.34,
+    "ci_lo": -295.7,
+    "ci_hi": -85.14,
+    "boot_se": 54.49
   },
   "oos_all": {
-    "n": 18,
-    "wr": 0.3888888888888889,
-    "net": -3108.49,
-    "ev": -172.69,
-    "pf": 0.09,
+    "n": 19,
+    "wr": 0.3684210526315789,
+    "net": -3550.79,
+    "ev": -186.88,
+    "pf": 0.08,
     "gw": 45.36,
-    "gl": 311.45,
-    "mfe": 6.317,
-    "mae": 12.908,
-    "r": 0.49,
-    "mdd": -3262.04,
-    "ci_lo": -278.29,
-    "ci_hi": -67.21,
-    "boot_se": 54.6
+    "gl": 322.36,
+    "mfe": 6.337,
+    "mae": 13.834,
+    "r": 0.46,
+    "mdd": -3704.34,
+    "ci_lo": -295.7,
+    "ci_hi": -85.14,
+    "boot_se": 54.49
   },
   "paper": {
     "days": 0,
@@ -457,16 +477,16 @@
     "excluded_pre_freeze_days": 3
   },
   "compare": {
-    "oos_ev": -172.69,
+    "oos_ev": -186.88,
     "paper_ev": null
   },
   "decide": {
     "stage": "NO_EDGE_OOS",
-    "reason": "OOS NET EV \u20b9-172.69/trade, 95% CI [-278.29, -67.21] entirely \u2264 0 (n=18, SE \u20b954.6) \u2014 no edge; baseline is the honest control",
-    "oos_ev": -172.69,
-    "ci_lo": -278.29,
-    "ci_hi": -67.21,
-    "boot_se": 54.6,
+    "reason": "OOS NET EV \u20b9-186.88/trade, 95% CI [-295.7, -85.14] entirely \u2264 0 (n=19, SE \u20b954.49) \u2014 no edge; baseline is the honest control",
+    "oos_ev": -186.88,
+    "ci_lo": -295.7,
+    "ci_hi": -85.14,
+    "boot_se": 54.49,
     "paper_ev": null,
     "gap": null
   }

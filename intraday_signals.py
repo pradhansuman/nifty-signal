@@ -60,8 +60,9 @@ def _yahoo_bars(symbol, interval):
             df.index = df.index.tz_localize("UTC").tz_convert(IST)
         else:
             df.index = df.index.tz_convert(IST)
-        if interval != "1h":
-            df = _market_hours_only(df)
+        # Yahoo NSE intraday data is already market-hours-only — do NOT filter
+        # to today, or multi-day warmup (15m reclaim needs ~25 bars ≈ 1 session,
+        # 1h trend needs 55) is destroyed.
         return df
     except Exception:
         return None

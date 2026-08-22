@@ -377,7 +377,7 @@
   </div>
   <div class="card-header" style="margin-top:10px"><span class="label" data-i18n="today-scalp">📜 Today's Scalp Calls <span style="font-size:10px;color:var(--text-dim)">(kept alive till expiry)</span></span><span class="value" id="scalperCallsCount">--</span></div>
   <div class="strat-grid" id="scalperHistory"><div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">Loading...</div></div>
-  <div class="card-header" style="margin-top:10px"><span class="label" data-i18n="scalp-pnl">💰 Scalp Dry-Run P&amp;L (paper)</span><span class="value" id="scalperPnl">--</span></div>
+  <div class="card-header" style="margin-top:10px"><span class="label" data-i18n="scalp-pnl">💰 Scalp Dry-Run P&amp;L (paper) <span style="font-size:10px;color:var(--text-dim)">(retained ledger)</span></span><span class="value" id="scalperPnl">--</span></div>
   <div class="strat-grid" id="scalperPnlGrid"></div>
 </div>
 
@@ -386,8 +386,8 @@
   <div id="regimeBanner" style="font-size:16px;font-weight:800;padding:10px;border-radius:10px;text-align:center;background:#141b22">Loading...</div>
   <div id="regimeStrategy" style="margin-top:8px;font-size:12px;color:var(--text-dim)"></div>
   <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-    <div style="flex:1;min-width:30%;padding:6px 8px;border-radius:8px;background:var(--bg);text-align:center"><div style="font-size:10px;color:var(--text-dim)">ADX</div><div class="value-sm" id="regimeAdx">--</div></div>
-    <div style="flex:1;min-width:30%;padding:6px 8px;border-radius:8px;background:var(--bg);text-align:center"><div style="font-size:10px;color:var(--text-dim)">DI+/DI−</div><div class="value-sm" id="regimeDi">--</div></div>
+    <div style="flex:1;min-width:30%;padding:6px 8px;border-radius:8px;background:var(--bg);text-align:center"><div style="font-size:10px;color:var(--text-dim)">ADX (session)</div><div class="value-sm" id="regimeAdx">--</div></div>
+    <div style="flex:1;min-width:30%;padding:6px 8px;border-radius:8px;background:var(--bg);text-align:center"><div style="font-size:10px;color:var(--text-dim)">DI+/DI− (session)</div><div class="value-sm" id="regimeDi">--</div></div>
     <div style="flex:1;min-width:30%;padding:6px 8px;border-radius:8px;background:var(--bg);text-align:center"><div style="font-size:10px;color:var(--text-dim)">VIX</div><div class="value-sm" id="regimeVix">--</div></div>
   </div>
   <div style="font-size:10px;color:var(--text-dim);margin-top:6px" id="regimeReason"></div>
@@ -403,7 +403,7 @@
 </div>
 
 <div class="card">
-  <div class="card-header"><span class="label" data-i18n="pnl-history">📅 Dry-Run P&amp;L by Day</span><span class="value" id="scalperPnlHistUpd">--</span></div>
+  <div class="card-header"><span class="label" data-i18n="pnl-history">📅 Dry-Run P&amp;L by Day <span style="font-size:10px;color:var(--text-dim)">(historical snapshots)</span></span><span class="value" id="scalperPnlHistUpd">--</span></div>
   <div class="strat-grid" id="scalperPnlHistory"><div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">Loading...</div></div>
 </div>
 
@@ -475,7 +475,7 @@
     <div class="gauge-row">
       <div class="gauge">
         <div class="g-value" id="adxVal">--</div>
-        <div class="g-label">ADX</div>
+        <div class="g-label">ADX (session)</div>
         <div class="g-sub" id="adxSub"></div>
       </div>
       <div class="gauge">
@@ -1294,6 +1294,6 @@
 <!-- Debug: remove after fix -->
 <div id="debugInfo" style="position:fixed;bottom:0;left:0;right:0;background:#000;color:#0f0;font-size:10px;padding:4px;z-index:9999;max-height:60px;overflow:hidden">JS not running...</div>
 
-<script src="/dash.js?v=20260819a"></script>
+<script src="/dash.js?v=20260821n"></script>
 </body>
 </html>

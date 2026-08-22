@@ -15,6 +15,7 @@ import os
 import sys
 import time
 from datetime import datetime
+from datetime import time as dtime
 
 import numpy as np
 import pandas as pd
@@ -24,6 +25,7 @@ import yfinance as yf
 sys.path.insert(0, ".")
 import chain_table  # noqa: E402  (Upstox option chain for live premiums)
 import delta_exchange  # noqa: E402  (Delta Exchange BTC options chain)
+from market_session import india_market_session  # noqa: E402
 
 # ── Multi-asset config ──
 ASSETS = {
@@ -83,6 +85,7 @@ def _load_tuning():
         "theta_max": float(os.environ.get("SCALP_THETA_MAX", "0.5")),  # % of premium per 10-min hold
         "oi_min": float(os.environ.get("SCALP_OI_MIN", "500")),  # min option OI (lots) for a tradeable strike
         "funding_gate": float(os.environ.get("SCALP_FUNDING_GATE", "0.0005")),  # BTC: block the crowded carry side (0.05%/8h)
+        "slope_atr_min": float(os.environ.get("SCALP_SLOPE_ATR_MIN", "1.0")),  # trend gate: min 200E drift (ATR units) for "trending"
         "window_open": False,  # override: ignore lunch-chop window block
         "regime_off": False,    # override: allow counter-trend scalps (chatty mode)
     }
@@ -138,6 +141,76 @@ def _adx(df, n=14):
     mdi = 100 * pd.Series(minus_dm, index=df.index).ewm(alpha=1 / n, adjust=False).mean() / atr
     dx = 100 * (pdi - mdi).abs() / (pdi + mdi).replace(0, np.nan)
     return dx.ewm(alpha=1 / n, adjust=False).mean()
+
+
+def _infer_interval_minutes(df):
+    """Infer the bar timeframe (minutes) from median spacing of the index."""
+    if df is None or len(df) < 2:
+        return None
+    deltas = df.index.to_series().diff().dropna().dt.total_seconds().abs() / 60.0
+    if len(deltas) == 0:
+        return None
+    med = float(deltas.median())
+    for cand in (1, 5, 15, 30, 60):
+        if abs(med - cand) <= cand * 0.30:
+            return cand
+    return max(1, int(round(med)))
+
+
+def _orb_window(sess_df):
+    """15-minute opening range, anchored to 09:15-09:30 IST (NOT "first N bars").
+
+    Returns dict(orb_high, orb_low, available, note).
+    - Infers the feed timeframe from bar spacing (robust to config drift).
+    - A feed coarser than 15m cannot represent a 15-min ORB → available=False
+      (never silently substitute a 60-min range for a 15-min one).
+    - Selects only bars whose IST wall-clock falls in [09:15, 09:30); pre-market,
+      missing, or not-yet-formed bars are excluded.
+    """
+    if sess_df is None or len(sess_df) < 2:
+        return {"orb_high": None, "orb_low": None, "available": False, "note": "no session data"}
+    tf = _infer_interval_minutes(sess_df)
+    if tf is None:
+        return {"orb_high": None, "orb_low": None, "available": False, "note": "cannot infer timeframe"}
+    if tf > 15:
+        return {"orb_high": None, "orb_low": None, "available": False,
+                "note": "feed {}m is coarser than 15m — no 15-min ORB".format(tf)}
+    t = sess_df.index.time
+    mask = (t >= dtime(9, 15)) & (t < dtime(9, 30))
+    orb = sess_df[mask]
+    if len(orb) == 0:
+        return {"orb_high": None, "orb_low": None, "available": False,
+                "note": "opening 15 min not formed (pre-09:15 or missing bars)"}
+    return {"orb_high": float(orb["High"].max()), "orb_low": float(orb["Low"].min()),
+            "available": True, "note": "09:15-09:30 IST ({} {}m bars)".format(len(orb), tf)}
+
+
+def _trend_strength_block(bias, slope_atr, slope_atr_min=1.0):
+    """Direction-aware, normalized trend-strength gate (returns reason or None).
+
+    STRENGTH is the 200 EMA's drift over the slope window, measured in ATR units
+    (slope_atr = (EMA200_now − EMA200_prev) / ATR14). This is what actually
+    separates a trending day (200E drifting several ATRs) from chop (200E drifting
+    ~0 ATR) — raw % distance does NOT: a 0.09% distance can be a decisive move
+    when ATR is tiny, and a flat 200E is chop regardless of how far price is.
+    DIRECTION is enforced separately by the regime filter (which side of the 200E).
+    """
+    if bias == "LONG" and slope_atr < slope_atr_min:
+        return "200 EMA drifting {:.2f} ATR < {:.2f} ATR — no rising trend".format(slope_atr, slope_atr_min)
+    if bias == "SHORT" and slope_atr > -slope_atr_min:
+        return "200 EMA drifting {:.2f} ATR > -{:.2f} ATR — no falling trend".format(slope_atr, slope_atr_min)
+    return None
+
+
+def _orb_position(spot, orb_high, orb_low):
+    """Classify spot vs the 15-min opening range: ABOVE / INSIDE / BELOW / N/A."""
+    if orb_high is None or orb_low is None:
+        return "N/A"
+    if spot > orb_high:
+        return "ABOVE"
+    if spot < orb_low:
+        return "BELOW"
+    return "INSIDE"
 
 
 def get_bars(asset="nifty", period="5d", interval="5m"):
@@ -385,6 +458,21 @@ def main(asset="nifty"):
     t0 = time.perf_counter()
     out = {"signal": "WAIT", "bias": "FLAT", "score": 0, "spot": None, "timestamp": _now(), "asset": asset}
     cfg = ASSETS[asset]
+    if asset != "btc":
+        session = india_market_session(datetime.now(IST))
+        out["market_open"] = session["open"]
+        if not session["open"]:
+            out.update({
+                "window": "BLOCKED",
+                "window_reason": session["reason"],
+                "blocking_gates": [{"gate": "Market session", "reason": session["reason"]}],
+                "reason": session["reason"],
+                "latency_ms": {"data": 0, "signal": 0, "decision": 0,
+                               "total": round((time.perf_counter() - t0) * 1000, 1)},
+            })
+            return out
+    else:
+        out["market_open"] = True  # Bitcoin trades continuously.
     df = get_bars(asset, period=cfg.get("period", "5d"), interval=cfg.get("interval", "5m"))
     t1 = time.perf_counter()
     if df is None or len(df) < 40:
@@ -421,6 +509,19 @@ def main(asset="nifty"):
             out["feed"] = "yf-spot"
     out["spot"] = round(spot, 2)
 
+    # Live LTP for the decision — the last bar close can lag the real quote by
+    # up to a minute. VWAP/ORB/trend comparisons must use the SAME live price the
+    # dashboard shows; bar-based indicators (EMA/RSI/Stoch/ADX) stay on closes.
+    if asset in ("nifty", "bnf", "sensex"):
+        try:
+            import upstox_rt as _urt
+            _live = _urt.last_price(asset)
+            if _live:
+                spot = float(_live)
+        except Exception:
+            pass
+    out["spot"] = round(spot, 2)
+
     ema9 = closes.ewm(span=9, adjust=False).mean()
     ema21 = closes.ewm(span=21, adjust=False).mean()
     e9 = float(ema9.iloc[-1])
@@ -450,88 +551,110 @@ def main(asset="nifty"):
     dline = float(dd.iloc[-1])
 
     mom = float(closes.iloc[-1] - closes.iloc[-4])
-    n_orb = min(3, len(sess))
-    orb_high = float(s_high.iloc[:n_orb].max())
-    orb_low = float(s_low.iloc[:n_orb].min())
+    # ATR(14) for momentum normalization — a raw "7-point" move means nothing
+    # without volatility context; classify strength in ATR units instead.
+    tr = pd.concat([(df["High"] - df["Low"]).clip(lower=0),
+                    (df["High"] - df["Close"].shift(1)).abs(),
+                    (df["Low"] - df["Close"].shift(1)).abs()], axis=1).max(axis=1)
+    atr = float(tr.rolling(14).mean().iloc[-1]) if len(tr) >= 14 else 0.0
+    mom_atr = mom / atr if atr > 0 else 0.0
+    # Opening Range = first 15 minutes (09:15-09:30 IST), not "first N bars".
+    # Anchored to the exchange open; coarse feeds (>15m) → ORB unavailable.
+    orb = _orb_window(sess)
+    orb_high = orb["orb_high"]
+    orb_low = orb["orb_low"]
+    out["orb_available"] = orb["available"]
+    out["orb_note"] = orb["note"]
 
     score = 0
     reasons = []
-    if e9 > e21:
-        score += 2
-        reasons.append("EMA9 {:.0f} > EMA21 {:.0f}".format(e9, e21))
-    else:
-        score -= 2
-        reasons.append("EMA9 {:.0f} < EMA21 {:.0f}".format(e9, e21))
+    breakdown = []  # [{gauge, points, note}] — auditable score trail
+
+    def _add(gauge, pts, note):
+        nonlocal score
+        score += pts
+        reasons.append("{} ({:+d})".format(note, pts))
+        breakdown.append({"gauge": gauge, "points": pts, "note": note})
+
+    _add("EMA 9/21", 2 if e9 > e21 else -2,
+         "EMA9 {:.0f} {} EMA21 {:.0f}".format(e9, ">" if e9 > e21 else "<", e21))
     if cross_up:
-        score += 2
-        reasons.append("fresh golden cross")
+        _add("EMA cross", 2, "fresh golden cross")
     if cross_down:
-        score -= 2
-        reasons.append("fresh death cross")
-    if spot > vwap_now:
-        score += 1
-        reasons.append("above VWAP {:.0f}".format(vwap_now))
-    else:
-        score -= 1
-        reasons.append("below VWAP {:.0f}".format(vwap_now))
-    if mom > 0:
-        score += 1
-        reasons.append("momentum +{:.1f}".format(mom))
-    else:
-        score -= 1
-        reasons.append("momentum {:.1f}".format(mom))
+        _add("EMA cross", -2, "fresh death cross")
+    _add("VWAP", 1 if spot > vwap_now else -1,
+         "{} VWAP {:.0f}".format("above" if spot > vwap_now else "below", vwap_now))
+    _add("Momentum", 1 if mom > 0 else -1, "momentum {}{:.1f}".format("+" if mom > 0 else "", mom))
     if r > 70:
-        score -= 1
-        reasons.append("RSI {:.0f} overbought".format(r))
+        _add("RSI", -1, "RSI {:.0f} overbought".format(r))
     elif r < 30:
-        score += 1
-        reasons.append("RSI {:.0f} oversold".format(r))
+        _add("RSI", 1, "RSI {:.0f} oversold".format(r))
     else:
-        reasons.append("RSI {:.0f} neutral".format(r))
+        _add("RSI", 0, "RSI {:.0f} neutral".format(r))
     if k > 80:
-        score -= 1
-        reasons.append("Stoch {:.0f} overbought".format(k))
+        _add("Stoch", -1, "Stoch {:.0f} overbought".format(k))
     elif k < 20:
-        score += 1
-        reasons.append("Stoch {:.0f} oversold".format(k))
+        _add("Stoch", 1, "Stoch {:.0f} oversold".format(k))
     else:
-        reasons.append("Stoch {:.0f} neutral".format(k))
-    if spot > orb_high:
-        score += 1
-        reasons.append("above ORB high {:.0f}".format(orb_high))
-    elif spot < orb_low:
-        score -= 1
-        reasons.append("below ORB low {:.0f}".format(orb_low))
+        _add("Stoch", 0, "Stoch {:.0f} neutral".format(k))
+    _orb_pos = _orb_position(spot, orb_high, orb_low)
+    if _orb_pos == "ABOVE":
+        _add("ORB", 1, "above ORB high {:.0f}".format(orb_high))
+    elif _orb_pos == "BELOW":
+        _add("ORB", -1, "below ORB low {:.0f}".format(orb_low))
+    elif _orb_pos == "INSIDE":
+        _add("ORB", 0, "inside ORB {:.0f}-{:.0f}".format(orb_low, orb_high))
+    else:
+        _add("ORB", 0, "ORB N/A ({})".format(orb["note"]))
 
     tun = _load_tuning()
     # Per-asset gate overrides (BTC is choppier → stricter gates than Nifty/BNF)
     score_min = float(cfg.get("score_min", tun["score_min"]))
     out["score_min"] = score_min
     bias = "LONG" if score >= score_min else "SHORT" if score <= -score_min else "FLAT"
+    # Preserve the raw directional read separately from the gated execution
+    # bias. A bullish score can be valid while tradeability is blocked.
+    score_bias = bias
 
-    # ── 200 EMA regime filter: never scalp against the trend ──
-    ema200 = float(closes.ewm(span=200, adjust=False).mean().iloc[-1])
+    # ── 200 EMA regime filter: DIRECTION — never scalp against the trend ──
+    ema200_series = closes.ewm(span=200, adjust=False).mean()
+    ema200 = float(ema200_series.iloc[-1])
     out["ema200"] = round(ema200, 2)
+    # 200E slope over a ~2-hour horizon (duration-based, scales with timeframe)
+    _slope_tf = _infer_interval_minutes(df) or 5
+    _slope_bars = max(2, int(round(120.0 / _slope_tf)))
+    ema200_prev = float(ema200_series.iloc[-_slope_bars - 1]) if len(ema200_series) >= _slope_bars + 1 else ema200
+    ema200_slope = (ema200 - ema200_prev) / ema200_prev * 100.0 if ema200_prev else 0.0
+    ema200_slope_atr = (ema200 - ema200_prev) / atr if atr > 0 else 0.0
+    out["trend_dir"] = "ABOVE" if spot > ema200 else "BELOW"
+    out["ema200_slope"] = round(ema200_slope, 3)
+    out["ema200_slope_atr"] = round(ema200_slope_atr, 2)
     regime_block = None
-    if bias == "LONG" and spot < ema200 and not tun.get("regime_off"):
+    if score_bias == "LONG" and spot < ema200 and not tun.get("regime_off"):
         regime_block = "counter-trend LONG blocked (spot below 200 EMA {:.0f})".format(ema200)
         bias = "FLAT"
-    elif bias == "SHORT" and spot > ema200 and not tun.get("regime_off"):
+    elif score_bias == "SHORT" and spot > ema200 and not tun.get("regime_off"):
         regime_block = "counter-trend SHORT blocked (spot above 200 EMA {:.0f})".format(ema200)
         bias = "FLAT"
 
-    # ── Trend-strength gate: momentum edge exists ONLY on strong-trend days ──
-    # Backtest 2026-08-14 (58 sessions, 4295 bars): |spot-200E| >= 0.8% of spot →
-    # 134 trades, 60% WR, PF 1.53, +429 pts. Below 0.5% → PF ~0.93 (loser).
-    trend_min = float(cfg.get("trend_min", tun["trend_min"]))
+    # ── Trend-strength gate: STRENGTH = 200E drift (ATR-normalized) ──
+    # (Redesign 2026-08-21: the old gate used raw |spot-200E| % as a "strength"
+    # proxy — conceptually wrong: 0.09% distance can be a decisive move when ATR
+    # is tiny, and a flat 200E is chop regardless of % distance. The 200E's own
+    # drift (in ATR units) is what separates trend from chop.
+    # NOTE: this gate is UNVALIDATED — the old PF 1.53 backtest was for the raw
+    # % gate and does NOT transfer. Must go through the research/ablation loop.)
+    slope_atr_min = float(tun.get("slope_atr_min", 1.0))
     trend_dist = abs(spot - ema200) / ema200 * 100.0
+    trend_dist_atr = (spot - ema200) / atr if atr > 0 else 0.0
     out["trend_dist"] = round(trend_dist, 2)
-    out["trend_gate"] = trend_min
+    out["trend_dist_atr"] = round(trend_dist_atr, 2)
+    out["slope_atr_min"] = slope_atr_min
     trend_block = None
-    if bias != "FLAT" and trend_dist < trend_min:
-        trend_block = "trend too weak (|spot-200E| {:.2f}% < {:.1f}% gate) — momentum has no edge in chop".format(
-            trend_dist, trend_min)
-        bias = "FLAT"
+    if score_bias != "FLAT":
+        trend_block = _trend_strength_block(score_bias, ema200_slope_atr, slope_atr_min)
+        if trend_block:
+            bias = "FLAT"
 
     # ── ADX trend-strength gate (backtest 2026-08-14: ADX>25 → PF 1.82) ──
     adx_min = float(cfg.get("adx_min", tun["adx_min"]))
@@ -540,7 +663,7 @@ def main(asset="nifty"):
     out["adx"] = round(adx_val, 1)
     out["adx_gate"] = adx_min
     adx_block = None
-    if bias != "FLAT" and adx_val < adx_min:
+    if score_bias != "FLAT" and adx_val < adx_min:
         adx_block = "ADX {:.2f} < {:.1f} — no sustained trend".format(adx_val, adx_min)
         bias = "FLAT"
 
@@ -551,7 +674,7 @@ def main(asset="nifty"):
     out["vix"] = round(vix_val, 2) if vix_val else None
     out["vix_gate"] = [vix_min, vix_max]
     vix_block = None
-    if bias != "FLAT" and vix_val is not None and not (vix_min <= vix_val <= vix_max):
+    if score_bias != "FLAT" and vix_val is not None and not (vix_min <= vix_val <= vix_max):
         vix_block = "VIX {:.1f} outside {:.0f}-{:.0f} — premium too cheap/expensive for scalps".format(
             vix_val, vix_min, vix_max)
         bias = "FLAT"
@@ -560,7 +683,9 @@ def main(asset="nifty"):
     # Positive funding → longs pay shorts → SHORT earns, LONG costs. Skip the
     # paying side when funding is meaningfully one-sided (fail-open when None).
     funding_block = None
-    bias, funding_block = _funding_gate(asset, bias, out.get("funding"), tun.get("funding_gate", 0.0005))
+    _, funding_block = _funding_gate(asset, score_bias, out.get("funding"), tun.get("funding_gate", 0.0005))
+    if funding_block:
+        bias = "FLAT"
 
     # ── Time-of-day window: avoid lunch chop (BTC = 24/7) ──
     now_dt = datetime.now(IST)
@@ -575,7 +700,7 @@ def main(asset="nifty"):
         "Scalp window ACTIVE (9:20-11:45, 13:30-15:20)" if window_open
         else "Scalp window BLOCKED — lunch chop 11:45-13:30 / pre-9:20")
     window_block = None
-    if not window_open and bias != "FLAT":
+    if not window_open and score_bias != "FLAT":
         window_block = out["window_reason"]
         bias = "FLAT"
 
@@ -585,25 +710,62 @@ def main(asset="nifty"):
         mom_ok = mom >= 30 if bias == "LONG" else mom <= -30
         vwap_ok = spot >= vwap_now if bias == "LONG" else spot <= vwap_now
         rsi_ok = r >= 50 if bias == "LONG" else r <= 50
-        perfect = (score >= score_min and trend_dist >= trend_min
+        perfect = (score >= score_min and trend_block is None
                    and adx_val >= adx_min and mom_ok and vwap_ok and rsi_ok)
     out["perfect"] = perfect
 
+    prev_k = float(kk.iloc[-2]) if len(kk) >= 2 else k
+    prev_d = float(dd.iloc[-2]) if len(dd) >= 2 else dline
+    stoch_crossed = None
+    if prev_k >= prev_d and k < dline:
+        stoch_crossed = "bearish crossover"
+    elif prev_k <= prev_d and k > dline:
+        stoch_crossed = "bullish crossover"
+
+    _blocks = []
+    trend_reasons = [reason for reason in (regime_block, trend_block) if reason]
+    if trend_reasons:
+        _blocks.append({"gate": "Trend", "reason": "; ".join(trend_reasons)})
+    if adx_block:
+        _blocks.append({"gate": "ADX", "reason": adx_block})
+    if vix_block:
+        _blocks.append({"gate": "VIX", "reason": vix_block})
+    if funding_block:
+        _blocks.append({"gate": "Funding", "reason": funding_block})
+    if window_block:
+        _blocks.append({"gate": "Window", "reason": window_block})
+
     out.update({
-        "bias": bias, "score": score,
+        "bias": bias, "score": score, "score_met": abs(score) >= score_min,
+        "score_bias": score_bias,
         "ema9": round(e9, 2), "ema21": round(e21, 2),
-        "vwap": round(vwap_now, 2), "rsi": round(r, 1),
+        "vwap": round(vwap_now, 2),
+        "vwap_pct": round((spot - vwap_now) / vwap_now * 100.0, 3) if vwap_now else None,
+        "rsi": round(r, 1),
         "stoch_k": round(k, 1), "stoch_d": round(dline, 1),
-        "momentum": round(mom, 2), "orb_high": round(orb_high, 2), "orb_low": round(orb_low, 2),
+        "stoch_cross": "K<D weakening" if k < dline else ("K>D strengthening" if k > dline else "K=D"),
+        "stoch_crossed": stoch_crossed,
+        "momentum": round(mom, 2), "momentum_atr": round(mom_atr, 2),
+        "orb_high": round(orb_high, 2) if orb_high is not None else None,
+        "orb_low": round(orb_low, 2) if orb_low is not None else None,
+        "blocking_gates": _blocks,
         "reasons": reasons,
+        "score_breakdown": breakdown,
         "reason": "; ".join(reasons),
     })
 
     if bias == "FLAT":
         out["signal"] = "WAIT"
-        block_txt = regime_block or trend_block or adx_block or vix_block or funding_block or window_block
-        out["reason"] = "No scalp edge — score {:+d} (need ±{:.0f}). {}{}".format(
-            score, score_min, (block_txt + ". " if block_txt else ""), "; ".join(reasons))
+        block_txt = "; ".join(x for x in (regime_block, trend_block, adx_block, vix_block, funding_block, window_block) if x)
+        if abs(score) >= score_min and block_txt:
+            # score CLEARED the ±threshold but a gate blocked the trade
+            out["reason"] = "score {:+d} (≥ ±{:.0f}) but {} — {}".format(
+                score, score_min, block_txt, "; ".join(reasons))
+        elif abs(score) < score_min:
+            out["reason"] = "score {:+d} below ±{:.0f} threshold — {}".format(
+                score, score_min, "; ".join(reasons))
+        else:
+            out["reason"] = "No scalp edge — score {:+d}. {}".format(score, "; ".join(reasons))
         t_flat = time.perf_counter()
         out["latency_ms"] = {
             "data": round((t1 - t0) * 1000, 1),

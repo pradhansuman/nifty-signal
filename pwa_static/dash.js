@@ -96,6 +96,25 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+// India cash-market guard for the visible UI. Backend endpoints enforce the
+// same rule; this prevents a cached Friday response from appearing tradeable
+// while the page is open on a weekend or outside NSE/BSE hours.
+function indiaMarketSession() {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Kolkata', weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date());
+  const value = key => parts.find(p => p.type === key)?.value;
+  const day = value('weekday');
+  const hour = Number(value('hour'));
+  const minute = Number(value('minute'));
+  const minutes = hour * 60 + minute;
+  if (day === 'Sat' || day === 'Sun') return {open: false, reason: 'Market closed (weekend)'};
+  if (minutes < 9 * 60 + 15 || minutes > 15 * 60 + 30) {
+    return {open: false, reason: 'Outside market hours (9:15 AM - 3:30 PM IST)'};
+  }
+  return {open: true, reason: 'Market open'};
+}
+
 // ── Data Fetch ──
 async function fetchSignal() {
   document.getElementById('debugInfo').textContent = 'Fetching signal...';
@@ -126,6 +145,10 @@ function render(s) {
   if (!s || typeof s !== 'object') {
     console.warn('render got invalid data:', s);
     return;
+  }
+  const indiaSession = indiaMarketSession();
+  if (!indiaSession.open) {
+    s = {...s, signal: 'WAIT', action: 'HOLD — Nifty cash market is closed.', reason: indiaSession.reason};
   }
   try {
   const sig = s.signal || 'LOADING';
@@ -159,7 +182,7 @@ function render(s) {
   document.getElementById('diMinusVal').textContent = s.di_minus || '--';
 
   // EMA
-  document.getElementById('emaDistance').textContent = (dist >= 0 ? '+' : '') + dist + '%';
+  document.getElementById('emaDistance').textContent = dist != null ? (dist >= 0 ? '+' : '') + dist + '%' : '--';
   document.getElementById('ema200Label').textContent = '200 EMA: ' + (s.ema_200 ? s.ema_200.toLocaleString('en-IN') : '--');
   document.getElementById('emaLow').textContent = s.ema_200 ? (s.ema_200 * 0.99).toFixed(0) : '--';
   document.getElementById('emaHigh').textContent = s.ema_200 ? (s.ema_200 * 1.01).toFixed(0) : '--';
@@ -173,9 +196,10 @@ function render(s) {
 
   // Regime — compute from data
   const isTrending = s.adx >= 20;
-  const isBullish = s.di_plus > s.di_minus;
-  const bias = isTrending ? (isBullish ? 'defined_risk' : 'buy_directional') : 'sell_premium';
-  const regimeLabel = isTrending ? (isBullish ? 'Low Vol Trending (Bullish)' : 'Trending (Bearish)') : 'Low Vol Ranging';
+  const diSpread = (s.di_plus != null && s.di_minus != null) ? s.di_plus - s.di_minus : 0;
+  const direction = diSpread > 5 ? 'bullish' : diSpread < -5 ? 'bearish' : 'flat';
+  const bias = isTrending ? (direction === 'bullish' ? 'defined_risk' : direction === 'bearish' ? 'buy_directional' : 'neutral') : 'sell_premium';
+  const regimeLabel = isTrending ? (direction === 'bullish' ? 'Low Vol Trending (Bullish)' : direction === 'bearish' ? 'Trending (Bearish)' : 'Trending (flat bias)') : 'Low Vol Ranging';
   const regimeBadge = document.getElementById('regimeBadge');
   regimeBadge.textContent = regimeLabel;
   regimeBadge.className = 'regime-badge ' + bias;
@@ -183,7 +207,7 @@ function render(s) {
   document.getElementById('regimeDesc').textContent = isTrending
     ? 'Directional trend active — use debit spreads or directional plays'
     : 'Range-bound — premium selling ideal';
-  document.getElementById('regimeTransition').textContent = 'ADX: ' + (s.adx || '--') + ' | DI+: ' + (s.di_plus || '--') + ' | DI-: ' + (s.di_minus || '--');
+  document.getElementById('regimeTransition').textContent = 'Session ADX: ' + (s.adx || '--') + ' | DI+: ' + (s.di_plus || '--') + ' | DI-: ' + (s.di_minus || '--');
 
   // Action
   const actionCard = document.getElementById('actionCard');
@@ -437,7 +461,7 @@ async function fetchJournal() {
     document.getElementById('jWinRate').textContent = stats.win_rate != null ? stats.win_rate + '%' : '--';
     const pnl = stats.total_pnl;
     const pnlEl = document.getElementById('jTotalPnl');
-    pnlEl.textContent = pnl != null ? '₹' + Math.abs(pnl).toLocaleString('en-IN') : '--';
+    pnlEl.textContent = pnl != null ? (pnl < 0 ? '-₹' : '₹') + Math.abs(pnl).toLocaleString('en-IN') : '--';
     pnlEl.style.color = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'inherit';
     document.getElementById('jRR').textContent = stats.risk_reward != null ? '1:' + stats.risk_reward : '--';
     
@@ -449,7 +473,7 @@ async function fetchJournal() {
       const pnlClass = (t.pnl || 0) >= 0 ? 'color:var(--green)' : 'color:var(--red)';
       return '<div style="display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid var(--border)">' +
         '<span>' + t.date + ' <b>' + (t.direction||'--').toUpperCase() + '</b> ' + (t.strike||'') + '</span>' +
-        '<span style="' + pnlClass + '">' + (t.pnl != null ? '₹' + t.pnl.toLocaleString('en-IN') : 'Open') + '</span>' +
+        '<span style="' + pnlClass + '">' + (t.pnl != null ? (t.pnl < 0 ? '-₹' : '₹') + Math.abs(t.pnl).toLocaleString('en-IN') : 'Open') + '</span>' +
       '</div>';
     }).join('');
   } catch(e) {}
@@ -696,19 +720,33 @@ async function fetchTradeGate() {
   try {
     const resp = await fetch('/api/trade-gate');
     const d = await resp.json();
+    const liveScalp = window._lastScalper || await fetch('/api/scalper?_=' + Date.now()).then(r => r.json()).catch(() => ({}));
     const banner = document.getElementById('tradeGateBanner');
     if (!banner) return;
-    const isTrade = d.verdict === 'TRADE';
-    banner.textContent = (isTrade ? '✅ TRADE' : '⛔ NO TRADE') + (d.direction === 'bullish' ? ' · BULL' : d.direction === 'bearish' ? ' · BEAR' : '');
+    const scoreBias = d.score_bias || liveScalp.score_bias || (liveScalp.score >= (liveScalp.score_min || 3) ? 'LONG' : liveScalp.score <= -(liveScalp.score_min || 3) ? 'SHORT' : 'FLAT');
+    const liveBlocks = (liveScalp._display_blocking || liveScalp.blocking_gates || []).map(b => typeof b === 'string' ? b : b.gate).filter(Boolean);
+    const isTrade = d.verdict === 'TRADE' && !(scoreBias !== 'FLAT' && liveScalp.bias === 'FLAT');
+    const scoreDir = scoreBias === 'LONG' ? 'BULL' : scoreBias === 'SHORT' ? 'BEAR' : scoreBias === 'FLAT' ? 'NEUTRAL' : '--';
+    const regimeDir = d.direction === 'bullish' ? 'BULL' : d.direction === 'bearish' ? 'BEAR' : 'FLAT';
+    banner.textContent = (isTrade ? '✅ TRADE' : '⛔ NO TRADE') + ' · REGIME ' + regimeDir + ' · SCORE ' + scoreDir;
     banner.style.color = isTrade ? '#00e676' : '#ff5252';
     banner.style.background = (isTrade ? '#00e676' : '#ff5252') + '22';
     const v = document.getElementById('tradeGateVerdict');
-    if (v) v.textContent = (d.confidence || '') + ' · ' + (d.regime || '');
+    if (v) v.textContent = (d.confidence || '') + ' · ' + (d.regime || '') + ' · final ' + (d.final_bias || 'FLAT');
     const r = document.getElementById('tradeGateReason');
-    if (r) r.textContent = d.reason || '';
+    if (r) r.textContent = (!isTrade && liveBlocks.length && d.verdict === 'TRADE')
+      ? 'Scalper execution blocked by ' + liveBlocks.join(', ')
+      : (d.reason || '');
     const steps = document.getElementById('tradeGateSteps');
     if (steps) {
-      steps.innerHTML = (d.steps || []).map(s =>
+      const gateSteps = (d.steps || []).map(s => {
+        if (s.step === 'MARKET REGIME' && /momentum scalp allowed/i.test(s.detail)) {
+          const suffix = liveBlocks.length ? '; entry blocked by ' + liveBlocks.join(', ') : '; execution gates still required';
+          return {...s, detail: s.detail.replace(/\s*—\s*momentum scalp allowed/i, ' — momentum regime present') + suffix};
+        }
+        return s;
+      });
+      steps.innerHTML = gateSteps.map(s =>
         `<div style="display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--bg)">` +
         `<span>${ICON[s.status] || '·'} ${s.step}</span>` +
         `<span style="color:var(--text-dim);text-align:right">${s.detail}</span></div>`
@@ -852,12 +890,12 @@ async function fetchAlgoStatus() {
         if (pnlEl && d.scalp_pnl && d.scalp_pnl.resolved) {
           const p = d.scalp_pnl;
           pnlEl.textContent = p.resolved + ' trades · ' + p.wins + 'W/' + (p.resolved - p.wins) + 'L · ' +
-            (p.net_rs ? '₹' + Number(p.net_rs).toLocaleString('en-IN') : p.net_pts + ' pts');
+            (p.net_rs ? (p.net_rs < 0 ? '-₹' : '₹') + Math.abs(Number(p.net_rs)).toLocaleString('en-IN') : p.net_pts + ' pts');
         }
         scEl.innerHTML = sc.map(c => {
           const st = c.status || 'ACTIVE';
           const chip = st === 'TARGET_HIT' ? 'var(--green)' : st === 'STOP_HIT' || st === 'EXPIRED' ? 'var(--red)' : 'var(--accent)';
-          const pnl = c.pnl_pts != null ? ((c.pnl_pts >= 0 ? '+' : '') + c.pnl_pts + ' pts' + (c.pnl_rs ? ' · ₹' + Number(c.pnl_rs).toLocaleString('en-IN') : '')) : '';
+          const pnl = c.pnl_pts != null ? ((c.pnl_pts >= 0 ? '+' : '') + c.pnl_pts + ' pts' + (c.pnl_rs ? ' · ' + (c.pnl_rs < 0 ? '-₹' : '₹') + Math.abs(Number(c.pnl_rs)).toLocaleString('en-IN') : '')) : '';
           const hot = c.perfect ? ' 🔥' : '';
           return `<div style="font-size:10px;padding:2px 0;border-bottom:1px solid var(--border)">
             <span style="color:${chip}">${st}</span>${hot} ${c.time} ${String(c.asset).toUpperCase()} ${c.option || 'SPOT'} @ ${c.entry}${pnl ? ' → <b>' + pnl + '</b>' : ''}
@@ -1049,12 +1087,12 @@ function renderIvRank(d, prefix) {
   const rank = d.iv_rank;
   const rankEl = el('ivRankVal');
   rankEl.textContent = rank != null ? rank + '%' : '--';
-  rankEl.style.color = rank <= 20 ? 'var(--green)' : rank <= 40 ? 'var(--blue)' : rank <= 60 ? 'var(--yellow)' : rank <= 80 ? 'var(--red)' : '#ff6b7a';
+  rankEl.style.color = rank == null ? 'var(--text-dim)' : rank <= 20 ? 'var(--green)' : rank <= 40 ? 'var(--blue)' : rank <= 60 ? 'var(--yellow)' : rank <= 80 ? 'var(--red)' : '#ff6b7a';
 
   const pct = d.iv_percentile;
   const pctEl = el('ivPctVal');
   pctEl.textContent = pct != null ? pct + '%' : '--';
-  pctEl.style.color = pct <= 25 ? 'var(--green)' : pct >= 75 ? 'var(--red)' : 'var(--yellow)';
+  pctEl.style.color = pct == null ? 'var(--text-dim)' : pct <= 25 ? 'var(--green)' : pct >= 75 ? 'var(--red)' : 'var(--yellow)';
 
   el('ivCurrentVal').textContent = d.current_vix != null ? d.current_vix : '--';
   const atmIv = document.getElementById(P('atmIvVal'));
@@ -1163,7 +1201,7 @@ function renderChain(d, prefix) {
     const color = up ? 'var(--green)' : dn ? 'var(--red)' : 'var(--yellow)';
     spotTxt += ' <span style="font-size:14px;color:var(--text-dim)">(GIFT </span><span style="font-size:14px;color:' + color + ';font-weight:700">' + arrow + ' ' + gift + '</span><span style="font-size:14px;color:var(--text-dim)">)</span>';
     if (g != null && Math.abs(g) >= 15) {
-      spotTxt += ' <span style="font-size:11px;color:' + color + ';font-weight:700">' + (g > 0 ? '+' : '') + Number(g).toLocaleString('en-IN', {maximumFractionDigits: 0}) + 'pts</span>';
+      spotTxt += ' <span style="font-size:11px;color:' + color + ';font-weight:700">' + (g > 0 ? '+' : '') + Number(g).toLocaleString('en-IN', {maximumFractionDigits: 0}) + 'pts vs spot</span>';
     }
   }
   spotBig.innerHTML = spotTxt;
@@ -1248,6 +1286,8 @@ async function fetchSensex() {
 function renderSensex(d) {
   const el = id => document.getElementById(id);
   if (!el('sensexSpot')) return;
+  const indiaSession = indiaMarketSession();
+  if (!indiaSession.open) d = {...d, signal: 'WAIT', action: 'HOLD', reason: indiaSession.reason, stop_level: null, target_level: null};
   refreshSensexStrategies(d);
   const spot = d.spot;
   el('sensexSpot').textContent = spot != null ? Number(spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
@@ -1542,10 +1582,18 @@ async function fetchScalper() {
     const resp = await fetch('/api/scalper?_=' + Date.now());
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
     const d = await resp.json();
+    window._lastScalper = d;
     const upd = document.getElementById('scalperUpdated');
     if (upd) upd.textContent = d.timestamp || '';
     const scoreEl = document.getElementById('scalperScore');
-    if (scoreEl) scoreEl.textContent = 'Score: ' + (d.score >= 0 ? '+' : '') + d.score + ' (need ±' + (d.score_min != null ? d.score_min : 3) + ') · ' + (d.bias || 'FLAT');
+    if (scoreEl) {
+      const threshold = d.score_min != null ? d.score_min : 3;
+      const scoreBias = d.score_bias || (d.score >= threshold ? 'LONG' : d.score <= -threshold ? 'SHORT' : 'FLAT');
+      const directionLabel = {LONG: 'BULLISH', SHORT: 'BEARISH', FLAT: 'NEUTRAL'}[scoreBias];
+      const finalLabel = d.bias === 'FLAT' && scoreBias !== 'FLAT'
+        ? 'BLOCKED' : ({LONG: 'BULLISH', SHORT: 'BEARISH', FLAT: 'FLAT'}[d.bias || 'FLAT']);
+      scoreEl.textContent = 'Raw score: ' + (d.score >= 0 ? '+' : '') + d.score + ' (need ±' + (d.score_min != null ? d.score_min : 3) + ') · Direction: ' + directionLabel + ' · Final: ' + finalLabel;
+    }
     if (d.signal === 'SCALP_LONG' && d.call && !d.call.blocked) {
       banner.innerHTML = '<span class="live-badge live-long">🟢 LIVE</span>🟢 LONG — ' + d.call.option + ' @ ₹' + d.call.entry;
       banner.style.background = '#0a2816'; banner.style.color = '#80ffb4';
@@ -1605,14 +1653,14 @@ async function fetchScalper() {
       const pnlEl = document.getElementById('scalperPnl');
       const pnlGrid = document.getElementById('scalperPnlGrid');
       if (pnlEl && pnlGrid) {
-        const net = pnl.net_rs != null && pnl.net_rs !== 0 ? '₹' + Number(pnl.net_rs).toLocaleString('en-IN') : (pnl.net_pts != null ? pnl.net_pts + ' pts' : '--');
-        pnlEl.textContent = pnl.resolved ? (pnl.resolved + ' trades · ' + pnl.wins + 'W/' + (pnl.resolved - pnl.wins) + 'L · WR ' + pnl.win_rate + '%') : 'no resolved calls yet';
+        const net = pnl.net_rs != null && pnl.net_rs !== 0 ? (pnl.net_rs < 0 ? '-₹' : '₹') + Math.abs(Number(pnl.net_rs)).toLocaleString('en-IN') : (pnl.net_pts != null ? pnl.net_pts + ' pts' : '--');
+        pnlEl.textContent = pnl.resolved ? (pnl.resolved + ' retained trades · ' + pnl.wins + 'W/' + (pnl.resolved - pnl.wins) + 'L · WR ' + pnl.win_rate + '%') : 'no resolved calls yet';
         const rows = [];
         rows.push(stratRowHTML('Net P&L', net, 'paper, spread included', (pnl.net_pts || 0) >= 0 ? 'ok' : 'bad'));
         const byA = pnl.by_asset || {};
         for (const a of ['nifty', 'bnf', 'sensex', 'btc']) {
           const b = byA[a];
-          if (b) rows.push(stratRowHTML(a.toUpperCase(), b.w + 'W/' + (b.n - b.w) + 'L', b.n + ' calls · ' + (b.pts >= 0 ? '+' : '') + b.pts + ' pts' + (b.rs ? ' · ₹' + Number(b.rs).toLocaleString('en-IN') : ''), b.pts >= 0 ? 'ok' : 'bad'));
+          if (b) rows.push(stratRowHTML(a.toUpperCase(), b.w + 'W/' + (b.n - b.w) + 'L', b.n + ' calls · ' + (b.pts >= 0 ? '+' : '') + b.pts + ' pts' + (b.rs ? ' · ' + (b.rs < 0 ? '-₹' : '₹') + Math.abs(Number(b.rs)).toLocaleString('en-IN') : ''), b.pts >= 0 ? 'ok' : 'bad'));
         }
         if (!rows.length) rows.push('<div style="color:var(--text-dim);padding:6px;text-align:center;font-size:12px">No resolved calls yet — calls resolve to target/stop/expiry</div>');
         pnlGrid.innerHTML = rows.join('');
@@ -1626,7 +1674,7 @@ async function fetchScalper() {
         if (hUpd) hUpd.textContent = hd.history && hd.history.length ? hd.history.length + ' days' : '--';
         if (hEl) {
           const rowsH = (hd.history || []).map(r => {
-            const net = r.net_rs != null && r.net_rs !== 0 ? '₹' + Number(r.net_rs).toLocaleString('en-IN') : (r.net_pts != null ? r.net_pts + ' pts' : '--');
+            const net = r.net_rs != null && r.net_rs !== 0 ? (r.net_rs < 0 ? '-₹' : '₹') + Math.abs(Number(r.net_rs)).toLocaleString('en-IN') : (r.net_pts != null ? r.net_pts + ' pts' : '--');
             const btc = (r.by_asset || {}).btc;
             const btcTxt = btc ? ' · ₿ ' + (btc.pts >= 0 ? '+' : '') + btc.pts + ' pts' : '';
             const ok = (r.net_pts || 0) >= 0;
@@ -1644,24 +1692,89 @@ async function fetchScalper() {
       const add = (n, st, r, c) => rows.push(stratRowHTML(n, st, r, c));
       const emaUp = d.ema9 > d.ema21;
       add('EMA 9/21', emaUp ? 'BULL' : 'BEAR', 'EMA9 ' + Number(d.ema9).toLocaleString('en-IN') + ' vs EMA21 ' + Number(d.ema21).toLocaleString('en-IN'), emaUp ? 'ok' : 'bad');
-      const vwDiff = d.vwap != null ? ((d.spot - d.vwap) / d.vwap * 100) : null;
+      const vwDiff = d.vwap_pct != null ? d.vwap_pct : (d.vwap != null ? ((d.spot - d.vwap) / d.vwap * 100) : null);
       add('VWAP', d.vwap != null ? (d.spot >= d.vwap ? 'ABOVE' : 'BELOW') : '--', vwDiff != null ? (vwDiff >= 0 ? '+' : '') + vwDiff.toFixed(2) + '% vs VWAP ' + Number(d.vwap).toLocaleString('en-IN') : 'no data', vwDiff != null ? (vwDiff >= 0 ? 'ok' : 'bad') : 'wait');
-      add('RSI (14)', d.rsi != null ? d.rsi.toFixed(0) : '--', d.rsi != null ? (d.rsi > 70 ? 'overbought' : d.rsi < 30 ? 'oversold' : 'neutral') : '', 'wait');
-      add('Stoch', d.stoch_k != null ? 'K ' + d.stoch_k.toFixed(0) + ' / D ' + (d.stoch_d != null ? d.stoch_d.toFixed(0) : '--') : '--', d.stoch_k != null ? (d.stoch_k > 80 ? 'overbought' : d.stoch_k < 20 ? 'oversold' : 'neutral') : '', 'wait');
-      add('Momentum (3 bar)', d.momentum != null ? (d.momentum >= 0 ? '+' : '') + d.momentum.toFixed(1) : '--', d.momentum != null ? (Math.abs(d.momentum) > 5 ? 'strong move' : 'quiet') : '', d.momentum != null && Math.abs(d.momentum) > 5 ? 'wait' : 'wait');
-      const gate = d.trend_gate != null ? d.trend_gate : 0.8;
-      const strong = d.trend_dist != null && d.trend_dist >= gate;
-      add('Trend (200E)', d.trend_dist != null ? (strong ? 'STRONG' : 'WEAK') : '--', d.trend_dist != null ? '|spot−200E| ' + d.trend_dist.toFixed(2) + '% vs gate ' + gate + '%' : '', strong ? 'ok' : 'bad');
+      // RSI(14) — finer classification: 45–55 neutral, 55–70 bullish, 70+ overbought
+      const rsi = d.rsi;
+      const rsiCls = rsi == null ? '--' : (rsi > 70 ? 'OVERBOUGHT' : rsi >= 55 ? 'BULLISH' : rsi >= 45 ? 'NEUTRAL' : rsi >= 30 ? 'WEAK' : 'OVERSOLD');
+      add('RSI (14)', rsi != null ? rsi.toFixed(0) : '--', rsi != null ? 'RSI ' + rsi.toFixed(0) + ' → ' + rsiCls.toLowerCase() + ' (score ' + (rsi > 70 ? '-1' : rsi < 30 ? '+1' : '0') + ')' : '', rsi != null && rsi > 70 ? 'bad' : rsi != null && rsi < 30 ? 'ok' : 'wait');
+      // Stoch — K vs D direction matters for momentum cross/fade
+      const sk = d.stoch_k, sd = d.stoch_d;
+      const stochState = sk == null ? '--' : (sk > 80 ? 'OVERBOUGHT' : sk < 20 ? 'OVERSOLD' : 'NEUTRAL');
+      const stochDir = (sk != null && sd != null) ? (sk < sd ? ' · K<D weakening' : (sk > sd ? ' · K>D strengthening' : ' · K=D')) : '';
+      const stochX = d.stoch_crossed ? ' · ' + d.stoch_crossed : '';
+      add('Stoch', sk != null ? 'K ' + sk.toFixed(0) + ' / D ' + (sd != null ? sd.toFixed(0) : '--') : '--', stochState + stochDir + stochX, sk != null && sk > 80 ? 'bad' : sk != null && sk < 20 ? 'ok' : 'wait');
+      // Momentum (3 bar) — normalized vs ATR(14), not raw points
+      const momA = d.momentum_atr;
+      const momStrength = momA == null ? '' : (Math.abs(momA) >= 1.5 ? 'strong' : Math.abs(momA) >= 0.5 ? 'moderate' : 'weak');
+      add('Momentum (3 bar)', d.momentum != null ? (d.momentum >= 0 ? '+' : '') + d.momentum.toFixed(1) : '--', d.momentum != null ? (d.momentum >= 0 ? '+' : '') + d.momentum.toFixed(1) + ' pts · ' + (momA != null ? (momA >= 0 ? '+' : '') + momA.toFixed(2) + ' ATR (' + momStrength + ')' : '--') : '', d.momentum != null && d.momentum >= 0 ? 'ok' : 'wait');
+      // 200 EMA — direction + ATR-normalized drift (the real trend-strength gate)
+      // Derive direction from the same values shown in this card. A stale or
+      // mismatched trend_dir field must not contradict the displayed prices.
+      const dir = d.spot != null && d.ema200 != null
+        ? (d.spot >= d.ema200 ? 'ABOVE' : 'BELOW')
+        : (d.trend_dir || '--');
+      const slopeAtr = d.ema200_slope_atr;
+      const slopeMin = d.slope_atr_min != null ? d.slope_atr_min : 1.0;
+      const strongTrend = slopeAtr != null && Math.abs(slopeAtr) >= slopeMin;
+      const driftTxt = slopeAtr != null ? (slopeAtr >= 0 ? '+' : '') + slopeAtr.toFixed(2) + ' ATR (gate ±' + slopeMin + ')' : '--';
+      const rawBias = d.score >= (d.score_min != null ? d.score_min : 3) ? 'LONG'
+        : d.score <= -(d.score_min != null ? d.score_min : 3) ? 'SHORT' : 'FLAT';
+      const slopeState = slopeAtr == null ? '--' : slopeAtr >= slopeMin ? 'RISING'
+        : slopeAtr <= -slopeMin ? 'FALLING' : 'FLAT';
+      const slopeAligned = rawBias === 'LONG' ? slopeState === 'RISING'
+        : rawBias === 'SHORT' ? slopeState === 'FALLING' : true;
+      add('200 EMA position (5m)', dir, 'spot is ' + dir.toLowerCase() + ' the EMA; distance ' + (d.trend_dist != null ? d.trend_dist.toFixed(2) + '%' : '--'), 'wait');
+      add('200 EMA slope (5m)', slopeState, driftTxt + ' · raw ' + rawBias + (slopeAligned ? ' aligned' : ' blocked'), slopeAligned ? 'ok' : 'bad');
       const adxG = d.adx_gate != null ? d.adx_gate : 25;
       const adxOk = d.adx != null && d.adx >= adxG;
       add('ADX (14)', d.adx != null ? d.adx.toFixed(2) : '--', d.adx != null ? 'ADX ' + d.adx.toFixed(2) + ' vs gate ' + adxG + ' (trend strength)' : '', adxOk ? 'ok' : 'bad');
       const vg = d.vix_gate || [12, 18];
       const vixOk = d.vix != null && d.vix >= vg[0] && d.vix <= vg[1];
-      add('Nifty VIX', d.vix != null ? d.vix.toFixed(1) : '--', d.vix != null ? 'VIX ' + d.vix.toFixed(1) + ' vs ' + vg[0] + '–' + vg[1] + ' (premium regime)' : '', vixOk ? 'ok' : 'bad');
+      add('Nifty VIX', d.vix != null ? d.vix.toFixed(1) : '--', d.vix != null ? 'VIX ' + d.vix.toFixed(1) + ' (gate ' + vg[0] + '–' + vg[1] + '; below = flat/risk-off, above = premium rich)' : '', vixOk ? 'ok' : 'bad');
       if (d.orb_high != null) {
         const inOrb = d.spot >= d.orb_low && d.spot <= d.orb_high;
-        add('Opening Range', inOrb ? 'INSIDE' : (d.spot > d.orb_high ? 'ABOVE' : 'BELOW'), 'ORB ' + Number(d.orb_high).toLocaleString('en-IN') + ' / ' + Number(d.orb_low).toLocaleString('en-IN'), inOrb ? 'wait' : (d.spot > d.orb_high ? 'ok' : 'bad'));
+        add('Opening Range', inOrb ? 'INSIDE' : (d.spot > d.orb_high ? 'ABOVE' : 'BELOW'), 'ORB ' + Number(d.orb_high).toLocaleString('en-IN') + ' / ' + Number(d.orb_low).toLocaleString('en-IN') + ' (09:15-09:30 IST)', inOrb ? 'wait' : (d.spot > d.orb_high ? 'ok' : 'bad'));
+      } else {
+        add('Opening Range', 'N/A', d.orb_note || 'no 15-min ORB', 'wait');
       }
+      // Score — full audit trail (which gauge contributed what)
+      if (d.score_breakdown && d.score_breakdown.length) {
+        const bd = d.score_breakdown.map(b => b.gauge + ' ' + (b.points >= 0 ? '+' : '') + b.points).join(' · ');
+        const thr = d.score_min != null ? d.score_min : 3;
+        add('Score', (d.score >= 0 ? '+' : '') + d.score, 'threshold ±' + thr + ' · ' + bd, d.score >= thr ? 'ok' : (d.score <= -thr ? 'bad' : 'wait'));
+      }
+      // Decision architecture: score threshold → directional gates → final signal
+      // Older backends may return only the first blocker. Reconstruct the
+      // independent gates client-side so the explanation stays complete.
+      const blocking = Array.isArray(d.blocking_gates) ? d.blocking_gates.slice() : [];
+      const addBlock = (gate, reason) => {
+        if (!reason) return;
+        const existing = blocking.find(b => b.gate === gate);
+        if (!existing) blocking.push({gate, reason});
+        else if (!String(existing.reason || '').includes(reason)) existing.reason = existing.reason ? existing.reason + '; ' + reason : reason;
+      };
+      if (rawBias !== 'FLAT') {
+        if (rawBias === 'LONG' && d.spot != null && d.ema200 != null && d.spot < d.ema200) {
+          addBlock('Trend', 'counter-trend LONG: spot is below 200 EMA');
+        } else if (rawBias === 'SHORT' && d.spot != null && d.ema200 != null && d.spot > d.ema200) {
+          addBlock('Trend', 'counter-trend SHORT: spot is above 200 EMA');
+        }
+        if ((rawBias === 'LONG' && slopeAtr != null && slopeAtr < slopeMin) || (rawBias === 'SHORT' && slopeAtr != null && slopeAtr > -slopeMin)) {
+          addBlock('Trend', '200 EMA slope is not aligned with ' + rawBias);
+        }
+        const adxGate = d.adx_gate != null ? d.adx_gate : 25;
+        if (d.adx != null && d.adx < adxGate) addBlock('ADX', 'ADX ' + d.adx + ' < ' + adxGate);
+        const vixGate = d.vix_gate || [12, 18];
+        if (d.vix != null && (d.vix < vixGate[0] || d.vix > vixGate[1])) addBlock('VIX', 'VIX ' + d.vix + ' outside ' + vixGate[0] + '–' + vixGate[1]);
+        if (d.window === 'BLOCKED') addBlock('Window', d.window_reason || 'scalp window blocked');
+      }
+      if (blocking.length) {
+        add('Blocked by', blocking.map(g => g.gate).join(', '), blocking.map(g => g.gate + ': ' + g.reason).join(' · '), 'bad');
+      } else if (d.bias && d.bias !== 'FLAT' && Math.abs(d.score) >= (d.score_min != null ? d.score_min : 3)) {
+        add('Gates', 'ALL PASS', 'score met + all gates clear', 'ok');
+      }
+      d._display_blocking = blocking;
       g.innerHTML = rows.join('');
     }
   } catch (e) {}
@@ -1872,6 +1985,8 @@ async function fetchGap() {
 function renderBnf(d) {
   const el = id => document.getElementById(id);
   if (!el('bnfSpot')) return;
+  const indiaSession = indiaMarketSession();
+  if (!indiaSession.open) d = {...d, signal: 'WAIT', action: 'HOLD', reason: indiaSession.reason, stop_level: null, target_level: null};
   refreshBnfStrategies(d);
   el('bnfSpot').textContent = d.spot != null ? Number(d.spot).toLocaleString('en-IN', {maximumFractionDigits: 0}) : '--';
   el('bnfSpot').style.color = d.ema_distance_pct != null && d.ema_distance_pct < 0 ? 'var(--red)' : 'var(--green)';

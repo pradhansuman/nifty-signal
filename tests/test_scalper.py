@@ -93,13 +93,13 @@ class ScalperScoringTest(unittest.TestCase):
         scalper.get_bars.return_value = make_bars(up=True)
         self.tun.stop()
         t = mock.patch.object(scalper, "_load_tuning", return_value={
-            "score_min": 3.0, "trend_min": 99.0, "adx_min": 25.0,
+            "score_min": 3.0, "slope_atr_min": 999.0, "adx_min": 25.0,
             "vix_min": 12.0, "vix_max": 18.0, "theta_max": 0.5})
         t.start()
         self.addCleanup(t.stop)
         out = scalper.main()
         self.assertEqual(out["signal"], "WAIT")
-        self.assertIn("trend too weak", out.get("reason", ""))
+        self.assertIn("no rising trend", out.get("reason", ""))
 
     def test_lower_score_min_allows_weaker_setup(self):
         # loosened threshold (chatty mode) accepts score 2
